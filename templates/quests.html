@@ -15,7 +15,7 @@
 			<h2>Today's Quests</h2>
 			<div class="quests-list">
 				{% for quest in quests %}
-				<div class="quest-item{% if quest.completed_today %} completed{% endif %}">
+				<div class="quest-item{% if quest.completed_today %} completed{% endif %}" data-quest-id="{{ quest.id }}">
 					<div class="quest-content">
 						<h3>{{ quest.title }}</h3>
 						{% if quest.description.len() > 0 %}
@@ -24,7 +24,7 @@
 						<span class="exp-value">{{ quest.exp_value }} EXP</span>
 					</div>
 					<div class="quest-actions">
-						<button class="toggle-btn" data-quest-id="{{ quest.id }}" data-completed="{{ quest.completed_today }}">
+						<button class="toggle-btn" data-completed="{{ quest.completed_today }}" data-on-click="$$post('/quests/toggle', { quest_id: {{ quest.id }} })" data-on-click-morph=".quest-item[data-quest-id='{{ quest.id }}'], .total-exp">
 							{% if quest.completed_today %}
 							✅ Completed
 							{% else %}

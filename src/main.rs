@@ -2,7 +2,10 @@ mod database;
 mod handlers;
 mod models;
 
-use axum::{Router, routing::get};
+use axum::{
+    Router,
+    routing::{get, post},
+};
 use database::Database;
 use std::net::SocketAddr;
 use tower_http::services::ServeDir;
@@ -27,6 +30,7 @@ async fn main() {
     // Build our application with a route
     let app = Router::new()
         .route("/", get(handlers::quests))
+        .route("/quests/toggle", post(handlers::toggle_quest))
         .nest_service("/static", ServeDir::new("static"))
         .with_state(db);
 

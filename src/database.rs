@@ -1,10 +1,10 @@
-use chrono::{DateTime, NaiveDate, Utc};
+use chrono::{NaiveDate, Utc};
 use sqlx::SqlitePool;
 use std::env;
 
 use crate::models::{
-    CreateQuestRequest, CreateRewardRequest, Quest, QuestCompletion, Reward, RewardClaim, Settings,
-    UpdateQuestRequest, UpdateRewardRequest, UpdateSettingsRequest,
+    CreateQuestRequest, CreateRewardRequest, Quest, QuestCompletion, Reward, Settings,
+    UpdateQuestRequest, UpdateSettingsRequest,
 };
 
 #[derive(Clone)]

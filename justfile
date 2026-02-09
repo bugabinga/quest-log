@@ -16,3 +16,6 @@ lint:
 
 check: lint test
     cargo check
+
+dev:
+    cargo run
