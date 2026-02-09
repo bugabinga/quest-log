@@ -1,0 +1,176 @@
+/* Quest Log Styles */
+body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    margin: 0;
+    padding: 20px;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    min-height: 100vh;
+    color: #333;
+}
+
+.container {
+    max-width: 900px;
+    margin: 0 auto;
+    background: white;
+    padding: 30px;
+    border-radius: 12px;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.1);
+    backdrop-filter: blur(10px);
+}
+
+h1 {
+    color: #2c3e50;
+    text-align: center;
+    margin-bottom: 10px;
+    font-size: 2.5em;
+    text-shadow: 2px 2px 4px rgba(0,0,0,0.1);
+}
+
+.total-exp {
+    font-size: 1.4em;
+    font-weight: bold;
+    color: #27ae60;
+    text-align: center;
+    margin: 20px 0;
+    padding: 15px;
+    background: linear-gradient(45deg, #2ecc71, #27ae60);
+    color: white;
+    border-radius: 8px;
+    box-shadow: 0 4px 15px rgba(46, 204, 113, 0.3);
+}
+
+h2 {
+    color: #34495e;
+    border-bottom: 3px solid #3498db;
+    padding-bottom: 10px;
+    margin-top: 30px;
+}
+
+.quests-list {
+    margin: 20px 0;
+}
+
+.quest-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 20px;
+    border: 2px solid #ecf0f1;
+    border-radius: 8px;
+    margin: 15px 0;
+    transition: all 0.3s ease;
+    background: #f8f9fa;
+}
+
+.quest-item:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+}
+
+.quest-item.completed {
+    background: linear-gradient(135deg, #d4edda, #c3e6cb);
+    border-color: #28a745;
+    box-shadow: 0 4px 15px rgba(40, 167, 69, 0.2);
+}
+
+.quest-content {
+    flex: 1;
+    padding-right: 20px;
+}
+
+.quest-content h3 {
+    margin: 0 0 8px 0;
+    color: #2c3e50;
+    font-size: 1.2em;
+}
+
+.quest-content p {
+    margin: 5px 0;
+    color: #7f8c8d;
+    font-style: italic;
+}
+
+.exp-value {
+    font-weight: bold;
+    color: #e67e22;
+    font-size: 1.1em;
+    background: #fff3cd;
+    padding: 5px 10px;
+    border-radius: 20px;
+    border: 2px solid #f39c12;
+}
+
+.quest-actions {
+    margin-left: 20px;
+}
+
+.toggle-btn {
+    padding: 12px 24px;
+    border: none;
+    border-radius: 25px;
+    cursor: pointer;
+    font-size: 16px;
+    font-weight: bold;
+    transition: all 0.3s ease;
+    min-width: 140px;
+}
+
+.toggle-btn:hover {
+    transform: scale(1.05);
+}
+
+.toggle-btn:not(.completed) {
+    background: linear-gradient(45deg, #3498db, #2980b9);
+    color: white;
+    box-shadow: 0 4px 15px rgba(52, 152, 219, 0.3);
+}
+
+.toggle-btn:not(.completed):hover {
+    background: linear-gradient(45deg, #2980b9, #21618c);
+}
+
+.completed {
+    background: linear-gradient(45deg, #27ae60, #229954);
+    color: white;
+    cursor: default;
+    box-shadow: 0 4px 15px rgba(39, 174, 96, 0.3);
+}
+
+.no-quests {
+    text-align: center;
+    color: #95a5a6;
+    font-style: italic;
+    font-size: 1.2em;
+    margin: 40px 0;
+    padding: 30px;
+    background: #f8f9fa;
+    border-radius: 8px;
+    border: 2px dashed #dee2e6;
+}
+
+/* Responsive design */
+@media (max-width: 768px) {
+    .container {
+        margin: 10px;
+        padding: 20px;
+    }
+
+    h1 {
+        font-size: 2em;
+    }
+
+    .quest-item {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 15px;
+    }
+
+    .quest-actions {
+        margin-left: 0;
+        align-self: stretch;
+    }
+
+    .toggle-btn {
+        width: 100%;
+    }
+}

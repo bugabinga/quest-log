@@ -1,0 +1,17 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<meta charset="UTF-8">
+		<meta name="viewport" content="width=device-width, initial-scale=1.0">
+		<title>{% block title %}Quest Log{% endblock %}</title>
+		<link rel="stylesheet" href="/static/style.css">
+	</head>
+	<body>
+		<div id="app">
+			{% block content %}{% endblock %}
+		</div>
+		<script src="https://cdn.jsdelivr.net/npm/@hotwired/stimulus@3.2.2/dist/stimulus.min.js"></script>
+		<script src="https://cdn.jsdelivr.net/npm/@datastar/core@0.3.0/dist/datastar.min.js"></script>
+		{% block scripts %}{% endblock %}
+	</body>
+</html>
