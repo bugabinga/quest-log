@@ -38,6 +38,7 @@ impl Database {
 
         // Create directory if it doesn't exist
         if !data_dir_path.exists() {
+            tracing::debug!(path = %data_dir_path.display(), "Creating data directory");
             std::fs::create_dir_all(data_dir_path)
                 .map_err(|e| sqlx::Error::Configuration(
                     format!("❌ Failed to create database directory '{}': {}. Please check permissions.",
@@ -54,6 +55,7 @@ impl Database {
         let is_new_database = if database_path != ":memory:" && database_path != "sqlite::memory:" {
             let exists = Path::new(&database_path).exists();
             if !exists {
+                tracing::debug!(path = %database_path, "Creating new database file");
                 // Create an empty file to ensure SQLite can connect
                 std::fs::File::create(&database_path).map_err(|e| {
                     sqlx::Error::Configuration(
@@ -70,6 +72,7 @@ impl Database {
             false
         };
 
+        tracing::info!(db_path = %database_path, "🗄️  Connecting to database...");
         let pool = SqlitePool::connect(&database_path).await?;
 
         let db = Self { pool };
@@ -79,6 +82,7 @@ impl Database {
 
         // Seed sample data only if this is a new database AND we're in debug mode
         if is_new_database {
+            tracing::info!("🌱 Seeding sample data for first-time setup");
             #[cfg(debug_assertions)]
             db.seed_sample_data().await?;
         }
@@ -98,7 +102,9 @@ impl Database {
 
     /// Run database migrations
     pub async fn migrate(&self) -> Result<(), sqlx::Error> {
+        tracing::info!("🔧 Running database migrations...");
         sqlx::migrate!("./migrations").run(&self.pool).await?;
+        tracing::info!("✅ Migrations complete! (灬♥ω♥灬)");
         Ok(())
     }
 
@@ -200,15 +206,25 @@ impl Database {
 
     // Quest operations
     pub async fn get_quests_for_day(&self, day_of_week: i32) -> Result<Vec<Quest>, sqlx::Error> {
-        sqlx::query_as::<_, Quest>(
+        tracing::trace!(day_of_week, "📋 Fetching quests for day");
+        let quests = sqlx::query_as::<_, Quest>(
             "SELECT * FROM quests WHERE day_of_week = ? AND is_active = TRUE ORDER BY created_at",
         )
         .bind(day_of_week)
         .fetch_all(&self.pool)
-        .await
+        .await?;
+
+        tracing::trace!(
+            count = quests.len(),
+            day_of_week,
+            "📋 Loaded {} quests",
+            quests.len()
+        );
+        Ok(quests)
     }
 
     pub async fn get_quest_by_id(&self, id: i64) -> Result<Option<Quest>, sqlx::Error> {
+        tracing::trace!(quest_id = id, "🔍 Looking up quest by ID");
         sqlx::query_as::<_, Quest>("SELECT * FROM quests WHERE id = ?")
             .bind(id)
             .fetch_optional(&self.pool)
@@ -216,6 +232,7 @@ impl Database {
     }
 
     pub async fn create_quest(&self, req: CreateQuestRequest) -> Result<Quest, sqlx::Error> {
+        tracing::debug!(title = %req.title, day = req.day_of_week, exp = req.exp_value.unwrap_or(10), "📝 Creating new quest");
         let now = Utc::now();
         let quest = sqlx::query_as::<_, Quest>(
             "INSERT INTO quests (title, description, exp_value, day_of_week, created_at, updated_at)
@@ -230,6 +247,7 @@ impl Database {
         .fetch_one(&self.pool)
         .await?;
 
+        tracing::info!(quest_id = quest.id, title = %quest.title, exp = quest.exp_value, "✨ Quest created successfully!");
         Ok(quest)
     }
 
@@ -238,6 +256,7 @@ impl Database {
         id: i64,
         req: UpdateQuestRequest,
     ) -> Result<Option<Quest>, sqlx::Error> {
+        tracing::debug!(quest_id = id, "🔄 Updating quest");
         let now = Utc::now();
 
         // For simplicity, let's update only the fields that are provided
@@ -288,16 +307,25 @@ impl Database {
         }
 
         // Return the updated quest
-        self.get_quest_by_id(id).await
+        let result = self.get_quest_by_id(id).await?;
+        if result.is_some() {
+            tracing::info!(quest_id = id, "✅ Quest updated successfully!");
+        }
+        Ok(result)
     }
 
     pub async fn delete_quest(&self, id: i64) -> Result<bool, sqlx::Error> {
+        tracing::debug!(quest_id = id, "🗑️  Deleting quest");
         let result = sqlx::query("DELETE FROM quests WHERE id = ?")
             .bind(id)
             .execute(&self.pool)
             .await?;
 
-        Ok(result.rows_affected() > 0)
+        let deleted = result.rows_affected() > 0;
+        if deleted {
+            tracing::info!(quest_id = id, "💨 Quest deleted!");
+        }
+        Ok(deleted)
     }
 
     // Quest completion operations
@@ -334,9 +362,11 @@ impl Database {
         quest_id: i64,
         date: NaiveDate,
     ) -> Result<ToggleResult, sqlx::Error> {
+        tracing::debug!(quest_id, date = %date, "🎯 Toggling quest completion");
         // First, verify the quest exists
         let quest_exists = self.get_quest_by_id(quest_id).await?.is_some();
         if !quest_exists {
+            tracing::warn!(quest_id, "❌ Quest not found for completion toggle");
             return Err(sqlx::Error::RowNotFound); // Quest doesn't exist
         }
 
@@ -353,7 +383,10 @@ impl Database {
             .execute(&self.pool)
             .await
             {
-                Ok(_) => Ok(ToggleResult::NewlyUncompleted),
+                Ok(_) => {
+                    tracing::info!(quest_id, date = %date, "📤 Quest marked as incomplete");
+                    Ok(ToggleResult::NewlyUncompleted)
+                }
                 Err(e) => Err(e),
             }
         } else {
@@ -366,9 +399,13 @@ impl Database {
             .execute(&self.pool)
             .await
             {
-                Ok(_) => Ok(ToggleResult::NewlyCompleted),
+                Ok(_) => {
+                    tracing::info!(quest_id, date = %date, "🎉 Quest completed! +EXP");
+                    Ok(ToggleResult::NewlyCompleted)
+                }
                 Err(sqlx::Error::Database(db_err)) if db_err.is_unique_violation() => {
                     // Another concurrent operation already inserted - that's fine
+                    tracing::debug!(quest_id, date = %date, "Quest completion already recorded (concurrent)");
                     Ok(ToggleResult::NoChange)
                 }
                 Err(e) => Err(e),
@@ -399,6 +436,7 @@ impl Database {
 
     // Reward operations
     pub async fn get_available_rewards(&self) -> Result<Vec<Reward>, sqlx::Error> {
+        tracing::trace!("🎁 Fetching available rewards");
         sqlx::query_as::<_, Reward>(
             "SELECT * FROM rewards WHERE is_active = TRUE ORDER BY required_exp",
         )
@@ -407,8 +445,9 @@ impl Database {
     }
 
     pub async fn create_reward(&self, req: CreateRewardRequest) -> Result<Reward, sqlx::Error> {
+        tracing::debug!(title = %req.title, exp = req.required_exp, "🎁 Creating new reward");
         let now = Utc::now();
-        sqlx::query_as::<_, Reward>(
+        let reward = sqlx::query_as::<_, Reward>(
             "INSERT INTO rewards (title, description, required_exp, created_at, updated_at)
              VALUES (?, ?, ?, ?, ?) RETURNING *",
         )
@@ -418,7 +457,10 @@ impl Database {
         .bind(now)
         .bind(now)
         .fetch_one(&self.pool)
-        .await
+        .await?;
+
+        tracing::info!(reward_id = reward.id, title = %reward.title, "✨ Reward created!");
+        Ok(reward)
     }
 
     // Statistics and calculations

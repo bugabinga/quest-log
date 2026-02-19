@@ -5,28 +5,29 @@ export function pulseCounter(element) {
   setTimeout(() => element.classList.remove("exp-pulse"), 500);
 }
 
-export function createParticles(element, particleCount = 20) {
-  const rect = element.getBoundingClientRect();
-  const centerX = rect.left + rect.width / 2;
-  const centerY = rect.top + rect.height / 2;
+function appendWithViewTransition(container, notification) {
+  if (!document.startViewTransition) {
+    container.appendChild(notification);
+    return;
+  }
 
-  for (let i = 0; i < particleCount; i++) {
-    const particle = document.createElement("div");
-    particle.className = "celebration-particle";
+  const doAppend = () => {
+    try {
+      document.startViewTransition(() => {
+        container.appendChild(notification);
+      });
+    } catch {
+      container.appendChild(notification);
+    }
+  };
 
-    const angle = (Math.PI * 2 * i) / particleCount;
-    const velocity = 50 + Math.random() * 100;
-    const vx = Math.cos(angle) * velocity;
-    const vy = Math.sin(angle) * velocity;
-
-    particle.style.setProperty("--particle-vx", `${vx}px`);
-    particle.style.setProperty("--particle-vy", `${vy}px`);
-    particle.style.left = `${centerX}px`;
-    particle.style.top = `${centerY}px`;
-
-    document.body.appendChild(particle);
-
-    setTimeout(() => particle.remove(), 1000);
+  const active = document.activeViewTransition;
+  if (active) {
+    active.finished.then(doAppend).catch(() =>
+      container.appendChild(notification)
+    );
+  } else {
+    doAppend();
   }
 }
 
@@ -38,7 +39,7 @@ export function triggerErrorNotification(message) {
   notification.className = "error-message";
   notification.textContent = message;
 
-  container.appendChild(notification);
+  appendWithViewTransition(container, notification);
 
   setTimeout(() => {
     notification.classList.add("notification-exit");
@@ -54,7 +55,7 @@ export function triggerSuccessNotification(message) {
   notification.className = "success-message";
   notification.textContent = message;
 
-  container.appendChild(notification);
+  appendWithViewTransition(container, notification);
 
   setTimeout(() => {
     notification.classList.add("notification-exit");
@@ -70,7 +71,7 @@ export function triggerQuestUncompletionNotification() {
   notification.className = "error-message";
   notification.textContent = "Quest reopened";
 
-  container.appendChild(notification);
+  appendWithViewTransition(container, notification);
 
   setTimeout(() => {
     notification.classList.add("notification-exit");

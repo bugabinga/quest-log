@@ -48,68 +48,29 @@ methodology.
 
 ### Current Compliance Status
 
-| Factor                 | Status | Notes                                 |
-| ---------------------- | ------ | ------------------------------------- |
-| I. Codebase            | ✅     | Single git repo                       |
-| II. Dependencies       | ✅     | Cargo.toml declares all               |
-| III. Config            | ⚠️     | Missing `.env.example`, no `RUST_LOG` |
-| IV. Backing Services   | ✅     | SQLite via `QUEST_LOG_DATA_DIR`       |
-| V. Build, release, run | ❌     | No containerization, no CI/CD         |
-| VI. Processes          | ✅     | Stateless, DB-backed                  |
-| VII. Port binding      | ✅     | `PORT` env var, self-contained        |
-| VIII. Concurrency      | ✅     | Can scale horizontally                |
-| IX. Disposability      | ❌     | No graceful shutdown                  |
-| X. Dev/prod parity     | ❌     | No containerization                   |
-| XI. Logs               | ❌     | `println!` instead of stdout stream   |
-| XII. Admin processes   | ❌     | No CLI for migrations/admin           |
+| Factor                 | Status | Notes                            |
+| ---------------------- | ------ | -------------------------------- |
+| I. Codebase            | ✅     | Single git repo                  |
+| II. Dependencies       | ✅     | Cargo.toml declares all          |
+| III. Config            | ✅     | .env.example, RUST_LOG supported |
+| IV. Backing Services   | ✅     | SQLite via `QUEST_LOG_DATA_DIR`  |
+| V. Build, release, run | ❌     | No containerization, no CI/CD    |
+| VI. Processes          | ✅     | Stateless, DB-backed             |
+| VII. Port binding      | ✅     | `PORT` env var, self-contained   |
+| VIII. Concurrency      | ✅     | Can scale horizontally           |
+| IX. Disposability      | ❌     | No graceful shutdown             |
+| X. Dev/prod parity     | ❌     | No containerization              |
+| XI. Logs               | ✅     | Structured logging with emojis   |
+| XII. Admin processes   | ❌     | No CLI for migrations/admin      |
 
-### 14.1 Environment Configuration
+### 14.1 Environment Configuration ✅
 
-**Goal:** Document and standardize environment variables.
+**Done:** Implemented in main.rs with #[cfg(debug_assertions)] guard, created
+.env.example
 
-**Files:**
+### 14.2 Structured Logging ✅
 
-- `src/main.rs` - Remove `dotenvy::dotenv()` in release builds
-- `.env.example` - **Create**
-
-**Environment Variables:**
-
-| Variable             | Description                                                  | Default           | Required |
-| -------------------- | ------------------------------------------------------------ | ----------------- | -------- |
-| `PORT`               | Server listen port                                           | `3000`            | No       |
-| `QUEST_LOG_DATA_DIR` | Absolute path for database storage                           | Current directory | No       |
-| `RUST_LOG`           | Tracing log level (e.g., `info`, `debug`, `quest_log=trace`) | `info`            | No       |
-
-**Implementation:**
-
-- `dotenvy::dotenv()` should only load `.env` in debug builds via
-  `#[cfg(debug_assertions)]`
-- Production relies purely on environment variables
-
-### 14.2 Structured Logging
-
-**Goal:** Replace `println!` with structured logging to stdout.
-
-**Files:**
-
-- `src/main.rs` - Add tracing setup, replace `println!`
-- `Cargo.toml` - Add `tracing-subscriber` dependency
-
-**Dependency:**
-
-```toml
-tracing-subscriber = { version = "0.3", features = ["env-filter"] }
-```
-
-**Replace:**
-
-- `println!("Initializing database...")` → `info!("Initializing database")`
-- `println!("Database ready!")` → `info!("Database ready")`
-- `println!("Server listening on http://{}", addr)` →
-  `info!("Server listening on {}", addr)`
-
-**Note:** Plain text output to stdout only. No JSON. Execution environment
-handles log routing.
+**Done:** Added tracing with fun emoji logs, debug mode has clean output
 
 ### 14.3 Graceful Shutdown
 
@@ -150,11 +111,24 @@ clap = { version = "4", features = ["derive"] }
 quest-log                  # Start web server (default)
 quest-log run              # Start web server (explicit)
 quest-log migrate          # Run database migrations
-quest-log quest list       # List all quests
-quest-log quest create --title "..." --exp 10 --day 1
-quest-log quest delete --id <ID>
-quest-log quest complete --id <ID> --date YYYY-MM-DD
+quest-log quest list       # List quests [--day 1]
+quest-log quest create     # --title, --exp, --day
+quest-log quest delete     # --id
+quest-log quest complete   # --id, --date
+quest-log reward list      # List rewards
+quest-log reward create   # --title, --required-exp
+quest-log reward delete   # --id
+quest-log settings show   # Show current settings
+quest-log settings set    # --weekly-goal
 ```
+
+**Notes:**
+
+- CLI directly accesses SQLite database file (WAL mode handles concurrency)
+- No IPC with running server needed - CLI changes reflected on next page refresh
+- Quest `--day` defaults to current day of week
+- Reward `--required-exp` (or `--exp`) specifies EXP needed to claim
+- Settings `--weekly-goal` sets the weekly EXP target (default: 100)
 
 ### 14.5 Containerization (Podman Quadlets)
 

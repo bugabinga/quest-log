@@ -1,10 +1,8 @@
 import {
-  createParticles,
-  createParticlesUncomplete,
   pulseCounter,
   triggerQuestUncompletionNotification,
   triggerSuccessNotification,
-} from "./counter-animation.js";
+} from "./ui-effects.js";
 
 let previousExpToday = 0;
 
@@ -28,28 +26,12 @@ const observer = new MutationObserver((mutations) => {
       const attr = el.getAttribute(mutation.attributeName);
 
       if (mutation.attributeName === "data-just-completed" && attr === "true") {
-        const button = el.querySelector(".toggle-btn");
-        if (button) {
-          const rect = button.getBoundingClientRect();
-          createParticles(
-            rect.left + rect.width / 2,
-            rect.top + rect.height / 2,
-          );
-        }
-        triggerSuccessNotification("Quest completed! +XP");
+        triggerSuccessNotification("Quest completed!");
         el.removeAttribute("data-just-completed");
       } else if (
         mutation.attributeName === "data-just-uncompleted" &&
         attr === "true"
       ) {
-        const button = el.querySelector(".toggle-btn");
-        if (button) {
-          const rect = button.getBoundingClientRect();
-          createParticlesUncomplete(
-            rect.left + rect.width / 2,
-            rect.top + rect.height / 2,
-          );
-        }
         triggerQuestUncompletionNotification();
         el.removeAttribute("data-just-uncompleted");
       }
@@ -69,7 +51,7 @@ if (questList) {
 document.addEventListener("datastar-signal-patch", (e) => {
   const signals = e.detail;
   if (signals.error) {
-    import("./counter-animation.js").then((m) =>
+    import("./ui-effects.js").then((m) =>
       m.triggerErrorNotification(signals.error)
     );
   }
@@ -78,7 +60,7 @@ document.addEventListener("datastar-signal-patch", (e) => {
     const expCounter = document.getElementById("exp-counter");
     if (expCounter && signals.expToday !== previousExpToday) {
       const diff = signals.expToday - previousExpToday;
-      if (diff !== 0) {
+      if (diff > 0) {
         pulseCounter(expCounter);
       }
     }

@@ -30,6 +30,7 @@ pub enum AppError {
     Database,
     NotFound,
     ValidationError,
+    TemplateRender,
 }
 
 impl AppError {
@@ -38,6 +39,7 @@ impl AppError {
             Self::Database => StatusCode::INTERNAL_SERVER_ERROR,
             Self::NotFound => StatusCode::NOT_FOUND,
             Self::ValidationError => StatusCode::BAD_REQUEST,
+            Self::TemplateRender => StatusCode::INTERNAL_SERVER_ERROR,
         }
     }
 
@@ -46,6 +48,7 @@ impl AppError {
             Self::Database => "Well, This is Awkward",
             Self::NotFound => "Nothing Here",
             Self::ValidationError => "Can't Do That",
+            Self::TemplateRender => "Template Trouble",
         }
     }
 
@@ -54,6 +57,7 @@ impl AppError {
             Self::Database => "Something broke. Congratulations.",
             Self::NotFound => "Gone.",
             Self::ValidationError => "Wrong Day!",
+            Self::TemplateRender => "Something went wrong rendering the page.",
         }
     }
 
@@ -62,6 +66,7 @@ impl AppError {
             Self::Database => "You didn't do this, but you probably didn't need it to work anyway.",
             Self::NotFound => "Like your motivation. Or your quests.",
             Self::ValidationError => "You can only complete quests on their assigned day.",
+            Self::TemplateRender => "The page failed to generate. Try again?",
         }
     }
 }
@@ -69,7 +74,17 @@ impl AppError {
 impl IntoResponse for AppError {
     fn into_response(self) -> Response<Body> {
         let template = ErrorTemplate::from(self);
-        (self.status_code(), Html(template.render().unwrap())).into_response()
+        match template.render() {
+            Ok(html) => (self.status_code(), Html(html)).into_response(),
+            Err(e) => {
+                tracing::error!(error = %e, "💥 Failed to render error template");
+                (
+                    self.status_code(),
+                    Html("<html><body><h1>Error</h1></body></html>".to_string()),
+                )
+                    .into_response()
+            }
+        }
     }
 }
 
@@ -204,7 +219,7 @@ struct QuestsTemplate {
 pub async fn quests(
     State(state): State<AppState>,
     Query(query): Query<QuestsQuery>,
-) -> impl IntoResponse {
+) -> Result<impl IntoResponse, AppError> {
     let db = &state.db;
     let today = chrono::Utc::now().date_naive();
     let selected_date = if let Some(date_str) = query.date {
@@ -213,18 +228,31 @@ pub async fn quests(
         today
     };
 
+    tracing::debug!(date = %selected_date, "📜 Loading quests for day");
+
     // Validate within current week (Monday to Sunday)
     let week_start = today - chrono::Duration::days(today.weekday().num_days_from_monday() as i64);
     let week_end = week_start + chrono::Duration::days(6);
     if selected_date < week_start || selected_date > week_end {
-        return Html("Invalid date - must be within current week".to_string()).into_response();
+        tracing::warn!(date = %selected_date, week_start = %week_start, week_end = %week_end, "⚠️  Date outside current week - rejecting");
+        return Ok(Html("Invalid date - must be within current week".to_string()).into_response());
     }
 
     let day_of_week = selected_date.weekday().num_days_from_sunday() as i32;
 
     let quests = match db.get_quests_for_day(day_of_week).await {
-        Ok(quests) => quests,
-        Err(_) => return AppError::Database.into_response(),
+        Ok(quests) => {
+            tracing::debug!(
+                quest_count = quests.len(),
+                day = day_of_week,
+                "📋 Loaded quests"
+            );
+            quests
+        }
+        Err(e) => {
+            tracing::error!(error = %e, "💥 Failed to load quests from database");
+            return Err(AppError::Database);
+        }
     };
 
     let mut quests_display = Vec::new();
@@ -305,7 +333,13 @@ pub async fn quests(
         stats,
     };
 
-    Html(template.render().expect("Template rendering failed")).into_response()
+    match template.render() {
+        Ok(html) => Ok(Html(html).into_response()),
+        Err(e) => {
+            tracing::error!(error = %e, "💥 Failed to render quests template");
+            Err(AppError::TemplateRender)
+        }
+    }
 }
 
 pub async fn toggle_quest(
@@ -317,31 +351,47 @@ pub async fn toggle_quest(
     let today = chrono::Utc::now().date_naive();
     let quest_id = request.quest_id.as_i64();
 
+    tracing::debug!(quest_id, "✨ Toggle quest request received");
+
     // Check if quest exists first
-    let quest = db
-        .get_quest_by_id(quest_id)
-        .await
-        .map_err(|_| AppError::Database)?;
+    let quest = db.get_quest_by_id(quest_id).await.map_err(|e| {
+        tracing::error!(error = %e, quest_id, "💥 Database error looking up quest");
+        AppError::Database
+    })?;
 
     let Some(quest) = quest else {
+        tracing::warn!(quest_id, "❌ Quest not found in database");
         return Err(AppError::NotFound);
     };
 
     let quest_day = quest.day_of_week as u32;
     let today_day = today.weekday().num_days_from_sunday();
     if quest_day != today_day {
+        tracing::warn!(
+            quest_id,
+            quest_day,
+            today_day,
+            "⚠️  Quest not available today - wrong day"
+        );
         return Err(AppError::ValidationError);
     }
 
+    tracing::debug!(quest_id, title = %quest.title, "Toggling quest completion");
     let toggle_result = db
         .toggle_quest_completion(quest_id, today)
         .await
-        .map_err(|_| AppError::Database)?;
+        .map_err(|e| {
+            tracing::error!(error = %e, quest_id, "💥 Database error toggling quest");
+            AppError::Database
+        })?;
 
     let completed_today = db
         .is_quest_completed_today(quest_id, today)
         .await
-        .unwrap_or(false);
+        .unwrap_or_else(|e| {
+            tracing::warn!(error = %e, quest_id, "⚠️  Failed to check completion status, defaulting to false");
+            false
+        });
 
     let was_just_completed = toggle_result == ToggleResult::NewlyCompleted;
     let was_just_uncompleted = toggle_result == ToggleResult::NewlyUncompleted;
@@ -360,11 +410,8 @@ pub async fn toggle_quest(
     let mut quests_completed = 0;
 
     for q in &all_quests {
-        if db
-            .is_quest_completed_today(q.id, today)
-            .await
-            .ok()
-            .unwrap_or(false)
+        if let Ok(completed) = db.is_quest_completed_today(q.id, today).await
+            && completed
         {
             total_exp += q.exp_value;
             quests_completed += 1;
@@ -394,7 +441,10 @@ pub async fn toggle_quest(
         was_just_uncompleted,
     };
 
-    let quest_html = quest_template.render().expect("Template rendering failed");
+    let quest_html = quest_template.render().map_err(|e| {
+        tracing::error!(error = %e, "💥 Failed to render toggle template");
+        AppError::TemplateRender
+    })?;
 
     let signals_json = serde_json::json!({
         "expToday": total_exp,
@@ -408,6 +458,7 @@ pub async fn toggle_quest(
     let origin = request.client_id.clone();
     let _ = bcast.send(ServerMessage::Elements(quest_html.clone(), origin.clone()));
     let _ = bcast.send(ServerMessage::Signals(signals_json.to_string(), origin));
+    tracing::trace!("📢 Broadcast sent to {} client(s)", 1);
 
     let quest_patch = PatchElements::new(quest_html).use_view_transition(true);
     let signals_patch = PatchSignals::new(signals_json.to_string());
@@ -430,10 +481,18 @@ pub async fn navigate(
     let db = &state.db;
     let today = chrono::Utc::now().date_naive();
 
+    tracing::debug!(target_date = %path.date, "🧭 Navigate request");
+
     let selected_date = if path.date == "today" {
         today
     } else {
-        NaiveDate::parse_from_str(&path.date, "%Y-%m-%d").map_err(|_| AppError::NotFound)?
+        match NaiveDate::parse_from_str(&path.date, "%Y-%m-%d") {
+            Ok(d) => d,
+            Err(e) => {
+                tracing::warn!(target_date = %path.date, error = %e, "⚠️  Failed to parse date");
+                return Err(AppError::NotFound);
+            }
+        }
     };
 
     let week_start = selected_date
@@ -457,7 +516,10 @@ pub async fn navigate(
         let completed_today = db
             .is_quest_completed_today(quest.id, selected_date)
             .await
-            .unwrap_or(false);
+            .unwrap_or_else(|e| {
+                tracing::warn!(error = %e, quest_id = quest.id, "⚠️  Failed to check completion status");
+                false
+            });
         quests_display.push(QuestDisplay {
             id: quest.id,
             title: quest.title,
@@ -539,11 +601,26 @@ pub async fn navigate(
         is_today,
     };
 
-    let day_header_html = day_header.render().expect("Template rendering failed");
-    let today_btn_html = today_btn.render().expect("Template rendering failed");
-    let nav_left_html = nav_left.render().expect("Template rendering failed");
-    let nav_right_html = nav_right.render().expect("Template rendering failed");
-    let quest_list_html = quest_list.render().expect("Template rendering failed");
+    let day_header_html = day_header.render().map_err(|e| {
+        tracing::error!(error = %e, "💥 Failed to render day_header template");
+        AppError::TemplateRender
+    })?;
+    let today_btn_html = today_btn.render().map_err(|e| {
+        tracing::error!(error = %e, "💥 Failed to render today_btn template");
+        AppError::TemplateRender
+    })?;
+    let nav_left_html = nav_left.render().map_err(|e| {
+        tracing::error!(error = %e, "💥 Failed to render nav_left template");
+        AppError::TemplateRender
+    })?;
+    let nav_right_html = nav_right.render().map_err(|e| {
+        tracing::error!(error = %e, "💥 Failed to render nav_right template");
+        AppError::TemplateRender
+    })?;
+    let quest_list_html = quest_list.render().map_err(|e| {
+        tracing::error!(error = %e, "💥 Failed to render quest_list template");
+        AppError::TemplateRender
+    })?;
 
     let url_path = if is_today {
         "/".to_string()
@@ -586,6 +663,7 @@ pub async fn navigate(
 pub async fn events(
     State(state): State<AppState>,
 ) -> Sse<impl Stream<Item = Result<Event, Infallible>>> {
+    tracing::debug!("📡 SSE connection opened - client subscribed to updates");
     let rx = state.bcast.subscribe();
     let bcast_stream = BroadcastStream::new(rx).filter_map(|res| match res {
         Ok(ServerMessage::Elements(html, origin)) => {
@@ -618,4 +696,11 @@ pub async fn events(
         );
 
     Sse::new(bcast_stream.chain(keepalive))
+}
+
+// Test-only slow endpoint used by integration tests to simulate long-running requests.
+// This intentionally sleeps for a few seconds before responding.
+pub async fn slow() -> &'static str {
+    tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+    "done"
 }

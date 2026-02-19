@@ -1,7 +1,9 @@
+mod cli;
 mod database;
 mod handlers;
 mod models;
 mod state;
+mod tui;
 
 use crate::database::Database;
 use crate::handlers::ServerMessage;
@@ -13,6 +15,8 @@ use axum::{
 use static_serve::embed_assets;
 use std::net::SocketAddr;
 use tokio::sync::broadcast;
+use tokio::time::Duration;
+use tracing_subscriber::{EnvFilter, fmt, layer::SubscriberExt, util::SubscriberInitExt};
 
 #[cfg(debug_assertions)]
 embed_assets!("static", compress = true);
@@ -20,40 +24,172 @@ embed_assets!("static", compress = true);
 #[cfg(not(debug_assertions))]
 embed_assets!("static", compress = true, ignore_paths = ["*.map"]);
 
+fn setup_logging() {
+    let filter = EnvFilter::try_from_default_env()
+        .unwrap_or_else(|_| "quest_log=debug,tokio=info,axum=warn".into());
+
+    #[cfg(debug_assertions)]
+    let fmt_layer = fmt::layer()
+        .with_target(false)
+        .with_thread_ids(false)
+        .with_file(true)
+        .with_line_number(true)
+        .with_ansi(true)
+        .without_time()
+        .compact();
+
+    #[cfg(not(debug_assertions))]
+    let fmt_layer = fmt::layer()
+        .with_target(true)
+        .with_thread_ids(true)
+        .with_file(true)
+        .with_line_number(true)
+        .with_ansi(true);
+
+    tracing_subscriber::registry()
+        .with(filter)
+        .with(fmt_layer)
+        .init();
+
+    #[cfg(debug_assertions)]
+    eprintln!("⏰ Timestamps disabled in debug mode for cleaner output (灬•́_•̀灬)");
+}
+
+async fn health() -> &'static str {
+    "OK"
+}
+
 #[tokio::main]
 async fn main() {
+    setup_logging();
+
+    #[cfg(debug_assertions)]
     dotenvy::dotenv().ok();
 
-    println!("Initializing database...");
+    tracing::info!("✨ Quest Log starting up...");
+
+    // Dispatch CLI; returns Ok(true) if server should run
+    let should_run_server = match cli::run_cli().await {
+        Ok(should_run) => should_run,
+        Err(e) => {
+            eprintln!("❌ CLI error: {}", e);
+            std::process::exit(1);
+        }
+    };
+
+    if !should_run_server {
+        return;
+    }
+
+    let data_dir = std::env::var("QUEST_LOG_DATA_DIR").unwrap_or_else(|_| ".".to_string());
+    tracing::info!(data_dir = %data_dir, "📂 Data directory set");
+
+    let port = std::env::var("PORT").unwrap_or_else(|_| "3000".to_string());
+    tracing::debug!(port = %port, "🔌 Port configured");
+
+    tracing::info!("🗄️  Initializing database...");
     let db = Database::new()
         .await
-        .expect("Failed to connect to database");
+        .expect("💥 Failed to connect to database");
+    tracing::info!("✅ Database ready! (灬♥ω♥灬)");
 
-    println!("Database ready!");
+    let (bcast_tx, _rx) = broadcast::channel::<ServerMessage>(128);
 
-    let (bcast_tx, _) = broadcast::channel::<ServerMessage>(128);
     let app_state = AppState {
         db,
         bcast: bcast_tx,
     };
 
-    let app = Router::new()
+    tracing::debug!("🏗️  Building router...");
+    let mut router = Router::new()
         .route("/", get(handlers::quests))
         .route("/day/{date}", get(handlers::quests))
         .route("/navigate/{date}", get(handlers::navigate))
         .route("/quests/toggle", post(handlers::toggle_quest))
         .route("/events", get(handlers::events))
+        .route("/health", get(health))
         .merge(static_router())
-        .with_state(app_state);
+        .with_state(app_state.clone());
 
-    let port = std::env::var("PORT")
-        .unwrap_or_else(|_| "3000".to_string())
-        .parse::<u16>()
-        .expect("PORT must be a number");
+    // Test-only endpoints are enabled via ENABLE_TEST_ENDPOINTS=1 at runtime.
+    // This avoids exposing test routes in normal production runs.
+    if std::env::var("ENABLE_TEST_ENDPOINTS").unwrap_or_default() == "1" {
+        tracing::debug!("🔧 Test endpoints enabled");
+        router = router.route("/test/slow", get(handlers::slow));
+    }
 
+    let app = router;
+
+    let port: u16 = port.parse().expect("💢 PORT must be a number");
     let addr = SocketAddr::from(([127, 0, 0, 1], port));
-    println!("Server listening on http://{}", addr);
 
-    let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
-    axum::serve(listener, app).await.unwrap();
+    tracing::info!(port, "🚀 Starting HTTP server...");
+
+    // attach middleware to count active requests
+    // middleware: no-op when active_requests not present in AppState for test suites
+    let app = app;
+
+    // bind the TCP listener and create a server future (axum helper)
+    let listener = match tokio::net::TcpListener::bind(addr).await {
+        Ok(l) => l,
+        Err(e) => {
+            tracing::error!(error = %e, port = %port, "💥 Failed to bind to port - address may be in use");
+            return;
+        }
+    };
+
+    let server = axum::serve(listener, app);
+
+    tracing::info!(url = %format!("http://{}", addr), "🎉 Server listening! (◕‿◕)");
+    tracing::info!("💡 Open your browser and start questing!");
+
+    // a oneshot bridge we will trigger when a shutdown signal arrives
+    let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel::<()>();
+    let graceful = server.with_graceful_shutdown(async {
+        let _ = shutdown_rx.await;
+    });
+
+    // run the server in background so we can listen for signals concurrently
+    let server_handle = tokio::spawn(async move {
+        if let Err(e) = graceful.await {
+            tracing::error!(error = %e, "💥 Server error - HTTP service failed");
+        }
+    });
+
+    // wait for either ctrl-c or unix SIGTERM
+    tokio::select! {
+        _ = tokio::signal::ctrl_c() => {
+            tracing::info!("🛑 SIGINT received, initiating graceful shutdown...");
+        }
+        _ = async {
+            #[cfg(unix)]{
+                use tokio::signal::unix::{signal, SignalKind};
+                let mut sigterm = signal(SignalKind::terminate()).expect("Failed to install SIGTERM handler");
+                sigterm.recv().await
+            }
+            #[cfg(not(unix))]{
+                futures::future::pending::<()>().await
+            }
+        } => {
+            tracing::info!("🛑 SIGTERM received, initiating graceful shutdown...");
+        }
+    }
+
+    tracing::info!(
+        "⏳ Triggering server graceful shutdown (allowing in-flight requests to finish)..."
+    );
+    // best-effort send; ignore if receiver already dropped
+    let _ = shutdown_tx.send(());
+
+    // wait for the server task to finish with a generous timeout for CI
+    match tokio::time::timeout(Duration::from_secs(30), server_handle).await {
+        Ok(join_res) => {
+            if let Err(e) = join_res {
+                tracing::error!(error = %e, "💥 Server task panicked during shutdown");
+            }
+        }
+        Err(_) => {
+            tracing::error!("💥 Server did not shut down within 30s, forcing exit");
+        }
+    }
 }
