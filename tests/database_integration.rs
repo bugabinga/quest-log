@@ -2,7 +2,7 @@ use quest_log::{database::Database, models::*};
 use sqlx::SqlitePool;
 
 #[tokio::test]
-async fn test_phase2_database_layer_integration() {
+async fn test_database_layer_integration() {
     // Setup test database with in-memory SQLite (like unit tests)
     let pool = SqlitePool::connect("sqlite::memory:")
         .await

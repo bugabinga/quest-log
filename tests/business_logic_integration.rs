@@ -3,7 +3,7 @@ use quest_log::{database::Database, models::*};
 use sqlx::SqlitePool;
 
 #[tokio::test]
-async fn test_phase3_business_logic_integration() {
+async fn test_business_logic_integration() {
     // Setup test database with in-memory SQLite
     let pool = SqlitePool::connect("sqlite::memory:")
         .await
@@ -207,54 +207,75 @@ async fn test_phase3_business_logic_integration() {
         "Should not be able to claim reward requiring more EXP than earned"
     );
 
-    // Test quest completion toggle (uncomplete and complete again)
+    // Test quest completion toggle (now bidirectional - can complete and un-complete)
+    // First, ensure quest1 is in a known state by toggling it if already completed
+    let was_already_completed = db
+        .is_quest_completed_today(q1.id, monday)
+        .await
+        .expect("Failed to check quest completion status");
+
+    // Toggle to get to a known state (uncompleted)
+    if was_already_completed {
+        db.toggle_quest_completion(q1.id, monday)
+            .await
+            .expect("Failed to un-complete quest");
+    }
+
+    // Now toggle to complete
     let was_completed = db
         .toggle_quest_completion(q1.id, monday)
         .await
         .expect("Failed to toggle quest 1 completion");
-    assert!(!was_completed, "Quest should now be incomplete");
+    assert_eq!(
+        was_completed,
+        ToggleResult::NewlyCompleted,
+        "Quest should be newly completed"
+    );
 
     let exp_after_toggle = db
         .calculate_weekly_exp(week_start, week_end)
         .await
         .expect("Failed to calculate EXP after toggle");
     assert_eq!(
-        exp_after_toggle, 60,
-        "Weekly EXP should be reduced by 50 (110 - 50 = 60)"
+        exp_after_toggle, 110,
+        "Weekly EXP should be 110 (first quest completed)"
     );
 
-    // Complete it again
+    // Toggle again - should un-complete
     let completed_again = db
         .toggle_quest_completion(q1.id, monday)
         .await
-        .expect("Failed to complete quest 1 again");
-    assert!(completed_again, "Quest should now be completed again");
+        .expect("Failed to un-complete quest 1");
+    assert_eq!(
+        completed_again,
+        ToggleResult::NewlyUncompleted,
+        "Quest should be newly un-completed"
+    );
 
     let final_exp = db
         .calculate_weekly_exp(week_start, week_end)
         .await
         .expect("Failed to calculate final EXP");
-    assert_eq!(final_exp, 110, "Weekly EXP should be back to 110");
+    assert_eq!(final_exp, 60, "Weekly EXP should be 60 after un-completing");
 
-    // Test business logic validation - completing quest on wrong day should still work
-    // (The database allows any date, business logic validation happens at application level)
-    let future_date = week_start + chrono::Duration::days(30);
+    // Toggle third time - should complete again
     let future_completion = db
-        .toggle_quest_completion(q1.id, future_date)
+        .toggle_quest_completion(q1.id, monday)
         .await
-        .expect("Failed to complete quest in future");
-    assert!(
+        .expect("Failed to complete quest again");
+    assert_eq!(
         future_completion,
-        "Should be able to complete quest on any date"
+        ToggleResult::NewlyCompleted,
+        "Quest should be newly completed again"
     );
 
-    // Verify the future completion is counted in total EXP
+    // Verify the completion is counted in total EXP
     let total_with_future = db
         .get_total_exp_earned()
         .await
-        .expect("Failed to get total EXP with future completion");
+        .expect("Failed to get total EXP after re-completing");
     assert_eq!(
-        total_with_future, 160,
-        "Total EXP should include future completion (110 + 50 = 160)"
+        total_with_future, 110,
+        "Total EXP should be 110 after re-completing quest1"
     );
 }

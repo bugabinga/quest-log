@@ -1,45 +1,109 @@
-<!DOCTYPE html>
-<html lang="en">
-	<head>
-		<meta charset="UTF-8">
-		<meta name="viewport" content="width=device-width, initial-scale=1.0">
-		<title>Quest Log - Daily Quests</title>
-		<link rel="stylesheet" href="/static/style.css">
-	</head>
-	<body>
-		<div id="app">
-			<h1>Quest Log</h1>
-			<p class="total-exp">Total EXP Today: {{ total_exp }}</p>
+{% extends "base.html" %}
 
-			{% if quests.len() > 0 %}
-			<h2>Today's Quests</h2>
-			<div class="quests-list">
-				{% for quest in quests %}
-				<div class="quest-item{% if quest.completed_today %} completed{% endif %}" data-quest-id="{{ quest.id }}">
-					<div class="quest-content">
-						<h3>{{ quest.title }}</h3>
-						{% if quest.description.len() > 0 %}
-						<p>{{ quest.description }}</p>
-						{% endif %}
-						<span class="exp-value">{{ quest.exp_value }} EXP</span>
-					</div>
-					<div class="quest-actions">
-						<button class="toggle-btn" data-completed="{{ quest.completed_today }}" data-on-click="$$post('/quests/toggle', { quest_id: {{ quest.id }} })" data-on-click-morph=".quest-item[data-quest-id='{{ quest.id }}'], .total-exp">
-							{% if quest.completed_today %}
-							✅ Completed
-							{% else %}
-							Mark Complete
-							{% endif %}
-						</button>
-					</div>
-				</div>
-				{% endfor %}
-			</div>
+{% block title %}Quest Log - {{ day_name }}{% endblock %}
+
+{% block body_attrs %}data-weekday="{{ weekday_num }}"{% endblock %}
+
+{% block nav_active_quests %} nav-link--active{% endblock %}
+
+{% block content %}
+<div data-signals="{expToday: {{ stats.exp_today }}, expTodayMax: {{ stats.exp_today_max }}, weekExp: {{ stats.week_exp }}, weekExpMax: {{ stats.week_exp_max }}, questsCompleted: {{ stats.quests_completed }}, questsTotal: {{ stats.quests_total }}}"
+     data-computed="{expTodayPercent: () => Math.round($expToday / Math.max($expTodayMax, 1) * 100), weekExpPercent: () => Math.round($weekExp / Math.max($weekExpMax, 1) * 100)}">
+</div>
+
+<div class="notifications"></div>
+<h1 class="rainbow-text">Quest Log</h1>
+
+<div class="day-navigation">
+	<button class="{{ class_left }}" id="nav-left" aria-label="Previous Day"{% if can_navigate_left %} data-on:click="@get('/navigate/{{ prev_date }}', { headers: { 'X-Navigate-Dir': 'prev' } })"{% endif %}></button>
+	<div class="day-info" id="day-info">
+		<h2 class="day-title">{{ day_name }}</h2>
+		<p class="day-date">{{ selected_date }}</p>
+	</div>
+	<button class="{{ class_right }}" id="nav-right" aria-label="Next Day"{% if can_navigate_right %} data-on:click="@get('/navigate/{{ next_date }}', { headers: { 'X-Navigate-Dir': 'next' } })"{% endif %}></button>
+</div>
+
+{% if is_today == false %}
+<div class="today-button" id="today-btn-container">
+	<button class="today-btn" data-on:click="@get('/navigate/today')">🏰 Return to Today</button>
+</div>
+{% else %}
+<div class="today-button" id="today-btn-container" style="display: none;"></div>
+{% endif %}
+
+<div class="stats-panel" id="stats-panel">
+	<div class="stat-row">
+		<span class="stat-label">Today's EXP:</span>
+		<span class="stat-value" id="exp-counter"><span data-text="$expToday"></span> / <span data-text="$expTodayMax"></span></span>
+	</div>
+	<div class="progress-bar">
+		<div class="progress-fill" data-style:width="$expTodayPercent + '%'"></div>
+	</div>
+	<div class="stat-row">
+		<span class="stat-label">Weekly Progress:</span>
+		<span class="stat-value"><span data-text="$weekExp"></span> / <span data-text="$weekExpMax"></span> EXP</span>
+	</div>
+	<div class="progress-bar weekly">
+		<div class="progress-fill" data-style:width="$weekExpPercent + '%'"></div>
+	</div>
+	<div class="stat-row">
+		<span class="stat-label">Quests Completed:</span>
+		<span class="stat-value"><span data-text="$questsCompleted"></span> / <span data-text="$questsTotal"></span></span>
+	</div>
+</div>
+
+{% if error_message.len() > 0 %}
+<div class="error-message">{{ error_message }}</div>
+{% endif %}
+
+{% if quests.len() > 0 %}
+<div class="quests-list" id="quest-list" style="view-transition-name: quest-list;">
+	{% for quest in quests %}
+	<div class="quest-item{% if quest.completed_today %} completed{% endif %}"
+	     id="quest-{{ quest.id }}"
+	     data-quest-id="{{ quest.id }}"
+	     style="view-transition-name: quest-{{ quest.id }};"
+	     data-view-transition="quest-morph"
+	>
+		<div class="quest-content">
+			<h3>{{ quest.title }}</h3>
+			{% if quest.description.len() > 0 %}
+			<p>{{ quest.description }}</p>
+			{% endif %}
+			<span class="exp-value">{{ quest.exp_value }} EXP</span>
+		</div>
+		<div class="quest-actions">
+			{% if is_today %}
+			<button class="toggle-btn{% if quest.completed_today %} completed{% endif %}"
+			        type="button"
+			        data-on:click__prevent="@post('/quests/toggle', { payload: { quest_id: {{ quest.id }} } })"
+			>
+				{% if quest.completed_today %}
+				✅ Completed
+				{% else %}
+				Mark Complete
+				{% endif %}
+			</button>
 			{% else %}
-			<p class="no-quests">No quests scheduled for today. Check back tomorrow!</p>
+			<div class="completion-status">
+				{% if quest.completed_today %}
+				✅ Completed
+				{% else %}
+				❌ Not Completed
+				{% endif %}
+			</div>
 			{% endif %}
 		</div>
-		<script src="https://cdn.jsdelivr.net/npm/@hotwired/stimulus@3.2.2/dist/stimulus.min.js"></script>
-		<script src="https://cdn.jsdelivr.net/npm/@datastar/core@0.3.0/dist/datastar.min.js"></script>
-	</body>
-</html>
+	</div>
+	{% endfor %}
+</div>
+{% else %}
+<div class="quests-list" id="quest-list" style="view-transition-name: quest-list;">
+	<p class="no-quests">Your parent forgot to assign quests for this day! Time to create some adventures! 🎮</p>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script type="module" src="/js/quest-ui.js"></script>
+{% endblock %}

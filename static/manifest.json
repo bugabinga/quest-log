@@ -1,0 +1,16 @@
+{
+  "name": "Quest Log",
+  "short_name": ".Quest Log",
+  "description": "Gamified quest tracker for kids",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#1a1a2e",
+  "theme_color": "#5466ff",
+  "icons": [
+    {
+      "src": "/favicon.png",
+      "sizes": "any",
+      "type": "image/png"
+    }
+  ]
+}

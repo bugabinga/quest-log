@@ -1,0 +1,46 @@
+{% if quests.len() > 0 %}
+<div class="quests-list" id="quest-list" style="view-transition-name: quest-list;">
+	{% for quest in quests %}
+	<div class="quest-item{% if quest.completed_today %} completed{% endif %}"
+	     id="quest-{{ quest.id }}"
+	     data-quest-id="{{ quest.id }}"
+	     style="view-transition-name: quest-{{ quest.id }};"
+	     data-view-transition="quest-morph"
+	>
+		<div class="quest-content">
+			<h3>{{ quest.title }}</h3>
+			{% if quest.description.len() > 0 %}
+			<p>{{ quest.description }}</p>
+			{% endif %}
+			<span class="exp-value">{{ quest.exp_value }} EXP</span>
+		</div>
+		<div class="quest-actions">
+			{% if is_today %}
+			<button class="toggle-btn{% if quest.completed_today %} completed{% endif %}"
+			        type="button"
+			        data-on:click__prevent="@post('/quests/toggle', { payload: { quest_id: {{ quest.id }} } })"
+			>
+				{% if quest.completed_today %}
+				✅ Completed
+				{% else %}
+				Mark Complete
+				{% endif %}
+			</button>
+			{% else %}
+			<div class="completion-status">
+				{% if quest.completed_today %}
+				✅ Completed
+				{% else %}
+				❌ Not Completed
+				{% endif %}
+			</div>
+			{% endif %}
+		</div>
+	</div>
+	{% endfor %}
+</div>
+{% else %}
+<div class="quests-list" id="quest-list" style="view-transition-name: quest-list;">
+	<p class="no-quests">Your parent forgot to assign quests for this day! Time to create some adventures! 🎮</p>
+</div>
+{% endif %}

@@ -1,0 +1,8 @@
+{
+  "lint": {
+    "exclude": ["static/js/datastar.js"]
+  },
+  "fmt": {
+    "exclude": ["static/js/datastar.js"]
+  }
+}

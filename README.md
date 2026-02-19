@@ -51,7 +51,8 @@ Open http://localhost:3000 in your browser.
 
 The application uses the following environment variables:
 
-- `DATABASE_URL` - SQLite database path (default: `quests.db`)
+- `QUEST_LOG_DATA_DIR` - Directory path for storing the SQLite database file
+  (must be absolute path, default: current directory)
 - `PORT` - Server port (default: `3000`)
 
 ### Development Commands

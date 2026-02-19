@@ -4,14 +4,39 @@
 		<meta charset="UTF-8">
 		<meta name="viewport" content="width=device-width, initial-scale=1.0">
 		<title>{% block title %}Quest Log{% endblock %}</title>
-		<link rel="stylesheet" href="/static/style.css">
+		<link rel="icon" href="/images/favicon.png" type="image/png">
+		<link rel="stylesheet" href="/style.css">
+		<script type="module" src="/js/datastar.js"></script>
 	</head>
-	<body>
+	<body {% block body_attrs %}{% endblock %}>
+		{% include "fragments/video-modal.html" %}
+		<header class="game-header">
+			<nav class="game-header-nav">
+				<a href="/" class="nav-link{% block nav_active_quests %}{% endblock %}">
+					<span class="nav-icon nav-icon--sword"></span>
+					<span>Quests</span>
+				</a>
+				<a href="/highscore" class="nav-link{% block nav_active_highscore %}{% endblock %}">
+					<span class="nav-icon nav-icon--trophy"></span>
+					<span>Highscore</span>
+				</a>
+				<a href="/editor" class="nav-link{% block nav_active_editor %}{% endblock %}">
+					<span class="nav-icon nav-icon--scroll"></span>
+					<span>Editor</span>
+				</a>
+				<span class="nav-link nav-link--trailer" data-on:click="window.openVideoModal()">
+					<span class="nav-icon nav-icon--crystal"></span>
+					<span>Trailer</span>
+				</span>
+			</nav>
+		</header>
 		<div id="app">
-			{% block content %}{% endblock %}
+			<div class="container">
+				{% block content %}{% endblock %}
+			</div>
 		</div>
-		<script src="https://cdn.jsdelivr.net/npm/@hotwired/stimulus@3.2.2/dist/stimulus.min.js"></script>
-		<script src="https://cdn.jsdelivr.net/npm/@datastar/core@0.3.0/dist/datastar.min.js"></script>
 		{% block scripts %}{% endblock %}
+		<script src="/js/video-modal.js"></script>
+		<script type="module" src="/js/events.js"></script>
 	</body>
 </html>

@@ -18,6 +18,7 @@ pub struct Quest {
 }
 
 // Quest completion tracking
+#[allow(dead_code)]
 #[derive(Debug, Clone, FromRow, Serialize, Deserialize)]
 pub struct QuestCompletion {
     pub id: i64,
@@ -41,6 +42,7 @@ pub struct Reward {
 }
 
 // Reward claim tracking
+#[allow(dead_code)]
 #[derive(Debug, Clone, FromRow, Serialize, Deserialize)]
 pub struct RewardClaim {
     pub id: i64,
@@ -50,6 +52,7 @@ pub struct RewardClaim {
 }
 
 // Application settings (single row table)
+#[allow(dead_code)]
 #[derive(Debug, Clone, FromRow, Serialize, Deserialize)]
 pub struct Settings {
     pub id: i32, // Always 1
@@ -66,6 +69,7 @@ pub struct CreateQuestRequest {
     pub day_of_week: i32,
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Deserialize)]
 pub struct UpdateQuestRequest {
     pub title: Option<String>,
@@ -82,6 +86,7 @@ pub struct CreateRewardRequest {
     pub required_exp: i32,
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Deserialize)]
 pub struct UpdateRewardRequest {
     pub title: Option<String>,
@@ -90,12 +95,14 @@ pub struct UpdateRewardRequest {
     pub is_active: Option<bool>,
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Deserialize)]
 pub struct UpdateSettingsRequest {
     pub weekly_exp_goal: i32,
 }
 
 // Response types
+#[allow(dead_code)]
 #[derive(Debug, Serialize)]
 pub struct QuestWithCompletion {
     #[serde(flatten)]
@@ -103,6 +110,7 @@ pub struct QuestWithCompletion {
     pub completed_today: bool,
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Serialize)]
 pub struct WeeklyStats {
     pub total_exp: i32,
@@ -110,4 +118,21 @@ pub struct WeeklyStats {
     pub completion_percentage: f32,
     pub rewards_claimed: i32,
     pub available_rewards: Vec<Reward>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ToggleResult {
+    NewlyCompleted,
+    NewlyUncompleted,
+    NoChange,
+}
+
+#[derive(Debug, Clone, Copy, Serialize)]
+pub struct QuestStats {
+    pub exp_today: i32,
+    pub exp_today_max: i32,
+    pub week_exp: i32,
+    pub week_exp_max: i32,
+    pub quests_completed: i32,
+    pub quests_total: i32,
 }

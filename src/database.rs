@@ -1,25 +1,89 @@
-use chrono::{NaiveDate, Utc};
+use chrono::{Datelike, NaiveDate, Utc};
 use sqlx::SqlitePool;
 use std::env;
+use std::path::Path;
 
 use crate::models::{
     CreateQuestRequest, CreateRewardRequest, Quest, QuestCompletion, Reward, Settings,
-    UpdateQuestRequest, UpdateSettingsRequest,
+    ToggleResult, UpdateQuestRequest, UpdateSettingsRequest,
 };
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Database {
     pool: SqlitePool,
 }
 
+#[allow(dead_code)]
 impl Database {
     /// Create a new database connection pool
     pub async fn new() -> Result<Self, sqlx::Error> {
-        let database_url = env::var("DATABASE_URL").unwrap_or_else(|_| "quests.db".to_string());
+        let data_dir = env::var("QUEST_LOG_DATA_DIR")
+            .unwrap_or_else(|_| {
+                env::current_dir()
+                    .expect("❌ Failed to get current directory. Please ensure you have permission to access the current working directory.")
+                    .to_string_lossy()
+                    .to_string()
+            });
 
-        let pool = SqlitePool::connect(&database_url).await?;
+        // Validate absolute path
+        let data_dir_path = Path::new(&data_dir);
+        if !data_dir_path.is_absolute() {
+            return Err(sqlx::Error::Configuration(
+                format!("❌ QUEST_LOG_DATA_DIR must be an absolute path: '{}'. Current working directory would be: '{}'",
+                    data_dir,
+                    env::current_dir().unwrap_or_default().display()
+                ).into()
+            ));
+        }
 
-        Ok(Self { pool })
+        // Create directory if it doesn't exist
+        if !data_dir_path.exists() {
+            std::fs::create_dir_all(data_dir_path)
+                .map_err(|e| sqlx::Error::Configuration(
+                    format!("❌ Failed to create database directory '{}': {}. Please check permissions.",
+                        data_dir_path.display(), e).into()
+                ))?;
+        }
+
+        let database_path = data_dir_path
+            .join("quests.db")
+            .to_string_lossy()
+            .to_string();
+
+        // Check if database file exists (only for file-based databases, not :memory:)
+        let is_new_database = if database_path != ":memory:" && database_path != "sqlite::memory:" {
+            let exists = Path::new(&database_path).exists();
+            if !exists {
+                // Create an empty file to ensure SQLite can connect
+                std::fs::File::create(&database_path).map_err(|e| {
+                    sqlx::Error::Configuration(
+                        format!(
+                            "❌ Failed to create database file '{}': {}. Please check permissions.",
+                            database_path, e
+                        )
+                        .into(),
+                    )
+                })?;
+            }
+            !exists
+        } else {
+            false
+        };
+
+        let pool = SqlitePool::connect(&database_path).await?;
+
+        let db = Self { pool };
+
+        // Run migrations
+        db.migrate().await?;
+
+        // Seed sample data only if this is a new database AND we're in debug mode
+        if is_new_database {
+            #[cfg(debug_assertions)]
+            db.seed_sample_data().await?;
+        }
+
+        Ok(db)
     }
 
     /// Create a new database instance with an existing pool (for testing)
@@ -35,6 +99,102 @@ impl Database {
     /// Run database migrations
     pub async fn migrate(&self) -> Result<(), sqlx::Error> {
         sqlx::migrate!("./migrations").run(&self.pool).await?;
+        Ok(())
+    }
+
+    /// Seed the database with sample data (debug mode only)
+    #[cfg(debug_assertions)]
+    async fn seed_sample_data(&self) -> Result<(), sqlx::Error> {
+        // Sample quests for each day of the week
+        let sample_quests = vec![
+            (
+                "Morning exercise",
+                Some("Get your body moving for the day"),
+                15,
+                1,
+            ), // Monday
+            ("Read for 30 minutes", Some("Expand your knowledge"), 20, 1), // Monday
+            (
+                "Help with chores",
+                Some("Contribute to household tasks"),
+                10,
+                2,
+            ), // Tuesday
+            (
+                "Practice instrument",
+                Some("Improve your musical skills"),
+                25,
+                2,
+            ), // Tuesday
+            (
+                "Learn something new",
+                Some("Discover a new topic or skill"),
+                30,
+                3,
+            ), // Wednesday
+            ("Call a friend", Some("Maintain social connections"), 5, 3),  // Wednesday
+            (
+                "Organize workspace",
+                Some("Create a productive environment"),
+                15,
+                4,
+            ), // Thursday
+            ("Healthy meal prep", Some("Plan nutritious meals"), 20, 4),   // Thursday
+            (
+                "Meditation session",
+                Some("Center your mind and spirit"),
+                10,
+                5,
+            ), // Friday
+            (
+                "Review weekly goals",
+                Some("Assess progress and plan ahead"),
+                15,
+                5,
+            ), // Friday
+            ("Weekend project", Some("Work on a personal project"), 40, 6), // Saturday
+            (
+                "Family time",
+                Some("Spend quality time with loved ones"),
+                25,
+                0,
+            ), // Sunday
+        ];
+
+        for (title, description, exp_value, day_of_week) in sample_quests {
+            let req = CreateQuestRequest {
+                title: title.to_string(),
+                description: description.map(|s| s.to_string()),
+                exp_value: Some(exp_value),
+                day_of_week,
+            };
+            self.create_quest(req).await?;
+        }
+
+        // Sample rewards with different EXP requirements
+        let sample_rewards = vec![
+            (
+                "Small treat",
+                Some("Enjoy a favorite snack or small indulgence"),
+                50,
+            ),
+            (
+                "Movie night",
+                Some("Watch a movie or show you've been wanting to see"),
+                100,
+            ),
+            ("Weekend outing", Some("Plan a fun activity or trip"), 200),
+        ];
+
+        for (title, description, required_exp) in sample_rewards {
+            let req = CreateRewardRequest {
+                title: title.to_string(),
+                description: description.map(|s| s.to_string()),
+                required_exp,
+            };
+            self.create_reward(req).await?;
+        }
+
         Ok(())
     }
 
@@ -173,26 +333,46 @@ impl Database {
         &self,
         quest_id: i64,
         date: NaiveDate,
-    ) -> Result<bool, sqlx::Error> {
+    ) -> Result<ToggleResult, sqlx::Error> {
+        // First, verify the quest exists
+        let quest_exists = self.get_quest_by_id(quest_id).await?.is_some();
+        if !quest_exists {
+            return Err(sqlx::Error::RowNotFound); // Quest doesn't exist
+        }
+
         // Check if already completed
         let exists = self.is_quest_completed_today(quest_id, date).await?;
 
         if exists {
-            // Remove completion
-            sqlx::query("DELETE FROM quest_completions WHERE quest_id = ? AND completed_date = ?")
-                .bind(quest_id)
-                .bind(date)
-                .execute(&self.pool)
-                .await?;
-            Ok(false) // Now incomplete
+            // Already completed - delete it to un-complete
+            match sqlx::query(
+                "DELETE FROM quest_completions WHERE quest_id = ? AND completed_date = ?",
+            )
+            .bind(quest_id)
+            .bind(date)
+            .execute(&self.pool)
+            .await
+            {
+                Ok(_) => Ok(ToggleResult::NewlyUncompleted),
+                Err(e) => Err(e),
+            }
         } else {
-            // Add completion
-            sqlx::query("INSERT INTO quest_completions (quest_id, completed_date) VALUES (?, ?)")
-                .bind(quest_id)
-                .bind(date)
-                .execute(&self.pool)
-                .await?;
-            Ok(true) // Now complete
+            // Not completed - insert to complete
+            match sqlx::query(
+                "INSERT INTO quest_completions (quest_id, completed_date) VALUES (?, ?)",
+            )
+            .bind(quest_id)
+            .bind(date)
+            .execute(&self.pool)
+            .await
+            {
+                Ok(_) => Ok(ToggleResult::NewlyCompleted),
+                Err(sqlx::Error::Database(db_err)) if db_err.is_unique_violation() => {
+                    // Another concurrent operation already inserted - that's fine
+                    Ok(ToggleResult::NoChange)
+                }
+                Err(e) => Err(e),
+            }
         }
     }
 
@@ -259,6 +439,48 @@ impl Database {
         .await?;
 
         Ok(result.0)
+    }
+
+    pub async fn get_week_stats(
+        &self,
+        today: NaiveDate,
+        week_start: NaiveDate,
+        week_end: NaiveDate,
+    ) -> Result<crate::models::QuestStats, sqlx::Error> {
+        let day_of_week = today.weekday().num_days_from_sunday() as i32;
+
+        // Today's quests and completed EXP
+        let today_quests = self.get_quests_for_day(day_of_week).await?;
+        let exp_today_max: i32 = today_quests.iter().map(|q| q.exp_value).sum();
+        let quests_total = today_quests.len() as i32;
+
+        let mut exp_today = 0i32;
+        let mut quests_completed = 0i32;
+        for quest in &today_quests {
+            if self.is_quest_completed_today(quest.id, today).await? {
+                exp_today += quest.exp_value;
+                quests_completed += 1;
+            }
+        }
+
+        // Weekly stats
+        let week_exp = self.calculate_weekly_exp(week_start, week_end).await?;
+
+        // Max weekly EXP (all quests for each day of the week)
+        let mut week_exp_max = 0i32;
+        for dow in 0..7 {
+            let quests = self.get_quests_for_day(dow).await?;
+            week_exp_max += quests.iter().map(|q| q.exp_value).sum::<i32>();
+        }
+
+        Ok(crate::models::QuestStats {
+            exp_today,
+            exp_today_max,
+            week_exp,
+            week_exp_max,
+            quests_completed,
+            quests_total,
+        })
     }
 
     pub async fn get_total_exp_earned(&self) -> Result<i32, sqlx::Error> {
@@ -341,6 +563,8 @@ mod tests {
     use crate::models::*;
     use chrono::{NaiveDate, Utc};
     use sqlx::SqlitePool;
+    use std::path::Path;
+    use std::sync::Arc;
 
     async fn setup_test_db() -> Database {
         // Use in-memory SQLite for tests to avoid interference between tests
@@ -466,15 +690,15 @@ mod tests {
 
         // Complete quest
         let completed = db.toggle_quest_completion(quest.id, today).await.unwrap();
-        assert!(completed);
+        assert_eq!(completed, ToggleResult::NewlyCompleted);
 
         // Check completion status
         let is_completed = db.is_quest_completed_today(quest.id, today).await.unwrap();
         assert!(is_completed);
 
-        // Toggle back to incomplete
-        let uncompleted = db.toggle_quest_completion(quest.id, today).await.unwrap();
-        assert!(!uncompleted);
+        // Toggle again - should un-complete
+        let completed_again = db.toggle_quest_completion(quest.id, today).await.unwrap();
+        assert_eq!(completed_again, ToggleResult::NewlyUncompleted);
 
         let is_completed_after = db.is_quest_completed_today(quest.id, today).await.unwrap();
         assert!(!is_completed_after);
@@ -495,7 +719,7 @@ mod tests {
         let quest = db.create_quest(req).await.unwrap();
 
         // Complete quest on Monday and Wednesday of the current week
-        let today = Utc::now().date_naive();
+        let _today = Utc::now().date_naive();
         // For simplicity, use a known Monday
         let monday = NaiveDate::from_ymd_opt(2024, 1, 1).unwrap(); // This was a Monday
         let wednesday = monday + chrono::Duration::days(2);
@@ -609,5 +833,477 @@ mod tests {
         // Check that claim was recorded
         let claimed_count = db.get_rewards_claimed_count().await.unwrap();
         assert_eq!(claimed_count, 1);
+    }
+
+    // ===== QUEST_LOG_DATA_DIR INTEGRATION TESTS =====
+
+    #[tokio::test]
+    async fn test_quest_log_data_dir_absolute_path_validation() {
+        use std::env;
+        use tempfile::tempdir;
+
+        unsafe {
+            env::set_var("QUEST_LOG_DATA_DIR", "relative/path");
+        }
+        let result = Database::new().await;
+        assert!(result.is_err());
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("must be an absolute path")
+        );
+        unsafe {
+            env::remove_var("QUEST_LOG_DATA_DIR");
+        }
+
+        // Test that absolute paths work and directory is created
+        let temp_dir = tempdir().unwrap();
+        let absolute_path = temp_dir
+            .path()
+            .join("test_data_dir")
+            .to_string_lossy()
+            .to_string();
+        unsafe {
+            env::set_var("QUEST_LOG_DATA_DIR", &absolute_path);
+        }
+
+        // Directory shouldn't exist yet
+        assert!(!Path::new(&absolute_path).exists());
+
+        let result = Database::new().await;
+        assert!(result.is_ok(), "Should succeed with absolute path");
+
+        // Directory should now exist
+        assert!(Path::new(&absolute_path).exists());
+
+        // Database file should exist
+        let db_path = Path::new(&absolute_path).join("quests.db");
+        assert!(db_path.exists());
+
+        // Clean up environment variable
+        unsafe {
+            env::remove_var("QUEST_LOG_DATA_DIR");
+        }
+    }
+
+    #[tokio::test]
+    async fn test_create_quest_empty_title() {
+        let db = setup_test_db().await;
+
+        let req = CreateQuestRequest {
+            title: "".to_string(),
+            description: None,
+            exp_value: Some(10),
+            day_of_week: 1,
+        };
+
+        // Empty title should still work (database doesn't enforce this constraint)
+        let result = db.create_quest(req).await;
+        assert!(result.is_ok(), "Empty title should be allowed by database");
+    }
+
+    #[tokio::test]
+    async fn test_update_quest_not_found() {
+        let db = setup_test_db().await;
+
+        let update_req = UpdateQuestRequest {
+            title: Some("Updated Title".to_string()),
+            description: None,
+            exp_value: None,
+            day_of_week: None,
+            is_active: None,
+        };
+
+        let result = db.update_quest(99999, update_req).await.unwrap();
+        assert!(
+            result.is_none(),
+            "Updating non-existent quest should return None"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_delete_quest_not_found() {
+        let db = setup_test_db().await;
+
+        let result = db.delete_quest(99999).await.unwrap();
+        assert!(!result, "Deleting non-existent quest should return false");
+    }
+
+    #[tokio::test]
+    async fn test_toggle_completion_nonexistent_quest() {
+        let db = setup_test_db().await;
+        let today = Utc::now().date_naive();
+
+        // Should return an error for non-existent quest
+        let result = db.toggle_quest_completion(99999, today).await;
+        assert!(
+            result.is_err(),
+            "Should return error for non-existent quest"
+        );
+
+        // Verify no completion was recorded
+        let completions = db.get_completions_for_date(today).await.unwrap();
+        assert!(
+            completions.is_empty(),
+            "No completions should be recorded for non-existent quest"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_get_quest_by_id_not_found() {
+        let db = setup_test_db().await;
+
+        let result = db.get_quest_by_id(99999).await.unwrap();
+        assert!(result.is_none(), "Non-existent quest ID should return None");
+    }
+
+    // ===== SECURITY UNIT TESTS =====
+
+    #[tokio::test]
+    async fn test_sql_injection_prevention() {
+        let db = setup_test_db().await;
+
+        // Test SQL injection attempts in quest titles
+        let injection_attempts = vec![
+            "'; DROP TABLE quests; --",
+            "' OR '1'='1",
+            "'; SELECT * FROM settings; --",
+            "admin'--",
+        ];
+
+        for attempt in injection_attempts {
+            let req = CreateQuestRequest {
+                title: attempt.to_string(),
+                description: Some("Injection attempt".to_string()),
+                exp_value: Some(10),
+                day_of_week: 1,
+            };
+
+            // Should succeed (data is properly escaped by sqlx)
+            let quest = db.create_quest(req).await.unwrap();
+            assert_eq!(quest.title, attempt, "Title should be stored as-is");
+
+            // Verify we can retrieve it safely
+            let retrieved = db.get_quest_by_id(quest.id).await.unwrap().unwrap();
+            assert_eq!(retrieved.title, attempt, "Should retrieve safely");
+        }
+    }
+
+    #[tokio::test]
+    async fn test_xss_prevention_in_storage() {
+        let db = setup_test_db().await;
+
+        // Test XSS attempts in quest data
+        let xss_attempts = vec![
+            "<script>alert('xss')</script>",
+            "<img src=x onerror=alert('xss')>",
+            "javascript:alert('xss')",
+            "<iframe src='javascript:alert(\"xss\")'>",
+        ];
+
+        for attempt in xss_attempts {
+            let req = CreateQuestRequest {
+                title: attempt.to_string(),
+                description: Some("XSS attempt".to_string()),
+                exp_value: Some(10),
+                day_of_week: 1,
+            };
+
+            // Should succeed (data is properly escaped by sqlx)
+            let quest = db.create_quest(req).await.unwrap();
+            assert_eq!(quest.title, attempt, "Title should be stored as-is");
+
+            // Verify we can retrieve it safely
+            let retrieved = db.get_quest_by_id(quest.id).await.unwrap().unwrap();
+            assert_eq!(retrieved.title, attempt, "Should retrieve safely");
+        }
+    }
+
+    // ===== BOUNDARY AND EDGE CASE UNIT TESTS =====
+
+    #[tokio::test]
+    async fn test_zero_exp_quest() {
+        let db = setup_test_db().await;
+
+        let req = CreateQuestRequest {
+            title: "Zero EXP Quest".to_string(),
+            description: None,
+            exp_value: Some(0),
+            day_of_week: 1,
+        };
+
+        let quest = db.create_quest(req).await.unwrap();
+        assert_eq!(quest.exp_value, 0);
+
+        // Complete the quest
+        let today = Utc::now().date_naive();
+        let completed = db.toggle_quest_completion(quest.id, today).await.unwrap();
+        assert_eq!(completed, ToggleResult::NewlyCompleted);
+
+        // Calculate weekly EXP - should include zero
+        let week_start = NaiveDate::from_ymd_opt(2024, 1, 1).unwrap();
+        let week_end = week_start + chrono::Duration::days(6);
+        let total_exp = db.calculate_weekly_exp(week_start, week_end).await.unwrap();
+        assert_eq!(total_exp, 0, "Zero EXP quest should contribute 0 to total");
+    }
+
+    #[tokio::test]
+    async fn test_negative_exp_quest() {
+        let db = setup_test_db().await;
+
+        // Database might allow negative EXP values, but let's test the behavior
+        let req = CreateQuestRequest {
+            title: "Negative EXP Quest".to_string(),
+            description: None,
+            exp_value: Some(-10),
+            day_of_week: 1,
+        };
+
+        let quest = db.create_quest(req).await.unwrap();
+        assert_eq!(quest.exp_value, -10);
+
+        // Complete the quest using consistent dates
+        let week_start = NaiveDate::from_ymd_opt(2024, 1, 1).unwrap();
+        let today = week_start + chrono::Duration::days(2); // Wednesday within the week
+        let completed = db.toggle_quest_completion(quest.id, today).await.unwrap();
+        assert_eq!(completed, ToggleResult::NewlyCompleted);
+
+        // Calculate weekly EXP - should handle negative values
+        let week_end = week_start + chrono::Duration::days(6);
+        let total_exp = db.calculate_weekly_exp(week_start, week_end).await.unwrap();
+        assert_eq!(total_exp, -10, "Negative EXP should be handled correctly");
+    }
+
+    #[tokio::test]
+    async fn test_max_exp_values() {
+        let db = setup_test_db().await;
+
+        // Test with very large EXP values
+        let req = CreateQuestRequest {
+            title: "Max EXP Quest".to_string(),
+            description: None,
+            exp_value: Some(i32::MAX),
+            day_of_week: 1,
+        };
+
+        let quest = db.create_quest(req).await.unwrap();
+        assert_eq!(quest.exp_value, i32::MAX);
+
+        // Complete the quest using consistent dates
+        let week_start = NaiveDate::from_ymd_opt(2024, 1, 1).unwrap();
+        let today = week_start + chrono::Duration::days(2); // Wednesday within the week
+        let completed = db.toggle_quest_completion(quest.id, today).await.unwrap();
+        assert_eq!(completed, ToggleResult::NewlyCompleted);
+
+        // Calculate weekly EXP - should handle large values
+        let week_end = week_start + chrono::Duration::days(6);
+        let total_exp = db.calculate_weekly_exp(week_start, week_end).await.unwrap();
+        assert_eq!(total_exp, i32::MAX, "Should handle maximum i32 values");
+    }
+
+    #[tokio::test]
+    async fn test_empty_quest_list() {
+        let db = setup_test_db().await;
+
+        // Test getting quests for a day with no quests
+        let quests = db.get_quests_for_day(5).await.unwrap();
+        assert!(
+            quests.is_empty(),
+            "Should return empty list for day with no quests"
+        );
+
+        // Test weekly EXP calculation with no quests
+        let week_start = NaiveDate::from_ymd_opt(2024, 1, 1).unwrap();
+        let week_end = week_start + chrono::Duration::days(6);
+        let total_exp = db.calculate_weekly_exp(week_start, week_end).await.unwrap();
+        assert_eq!(total_exp, 0, "Empty quest list should result in 0 EXP");
+    }
+
+    #[tokio::test]
+    async fn test_get_quests_for_invalid_day() {
+        let db = setup_test_db().await;
+
+        // Test edge cases for day_of_week
+        let quests = db.get_quests_for_day(-1).await.unwrap();
+        assert!(quests.is_empty(), "Invalid day should return empty list");
+
+        let quests = db.get_quests_for_day(7).await.unwrap();
+        assert!(quests.is_empty(), "Invalid day should return empty list");
+    }
+
+    #[tokio::test]
+    async fn test_reward_claiming_boundary_conditions() {
+        let db = setup_test_db().await;
+
+        // Create reward requiring exactly 0 EXP
+        let reward_req = CreateRewardRequest {
+            title: "Free Reward".to_string(),
+            description: None,
+            required_exp: 0,
+        };
+        let reward = db.create_reward(reward_req).await.unwrap();
+
+        // Should be able to claim immediately
+        let week_start = NaiveDate::from_ymd_opt(2024, 1, 1).unwrap();
+        let claimed = db.claim_reward(reward.id, week_start).await.unwrap();
+        assert!(claimed, "Should be able to claim reward requiring 0 EXP");
+
+        // Create reward requiring exact EXP match
+        let reward_req2 = CreateRewardRequest {
+            title: "Exact Match Reward".to_string(),
+            description: None,
+            required_exp: 25,
+        };
+        let reward2 = db.create_reward(reward_req2).await.unwrap();
+
+        // Create quest worth exactly 25 EXP
+        let quest_req = CreateQuestRequest {
+            title: "Exact EXP Quest".to_string(),
+            description: None,
+            exp_value: Some(25),
+            day_of_week: 1,
+        };
+        let quest = db.create_quest(quest_req).await.unwrap();
+
+        // Complete the quest
+        let today = week_start + chrono::Duration::days(2);
+        db.toggle_quest_completion(quest.id, today).await.unwrap();
+
+        // Should be able to claim with exact EXP match
+        let claimed = db.claim_reward(reward2.id, week_start).await.unwrap();
+        assert!(claimed, "Should be able to claim with exact EXP match");
+    }
+
+    // ===== CONCURRENT OPERATION UNIT TESTS =====
+
+    #[tokio::test]
+    async fn test_concurrent_quest_completions() {
+        use tempfile::tempdir;
+
+        // Use file-based SQLite for concurrent test (in-memory doesn't share across connections)
+        let temp_dir = tempdir().unwrap();
+        let db_path = temp_dir.path().join("concurrent_test.db");
+
+        // Create the database file first (required for SQLite)
+        std::fs::File::create(&db_path).unwrap();
+
+        let db_url = format!("sqlite:{}", db_path.display());
+        let pool = SqlitePool::connect(&db_url).await.unwrap();
+        sqlx::migrate!("./migrations").run(&pool).await.unwrap();
+        let db = Database { pool };
+
+        // Create a quest
+        let req = CreateQuestRequest {
+            title: "Concurrent Quest".to_string(),
+            description: None,
+            exp_value: Some(10),
+            day_of_week: 1,
+        };
+        let quest = db.create_quest(req).await.unwrap();
+
+        let today = Utc::now().date_naive();
+
+        // Wrap in Arc so all concurrent tasks share the same database instance
+        let db_arc = Arc::new(db);
+
+        // Spawn multiple concurrent tasks trying to toggle the same quest
+        let mut handles = vec![];
+        for _ in 0..10 {
+            let db_clone = db_arc.clone();
+            let quest_id = quest.id;
+            let date = today;
+
+            let handle =
+                tokio::spawn(async move { db_clone.toggle_quest_completion(quest_id, date).await });
+            handles.push(handle);
+        }
+
+        // Wait for all tasks to complete
+        let mut success_count = 0;
+        let _failure_count = 0;
+        for handle in handles {
+            match handle.await.unwrap() {
+                Ok(_) => success_count += 1,
+                Err(_) => {}
+            }
+        }
+
+        // All operations should succeed since completing is idempotent
+        assert_eq!(
+            success_count, 10,
+            "All completion operations should succeed"
+        );
+
+        // Verify final state - quest should be completed
+        let is_completed = db_arc
+            .is_quest_completed_today(quest.id, today)
+            .await
+            .unwrap();
+        assert!(
+            is_completed,
+            "Quest should be completed after concurrent operations"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_concurrent_reward_claiming() {
+        let db = setup_test_db().await;
+
+        // Create reward requiring 10 EXP
+        let reward_req = CreateRewardRequest {
+            title: "Concurrent Reward".to_string(),
+            description: None,
+            required_exp: 10,
+        };
+        let reward = db.create_reward(reward_req).await.unwrap();
+
+        // Create quest and complete it to get EXP
+        let quest_req = CreateQuestRequest {
+            title: "EXP Quest".to_string(),
+            description: None,
+            exp_value: Some(20),
+            day_of_week: 1,
+        };
+        let quest = db.create_quest(quest_req).await.unwrap();
+
+        let week_start = NaiveDate::from_ymd_opt(2024, 1, 1).unwrap();
+        let today = week_start + chrono::Duration::days(2);
+        db.toggle_quest_completion(quest.id, today).await.unwrap();
+
+        // Spawn multiple concurrent tasks trying to claim the same reward
+        let mut handles = vec![];
+        for _ in 0..5 {
+            let db_clone = Database::with_pool(db.pool().clone());
+            let reward_id = reward.id;
+            let week = week_start;
+
+            let handle = tokio::spawn(async move { db_clone.claim_reward(reward_id, week).await });
+            handles.push(handle);
+        }
+
+        // Wait for all tasks to complete
+        let mut success_count = 0;
+        let mut failure_count = 0;
+        for handle in handles {
+            match handle.await.unwrap() {
+                Ok(result) => {
+                    if result {
+                        success_count += 1
+                    } else {
+                        failure_count += 1
+                    }
+                }
+                Err(_) => failure_count += 1,
+            }
+        }
+
+        // Exactly one should succeed, others should fail
+        assert_eq!(success_count, 1, "Exactly one reward claim should succeed");
+        assert_eq!(failure_count, 4, "Four reward claims should fail");
+
+        // Verify reward was claimed
+        let claimed_count = db.get_rewards_claimed_count().await.unwrap();
+        assert_eq!(claimed_count, 1, "Reward should be claimed exactly once");
     }
 }
