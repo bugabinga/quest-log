@@ -10,7 +10,7 @@ use ratatui::{
     Frame, Terminal,
     backend::CrosstermBackend,
     layout::{Constraint, Direction, Layout, Rect},
-    style::{Color, Style, Stylize},
+    style::{Color, Style},
     text::Line,
     widgets::{Block, BorderType, List, ListItem, Paragraph, Tabs},
 };
@@ -371,8 +371,8 @@ pub async fn run_tui() -> io::Result<()> {
     Ok(())
 }
 
-async fn run_app<B: ratatui::backend::Backend>(
-    terminal: &mut Terminal<B>,
+async fn run_app(
+    terminal: &mut Terminal<CrosstermBackend<io::Stdout>>,
     app: &mut AppState,
 ) -> io::Result<()> {
     let tab_names = ["📋 Quests", "🎁 Rewards", "⚙️ Settings"];

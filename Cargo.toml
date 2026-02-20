@@ -26,9 +26,9 @@ tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 clap = { version = "4", features = ["derive"] }
 futures = "0.3"
-ratatui = "0.28"
-crossterm = "0.28"
-hyper = { version = "0.14", features = ["full"] }
+ratatui = "0.30"
+crossterm = "0.29"
+hyper = { version = "1.8", features = ["full"] }
 tower = "0.5"
 
 [dev-dependencies]
@@ -37,10 +37,10 @@ tokio-test = "0.4"
 proptest = "1.10"
 tempfile = "3.25.0"
 ratatui-testlib = "0.1"
-insta = { version = "1.0", features = ["yaml"] }
-pretty_assertions = "1.0"
-hyper = { version = "0.14", features = ["full"] }
-nix = { version = "0.29", optional = false }
+insta = { version = "1.46", features = ["yaml"] }
+pretty_assertions = "1.4"
+hyper = { version = "1.8", features = ["full"] }
+nix = { version = "0.31", optional = false }
 libc = { version = "0.2", optional = false }
 
 [build-dependencies]
