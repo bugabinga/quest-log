@@ -3,7 +3,7 @@
 #![cfg(all(feature = "systemd", target_os = "linux"))]
 
 use sd_notify::{self, NotifyState};
-use std::os::unix::io::{FromRawFd, RawFd};
+use std::os::unix::io::RawFd;
 use std::time::Duration;
 use tokio::task::JoinHandle;
 
@@ -72,8 +72,10 @@ pub fn take_listen_fds() -> Vec<RawFd> {
     }
 
     // Unset env so children won't inherit and repeated calls won't re-read
-    std::env::remove_var("LISTEN_FDS");
-    std::env::remove_var("LISTEN_PID");
+    unsafe {
+        std::env::remove_var("LISTEN_FDS");
+        std::env::remove_var("LISTEN_PID");
+    }
 
     // sd_listen_fds semantics reserve fds starting at 3; we return them in order
     // so the caller can consume them via FromRawFd exactly once.
@@ -81,5 +83,5 @@ pub fn take_listen_fds() -> Vec<RawFd> {
     fds
 }
 
-/// Stub implementations when the feature is not enabled are intentionally not provided here;
-/// consumers should gate usage behind cfg checks or call these from cfg-gated modules.
+// Stub implementations when the feature is not enabled are intentionally not provided here;
+// consumers should gate usage behind cfg checks or call these from cfg-gated modules.
