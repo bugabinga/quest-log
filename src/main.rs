@@ -131,16 +131,60 @@ async fn main() {
     // middleware: no-op when active_requests not present in AppState for test suites
     let app = app;
 
-    // bind the TCP listener and create a server future (axum helper)
-    let listener = match tokio::net::TcpListener::bind(addr).await {
-        Ok(l) => l,
-        Err(e) => {
-            tracing::error!(error = %e, port = %port, "💥 Failed to bind to port - address may be in use");
-            return;
+    // If systemd provided socket activation fds, convert the first one to a TcpListener
+    // and use it. Otherwise, bind normally to the configured address.
+    let server = {
+        #[cfg(all(feature = "systemd", target_os = "linux"))]
+        {
+            let fds = systemd::take_listen_fds();
+            if let Some(fd) = fds.get(0) {
+                use std::os::unix::io::FromRawFd;
+                unsafe {
+                    match std::net::TcpListener::from_raw_fd(*fd) {
+                        std_listener => match tokio::net::TcpListener::from_std(std_listener) {
+                            Ok(tokio_listener) => {
+                                tracing::info!(fd = %fd, "🔌 Serving on socket-activated fd");
+                                axum::serve(tokio_listener, app)
+                            }
+                            Err(e) => {
+                                tracing::error!(error = %e, "💥 Failed to use socket-activated fd - falling back to bind");
+                                let listener = match tokio::net::TcpListener::bind(addr).await {
+                                    Ok(l) => l,
+                                    Err(e) => {
+                                        tracing::error!(error = %e, port = %port, "💥 Failed to bind to port - address may be in use");
+                                        return;
+                                    }
+                                };
+                                axum::serve(listener, app)
+                            }
+                        },
+                    }
+                }
+            } else {
+                // No socket activation fds; bind normally
+                let listener = match tokio::net::TcpListener::bind(addr).await {
+                    Ok(l) => l,
+                    Err(e) => {
+                        tracing::error!(error = %e, port = %port, "💥 Failed to bind to port - address may be in use");
+                        return;
+                    }
+                };
+                axum::serve(listener, app)
+            }
+        }
+
+        #[cfg(not(all(feature = "systemd", target_os = "linux")))]
+        {
+            let listener = match tokio::net::TcpListener::bind(addr).await {
+                Ok(l) => l,
+                Err(e) => {
+                    tracing::error!(error = %e, port = %port, "💥 Failed to bind to port - address may be in use");
+                    return;
+                }
+            };
+            axum::serve(listener, app)
         }
     };
-
-    let server = axum::serve(listener, app);
 
     tracing::info!(url = %format!("http://{}", addr), "🎉 Server listening! (◕‿◕)");
     // If built with systemd support, send READY and start watchdog if enabled.

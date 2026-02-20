@@ -75,6 +75,9 @@ pub fn take_listen_fds() -> Vec<RawFd> {
     std::env::remove_var("LISTEN_FDS");
     std::env::remove_var("LISTEN_PID");
 
+    // sd_listen_fds semantics reserve fds starting at 3; we return them in order
+    // so the caller can consume them via FromRawFd exactly once.
+
     fds
 }
 
