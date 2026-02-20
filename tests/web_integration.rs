@@ -4,9 +4,9 @@ use axum::{
     http::{Request, StatusCode},
     routing::{get, post},
 };
-use chrono::{Datelike, Utc};
+use chrono::{Datelike, NaiveDate, Utc};
 use quest_log::{
-    database::Database, handlers, handlers::ServerMessage, models::*, state::AppState,
+    database::Database, handlers, handlers::ServerMessage, models::*, state::AppState, time,
 };
 
 use sqlx::SqlitePool;
@@ -66,6 +66,61 @@ async fn test_quest_listing_integration() {
     assert_eq!(total_exp, 0, "No quests completed yet");
 
     println!("Quest listing integration test completed successfully");
+}
+
+// Test quest listing on a known Sunday (using set_today)
+#[tokio::test]
+async fn test_quest_listing_on_sunday() {
+    // Set today to a known Sunday: Feb 15, 2026 is a Sunday
+    let sunday = NaiveDate::from_ymd_opt(2026, 2, 15).unwrap();
+    time::set_today(sunday);
+
+    // Setup test database with in-memory SQLite
+    let pool = SqlitePool::connect("sqlite::memory:")
+        .await
+        .expect("Failed to create in-memory database");
+    let db: Database = Database::with_pool(pool);
+    db.migrate().await.expect("Failed to run migrations");
+
+    // Add test data - create quests for Sunday (day_of_week = 0)
+    let quest_req = CreateQuestRequest {
+        title: "Sunday Quest".to_string(),
+        description: Some("Testing quest listing on Sunday".to_string()),
+        exp_value: Some(25),
+        day_of_week: 0, // Sunday
+    };
+    let quest = db
+        .create_quest(quest_req)
+        .await
+        .expect("Failed to create test quest");
+
+    // Test using time::today() which now returns our fake Sunday
+    let today = time::today();
+    let day_of_week = today.weekday().num_days_from_sunday() as i32;
+
+    // Verify we're on Sunday
+    assert_eq!(day_of_week, 0, "Should be Sunday (0)");
+    assert_eq!(today, sunday);
+
+    // Test quest retrieval for today (mimicking handler logic)
+    let quests = db
+        .get_quests_for_day(day_of_week)
+        .await
+        .expect("Failed to get quests");
+    assert_eq!(quests.len(), 1);
+    assert_eq!(quests[0].title, "Sunday Quest");
+
+    // Test completion status check
+    let completed_today = db
+        .is_quest_completed_today(quest.id, today)
+        .await
+        .expect("Failed to check completion");
+    assert!(!completed_today, "New quest should not be completed");
+
+    println!("Quest listing on Sunday test completed successfully");
+
+    // Cleanup
+    time::reset_today();
 }
 
 // Test quest toggle functionality via HTTP endpoints

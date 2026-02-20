@@ -18,6 +18,7 @@ use tokio_stream::wrappers::BroadcastStream;
 
 use crate::models::{ClaimState, QuestStats, ToggleResult};
 use crate::state::AppState;
+use crate::time;
 
 #[derive(Clone, Debug)]
 pub enum ServerMessage {
@@ -223,7 +224,7 @@ pub async fn quests(
     Query(query): Query<QuestsQuery>,
 ) -> Result<impl IntoResponse, AppError> {
     let db = &state.db;
-    let today = chrono::Utc::now().date_naive();
+    let today = time::today();
     let selected_date = if let Some(date_str) = query.date {
         NaiveDate::parse_from_str(&date_str, "%Y-%m-%d").unwrap_or(today)
     } else {
@@ -233,8 +234,7 @@ pub async fn quests(
     tracing::debug!(date = %selected_date, "📜 Loading quests for day");
 
     // Validate within current week (Monday to Sunday)
-    let week_start = today - chrono::Duration::days(today.weekday().num_days_from_monday() as i64);
-    let week_end = week_start + chrono::Duration::days(6);
+    let (week_start, week_end) = time::get_week_bounds(today);
     if selected_date < week_start || selected_date > week_end {
         tracing::warn!(date = %selected_date, week_start = %week_start, week_end = %week_end, "⚠️  Date outside current week - rejecting");
         return Ok(Html("Invalid date - must be within current week".to_string()).into_response());
@@ -362,7 +362,7 @@ pub async fn toggle_quest(
 ) -> Result<Sse<impl Stream<Item = Result<Event, Infallible>>>, AppError> {
     let db = &state.db;
     let bcast = state.bcast.clone();
-    let today = chrono::Utc::now().date_naive();
+    let today = time::today();
     let quest_id = request.quest_id.as_i64();
 
     tracing::debug!(quest_id, "✨ Toggle quest request received");
@@ -435,8 +435,7 @@ pub async fn toggle_quest(
     let exp_today_max: i32 = all_quests.iter().map(|q| q.exp_value).sum();
     let quests_total = all_quests.len() as i32;
 
-    let week_start = today - chrono::Duration::days(today.weekday().num_days_from_monday() as i64);
-    let week_end = week_start + chrono::Duration::days(6);
+    let (week_start, week_end) = time::get_week_bounds(today);
     let week_exp = db
         .calculate_weekly_exp(week_start, week_end)
         .await
@@ -493,7 +492,7 @@ pub async fn navigate(
     headers: HeaderMap,
 ) -> Result<Sse<impl Stream<Item = Result<Event, Infallible>>>, AppError> {
     let db = &state.db;
-    let today = chrono::Utc::now().date_naive();
+    let today = time::today();
 
     tracing::debug!(target_date = %path.date, "🧭 Navigate request");
 
@@ -732,13 +731,12 @@ pub async fn claim_reward(
 ) -> Result<Sse<impl Stream<Item = Result<Event, Infallible>>>, AppError> {
     let db = &state.db;
     let bcast = state.bcast.clone();
-    let today = chrono::Utc::now().date_naive();
+    let today = time::today();
     let reward_id = request.reward_id;
 
     tracing::debug!(reward_id, "🏆 Claim reward request received");
 
-    let week_start = today - chrono::Duration::days(today.weekday().num_days_from_monday() as i64);
-    let week_end = week_start + chrono::Duration::days(6);
+    let (week_start, week_end) = time::get_week_bounds(today);
 
     let is_sunday = today.weekday().num_days_from_sunday() == 0;
     if !is_sunday {
@@ -816,4 +814,93 @@ pub async fn claim_reward(
 pub async fn slow() -> &'static str {
     tokio::time::sleep(std::time::Duration::from_secs(5)).await;
     "done"
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use chrono::Weekday;
+
+    #[test]
+    fn test_get_fantasy_day_name_monday() {
+        assert_eq!(
+            get_fantasy_day_name(Weekday::Mon),
+            "Monday: Day of the Sword 🗡️"
+        );
+    }
+
+    #[test]
+    fn test_get_fantasy_day_name_tuesday() {
+        assert_eq!(
+            get_fantasy_day_name(Weekday::Tue),
+            "Tuesday: Day of the Shield 🛡️"
+        );
+    }
+
+    #[test]
+    fn test_get_fantasy_day_name_wednesday() {
+        assert_eq!(
+            get_fantasy_day_name(Weekday::Wed),
+            "Wednesday: Day of the Wand 🪄"
+        );
+    }
+
+    #[test]
+    fn test_get_fantasy_day_name_thursday() {
+        assert_eq!(
+            get_fantasy_day_name(Weekday::Thu),
+            "Thursday: Day of the Tome 📚"
+        );
+    }
+
+    #[test]
+    fn test_get_fantasy_day_name_friday() {
+        assert_eq!(
+            get_fantasy_day_name(Weekday::Fri),
+            "Friday: Day of the Arcane ✨"
+        );
+    }
+
+    #[test]
+    fn test_get_fantasy_day_name_saturday() {
+        assert_eq!(
+            get_fantasy_day_name(Weekday::Sat),
+            "Saturday: Day of the Crown 👑"
+        );
+    }
+
+    #[test]
+    fn test_get_fantasy_day_name_sunday() {
+        assert_eq!(get_fantasy_day_name(Weekday::Sun), "Sunday: Day of Rest 🏰");
+    }
+
+    #[test]
+    fn test_quest_id_as_i64_with_i64_variant() {
+        let id = QuestId::I64(42);
+        assert_eq!(id.as_i64(), 42);
+    }
+
+    #[test]
+    fn test_quest_id_as_i64_with_string_variant_valid() {
+        let id = QuestId::String("123".to_string());
+        assert_eq!(id.as_i64(), 123);
+    }
+
+    #[test]
+    fn test_quest_id_as_i64_with_string_variant_invalid() {
+        let id = QuestId::String("not_a_number".to_string());
+        assert_eq!(id.as_i64(), 0);
+    }
+
+    #[test]
+    fn test_quest_id_as_i64_with_string_variant_negative() {
+        let id = QuestId::String("-5".to_string());
+        assert_eq!(id.as_i64(), -5);
+    }
+
+    #[test]
+    fn test_quest_id_as_i64_with_string_variant_whitespace() {
+        let id = QuestId::String("  7  ".to_string());
+        assert_eq!(id.as_i64(), 0);
+    }
 }

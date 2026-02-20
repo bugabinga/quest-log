@@ -124,8 +124,6 @@ pub fn assert_reward_properties(reward: &Reward, expected_title: &str, expected_
 
 /// Common test data for consistent testing
 pub mod test_data {
-    use super::*;
-
     pub const VALID_QUEST_TITLES: &[&str] = &[
         "Morning Exercise",
         "Read for 30 minutes",

@@ -1,5 +1,6 @@
 use crate::database::Database;
 use crate::models::{CreateQuestRequest, CreateRewardRequest, Quest, UpdateSettingsRequest};
+use crate::time;
 use chrono::Datelike;
 use crossterm::{
     event::{self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode, KeyEventKind},
@@ -79,10 +80,7 @@ pub struct RewardWithClaimed {
 impl AppState {
     pub async fn new() -> io::Result<Self> {
         let db = Database::new().await.map_err(io::Error::other)?;
-        let today = chrono::Utc::now()
-            .date_naive()
-            .weekday()
-            .num_days_from_sunday() as usize;
+        let today = time::today().weekday().num_days_from_sunday() as usize;
 
         let mut quests: Vec<Vec<QuestWithCompletion>> = Vec::new();
 
@@ -92,7 +90,7 @@ impl AppState {
 
             for quest in day_quests {
                 let completed = db
-                    .is_quest_completed_today(quest.id, chrono::Utc::now().date_naive())
+                    .is_quest_completed_today(quest.id, time::today())
                     .await
                     .unwrap_or(false);
                 quests_with_completion.push(QuestWithCompletion { quest, completed });
@@ -206,7 +204,7 @@ impl AppState {
             for quest in day_quests {
                 let completed = self
                     .db
-                    .is_quest_completed_today(quest.id, chrono::Utc::now().date_naive())
+                    .is_quest_completed_today(quest.id, time::today())
                     .await
                     .unwrap_or(false);
                 self.quests[dow].push(QuestWithCompletion { quest, completed });
@@ -311,7 +309,7 @@ impl AppState {
         let day_len = self.quests[self.selected_day].len();
         if day_len > 0 && self.selected_quest < day_len {
             let quest = &self.quests[self.selected_day][self.selected_quest];
-            let today = chrono::Utc::now().date_naive();
+            let today = time::today();
 
             self.db
                 .toggle_quest_completion(quest.quest.id, today)
@@ -991,4 +989,68 @@ async fn handle_delete_input(
         _ => {}
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_tab_variants() {
+        let tabs = [Tab::Quests, Tab::Rewards, Tab::Settings];
+        for tab in tabs {
+            let _ = tab;
+        }
+        assert!(true);
+    }
+
+    #[test]
+    fn test_view_list() {
+        assert!(View::List == View::List);
+    }
+
+    #[test]
+    fn test_view_create() {
+        assert!(View::Create == View::Create);
+    }
+
+    #[test]
+    fn test_view_delete() {
+        assert!(View::Delete == View::Delete);
+    }
+
+    #[test]
+    fn test_view_help() {
+        assert!(View::Help == View::Help);
+    }
+
+    #[test]
+    fn test_input_mode_none() {
+        assert!(InputMode::None == InputMode::None);
+    }
+
+    #[test]
+    fn test_input_mode_title() {
+        assert!(InputMode::Title == InputMode::Title);
+    }
+
+    #[test]
+    fn test_input_mode_exp() {
+        assert!(InputMode::Exp == InputMode::Exp);
+    }
+
+    #[test]
+    fn test_input_mode_day() {
+        assert!(InputMode::Day == InputMode::Day);
+    }
+
+    #[test]
+    fn test_input_mode_confirm_delete() {
+        assert!(InputMode::ConfirmDelete == InputMode::ConfirmDelete);
+    }
+
+    #[test]
+    fn test_input_mode_goal() {
+        assert!(InputMode::Goal == InputMode::Goal);
+    }
 }

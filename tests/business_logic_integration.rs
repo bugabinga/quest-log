@@ -1,5 +1,5 @@
-use chrono::NaiveDate;
-use quest_log::{database::Database, models::*};
+use chrono::{Datelike, NaiveDate};
+use quest_log::{database::Database, models::*, time};
 use sqlx::SqlitePool;
 
 #[tokio::test]
@@ -278,4 +278,113 @@ async fn test_business_logic_integration() {
         total_with_future, 110,
         "Total EXP should be 110 after re-completing quest1"
     );
+}
+
+// Test using set_today to simulate different days
+#[tokio::test]
+async fn test_todays_quests_with_set_today() {
+    // Set today to a known Wednesday: Jan 3, 2024 is a Wednesday
+    let wednesday = NaiveDate::from_ymd_opt(2024, 1, 3).unwrap();
+    time::set_today(wednesday);
+
+    // Setup test database
+    let pool = SqlitePool::connect("sqlite::memory:")
+        .await
+        .expect("Failed to create in-memory database");
+    let db: Database = Database::with_pool(pool);
+    db.migrate().await.expect("Failed to run migrations");
+
+    // Create quests for different days
+    let monday_quest_req = CreateQuestRequest {
+        title: "Monday Only Quest".to_string(),
+        description: None,
+        exp_value: Some(10),
+        day_of_week: 1,
+    };
+    let wednesday_quest_req = CreateQuestRequest {
+        title: "Wednesday Quest".to_string(),
+        description: None,
+        exp_value: Some(20),
+        day_of_week: 3,
+    };
+    let any_day_quest_req = CreateQuestRequest {
+        title: "Any Day Quest".to_string(),
+        description: None,
+        exp_value: Some(15),
+        day_of_week: 0, // Sunday
+    };
+
+    let _monday_q = db
+        .create_quest(monday_quest_req)
+        .await
+        .expect("Failed to create Monday quest");
+    let wednesday_q = db
+        .create_quest(wednesday_quest_req)
+        .await
+        .expect("Failed to create Wednesday quest");
+    let _ = db
+        .create_quest(any_day_quest_req)
+        .await
+        .expect("Failed to create Sunday quest");
+
+    // Use time::today() to get today's quests (now returns fake Wednesday)
+    let today = time::today();
+    let day_of_week = today.weekday().num_days_from_sunday() as i32;
+
+    // Verify we're on Wednesday
+    assert_eq!(day_of_week, 3, "Should be Wednesday (3)");
+    assert_eq!(today, wednesday);
+
+    // Get today's quests using the handler pattern
+    let todays_quests = db
+        .get_quests_for_day(day_of_week)
+        .await
+        .expect("Failed to get today's quests");
+
+    // Should only get Wednesday quest (day_of_week = 3)
+    assert_eq!(todays_quests.len(), 1);
+    assert_eq!(todays_quests[0].title, "Wednesday Quest");
+    assert_eq!(todays_quests[0].exp_value, 20);
+
+    // Now change to Monday and verify we get different quests
+    let monday = NaiveDate::from_ymd_opt(2024, 1, 1).unwrap();
+    time::set_today(monday);
+
+    let today_monday = time::today();
+    let monday_dow = today_monday.weekday().num_days_from_sunday() as i32;
+
+    assert_eq!(monday_dow, 1, "Should be Monday (1)");
+
+    let monday_quests = db
+        .get_quests_for_day(monday_dow)
+        .await
+        .expect("Failed to get Monday quests");
+
+    assert_eq!(monday_quests.len(), 1);
+    assert_eq!(monday_quests[0].title, "Monday Only Quest");
+
+    // Test completion tracking with fake today
+    let wednesday_again = time::today();
+    let was_completed = db
+        .is_quest_completed_today(wednesday_q.id, wednesday_again)
+        .await
+        .expect("Failed to check completion");
+    assert!(!was_completed, "Should not be completed yet");
+
+    // Complete the quest (using fake today)
+    db.toggle_quest_completion(wednesday_q.id, wednesday_again)
+        .await
+        .expect("Failed to complete quest");
+
+    // Verify it's now completed
+    let is_completed = db
+        .is_quest_completed_today(wednesday_q.id, wednesday_again)
+        .await
+        .expect("Failed to check completion after toggle");
+    assert!(is_completed, "Quest should be completed after toggle");
+
+    println!("set_today test completed - successfully simulated different days");
+
+    // Cleanup
+    time::reset_today();
 }

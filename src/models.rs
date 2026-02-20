@@ -110,16 +110,6 @@ pub struct QuestWithCompletion {
     pub completed_today: bool,
 }
 
-#[allow(dead_code)]
-#[derive(Debug, Serialize)]
-pub struct WeeklyStats {
-    pub total_exp: i32,
-    pub weekly_goal: i32,
-    pub completion_percentage: f32,
-    pub rewards_claimed: i32,
-    pub available_rewards: Vec<Reward>,
-}
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ToggleResult {
     NewlyCompleted,

@@ -5,6 +5,7 @@ mod models;
 mod state;
 #[cfg(target_os = "linux")]
 mod systemd;
+mod time;
 mod tui;
 
 use crate::database::Database;

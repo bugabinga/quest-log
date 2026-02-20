@@ -7,6 +7,7 @@ use crate::models::{
     ClaimState, CreateQuestRequest, CreateRewardRequest, Quest, QuestCompletion, Reward, Settings,
     ToggleResult, UpdateQuestRequest, UpdateSettingsRequest, WeeklyRewardDisplay,
 };
+use crate::time;
 
 #[derive(Clone, Debug)]
 pub struct Database {
@@ -654,7 +655,7 @@ impl Database {
         week_start: NaiveDate,
     ) -> Result<bool, sqlx::Error> {
         let week_end = week_start + chrono::Duration::days(6);
-        let today = Utc::now().date_naive();
+        let today = time::today();
         let is_sunday = today.weekday().num_days_from_sunday() == 0;
 
         if today < week_start || today > week_end || !is_sunday {
@@ -714,7 +715,8 @@ impl Database {
 mod tests {
     use crate::database::Database;
     use crate::models::*;
-    use chrono::{NaiveDate, Utc};
+    use crate::time;
+    use chrono::NaiveDate;
     use sqlx::SqlitePool;
     use std::path::Path;
     use std::sync::Arc;
@@ -839,7 +841,7 @@ mod tests {
         };
 
         let quest = db.create_quest(req).await.unwrap();
-        let today = Utc::now().date_naive();
+        let today = time::today();
 
         // Complete quest
         let completed = db.toggle_quest_completion(quest.id, today).await.unwrap();
@@ -872,7 +874,7 @@ mod tests {
         let quest = db.create_quest(req).await.unwrap();
 
         // Complete quest on Monday and Wednesday of the current week
-        let _today = Utc::now().date_naive();
+        let _today = time::today();
         // For simplicity, use a known Monday
         let monday = NaiveDate::from_ymd_opt(2024, 1, 1).unwrap(); // This was a Monday
         let wednesday = monday + chrono::Duration::days(2);
@@ -1086,7 +1088,7 @@ mod tests {
     #[tokio::test]
     async fn test_toggle_completion_nonexistent_quest() {
         let db = setup_test_db().await;
-        let today = Utc::now().date_naive();
+        let today = time::today();
 
         // Should return an error for non-existent quest
         let result = db.toggle_quest_completion(99999, today).await;
@@ -1190,7 +1192,7 @@ mod tests {
         assert_eq!(quest.exp_value, 0);
 
         // Complete the quest
-        let today = Utc::now().date_naive();
+        let today = time::today();
         let completed = db.toggle_quest_completion(quest.id, today).await.unwrap();
         assert_eq!(completed, ToggleResult::NewlyCompleted);
 
@@ -1355,7 +1357,7 @@ mod tests {
         };
         let quest = db.create_quest(req).await.unwrap();
 
-        let today = Utc::now().date_naive();
+        let today = time::today();
 
         // Wrap in Arc so all concurrent tasks share the same database instance
         let db_arc = Arc::new(db);
