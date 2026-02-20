@@ -1,6 +1,6 @@
 //! Optional systemd integration (enabled via `features = ["systemd"]`).
 //! Compiles only on Linux when the `systemd` feature is enabled.
-#![cfg(all(feature = "systemd", target_os = "linux"))]
+#![cfg(target_os = "linux")]
 
 use sd_notify::{self, NotifyState};
 use std::os::unix::io::RawFd;

@@ -4,7 +4,7 @@ mod handlers;
 mod models;
 mod state;
 mod tui;
-#[cfg(all(feature = "systemd", target_os = "linux"))]
+#[cfg(target_os = "linux")]
 mod systemd;
 
 use crate::database::Database;
@@ -187,8 +187,8 @@ async fn main() {
     };
 
     tracing::info!(url = %format!("http://{}", addr), "🎉 Server listening! (◕‿◕)");
-    // If built with systemd support, send READY and start watchdog if enabled.
-    #[cfg(all(feature = "systemd", target_os = "linux"))]
+    // On Linux, send READY and start watchdog if enabled.
+    #[cfg(target_os = "linux")]
     {
         // If systemd handed us sockets, prefer them instead of binding above.
         let fds = systemd::take_listen_fds();
