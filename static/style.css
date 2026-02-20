@@ -2361,3 +2361,265 @@ h1 {
   animation: particle-fly 1s ease-out forwards;
   box-shadow: 0 0 6px var(--color-accent, #f59e0b);
 }
+
+/* Weekly Rewards Section */
+.weekly-rewards {
+  background: linear-gradient(
+    180deg,
+    oklch(0.15 0.02 250) 0%,
+    oklch(0.1 0.02 250) 100%
+  );
+  border: 2px solid var(--color-border);
+  border-radius: var(--radius-md);
+  margin-bottom: var(--space-lg);
+  overflow: hidden;
+}
+
+.weekly-rewards[open] .rewards-summary::before {
+  transform: rotate(180deg);
+}
+
+.rewards-summary {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: var(--space-md);
+  cursor: pointer;
+  background: linear-gradient(
+    90deg,
+    oklch(var(--glow-color-primary) / 0.1) 0%,
+    transparent 100%
+  );
+  position: relative;
+}
+
+.rewards-summary::before {
+  content: "▼";
+  position: absolute;
+  right: var(--space-md);
+  font-size: 0.6rem;
+  color: var(--color-text-secondary);
+  transition: transform var(--duration-normal) var(--ease-out);
+}
+
+.rewards-icon {
+  font-size: 1.2rem;
+}
+
+.rewards-title {
+  flex: 1;
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: var(--color-text-primary);
+}
+
+.rewards-exp {
+  font-size: 0.75rem;
+  color: var(--color-accent);
+  text-shadow: oklch(var(--glow-color-accent) / 0.5) 0 0 8px;
+  font-weight: bold;
+}
+
+.rewards-list {
+  padding: var(--space-md);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+}
+
+.reward-card {
+  background: oklch(0.08 0.02 250);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  padding: var(--space-md);
+  transition: all var(--duration-normal) var(--ease-out);
+}
+
+.reward-card:hover {
+  border-color: oklch(var(--glow-color-primary) / 0.5);
+}
+
+.reward-card[data-just-claimed="true"] {
+  animation: reward-claim-burst 0.6s ease-out;
+  border-color: var(--color-accent);
+  box-shadow: 0 0 20px oklch(var(--glow-color-accent) / 0.3);
+}
+
+@keyframes reward-claim-burst {
+  0% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 oklch(var(--glow-color-accent) / 0.5);
+  }
+  50% {
+    transform: scale(1.02);
+    box-shadow: 0 0 30px oklch(var(--glow-color-accent) / 0.4);
+  }
+  100% {
+    transform: scale(1);
+    box-shadow: 0 0 10px oklch(var(--glow-color-accent) / 0.2);
+  }
+}
+
+.reward-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: var(--space-xs);
+}
+
+.reward-title {
+  font-size: 0.9rem;
+  font-weight: bold;
+  color: var(--color-text-primary);
+}
+
+.reward-exp {
+  font-size: 0.8rem;
+  color: var(--color-accent);
+  font-weight: bold;
+}
+
+.reward-description {
+  font-size: 0.7rem;
+  color: var(--color-text-secondary);
+  margin: var(--space-xs) 0;
+}
+
+.reward-progress {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  margin: var(--space-sm) 0;
+}
+
+.reward-progress-bar {
+  flex: 1;
+  height: 8px;
+}
+
+.progress-text {
+  font-size: 0.65rem;
+  color: var(--color-text-secondary);
+  min-width: 60px;
+  text-align: right;
+}
+
+.reward-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: var(--space-sm);
+}
+
+.claim-btn {
+  padding: var(--space-xs) var(--space-md);
+  font-size: 0.7rem;
+  font-weight: bold;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  border: none;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all var(--duration-normal) var(--ease-out);
+}
+
+.claim-btn.locked {
+  background: oklch(0.2 0.02 250);
+  color: var(--color-text-secondary);
+  cursor: not-allowed;
+}
+
+.claim-btn.claimable {
+  background: linear-gradient(
+    135deg,
+    oklch(var(--glow-color-success) / 0.8) 0%,
+    oklch(0.2 0.15 150) 100%
+  );
+  color: oklch(1 0 0);
+  animation: glow-pulse-success 2s ease-in-out infinite;
+}
+
+.claim-btn.claimable:hover {
+  transform: scale(1.05);
+  box-shadow: 0 0 20px oklch(var(--glow-color-success) / 0.5);
+}
+
+.claim-btn.claimable:active {
+  animation: claim-click 0.3s ease-out;
+}
+
+@keyframes claim-click {
+  0% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(0.95);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+.claim-btn.claimed {
+  background: linear-gradient(
+    135deg,
+    oklch(0.4 0.15 45) 0%,
+    oklch(0.25 0.1 45) 100%
+  );
+  color: oklch(1 0 0);
+  cursor: default;
+  animation: completed-glow 2s ease-in-out infinite;
+}
+
+/* Reward claim notification */
+.reward-claimed-notification {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: linear-gradient(
+    135deg,
+    oklch(0.3 0.15 45) 0%,
+    oklch(0.15 0.1 45) 100%
+  );
+  border: 3px solid oklch(var(--glow-color-accent) / 0.8);
+  border-radius: var(--radius-lg);
+  padding: var(--space-xl);
+  text-align: center;
+  z-index: 10000;
+  animation: reward-notification-in 0.5s ease-out;
+  box-shadow: 0 0 50px oklch(var(--glow-color-accent) / 0.5);
+}
+
+.reward-claimed-notification h2 {
+  font-size: 1.5rem;
+  color: oklch(1 0 0);
+  text-shadow: 0 0 10px oklch(var(--glow-color-accent));
+  margin-bottom: var(--space-sm);
+  animation: text-glow 1s ease-in-out infinite;
+}
+
+@keyframes text-glow {
+  0%, 100% {
+    text-shadow: 0 0 10px oklch(var(--glow-color-accent));
+  }
+  50% {
+    text-shadow:
+      0 0 20px oklch(var(--glow-color-accent)),
+      0 0 30px oklch(var(--glow-color-accent));
+  }
+}
+
+@keyframes reward-notification-in {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.5);
+  }
+  50% {
+    transform: translate(-50%, -50%) scale(1.1);
+  }
+  100% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+}

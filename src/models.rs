@@ -127,6 +127,24 @@ pub enum ToggleResult {
     NoChange,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+pub enum ClaimState {
+    Locked,
+    Claimable,
+    Claimed,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct WeeklyRewardDisplay {
+    pub id: i64,
+    pub title: String,
+    pub description: Option<String>,
+    pub required_exp: i32,
+    pub weekly_exp: i32,
+    pub state: ClaimState,
+    pub can_claim_today: bool,
+}
+
 #[derive(Debug, Clone, Copy, Serialize)]
 pub struct QuestStats {
     pub exp_today: i32,

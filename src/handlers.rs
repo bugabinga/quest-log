@@ -16,7 +16,7 @@ use std::convert::Infallible;
 use tokio_stream::StreamExt;
 use tokio_stream::wrappers::BroadcastStream;
 
-use crate::models::{QuestStats, ToggleResult};
+use crate::models::{ClaimState, QuestStats, ToggleResult};
 use crate::state::AppState;
 
 #[derive(Clone, Debug)]
@@ -202,6 +202,8 @@ struct QuestDisplay {
 #[template(path = "quests.html")]
 struct QuestsTemplate {
     pub quests: Vec<QuestDisplay>,
+    pub rewards: Vec<crate::models::WeeklyRewardDisplay>,
+    pub week_exp: i32,
     pub error_message: String,
     pub selected_date: String,
     pub day_name: String,
@@ -317,8 +319,20 @@ pub async fn quests(
             quests_total: quests_display.len() as i32,
         });
 
+    let week_exp = db
+        .calculate_weekly_exp(week_start, week_end)
+        .await
+        .unwrap_or(0);
+
+    let rewards = db
+        .get_weekly_reward_status(week_start, today)
+        .await
+        .unwrap_or_default();
+
     let template = QuestsTemplate {
         quests: quests_display,
+        rewards,
+        week_exp,
         error_message,
         selected_date: selected_date_formatted,
         day_name: day_name.to_string(),
@@ -696,6 +710,105 @@ pub async fn events(
         );
 
     Sse::new(bcast_stream.chain(keepalive))
+}
+
+#[derive(Template)]
+#[template(path = "fragments/weekly_rewards.html")]
+struct WeeklyRewardsTemplate {
+    pub rewards: Vec<crate::models::WeeklyRewardDisplay>,
+    pub week_exp: i32,
+}
+
+#[derive(Deserialize)]
+pub struct ClaimRewardRequest {
+    pub reward_id: i64,
+    #[serde(default)]
+    pub client_id: Option<String>,
+}
+
+pub async fn claim_reward(
+    State(state): State<AppState>,
+    ReadSignals(request): ReadSignals<ClaimRewardRequest>,
+) -> Result<Sse<impl Stream<Item = Result<Event, Infallible>>>, AppError> {
+    let db = &state.db;
+    let bcast = state.bcast.clone();
+    let today = chrono::Utc::now().date_naive();
+    let reward_id = request.reward_id;
+
+    tracing::debug!(reward_id, "🏆 Claim reward request received");
+
+    let week_start = today - chrono::Duration::days(today.weekday().num_days_from_monday() as i64);
+    let week_end = week_start + chrono::Duration::days(6);
+
+    let is_sunday = today.weekday().num_days_from_sunday() == 0;
+    if !is_sunday {
+        tracing::warn!(reward_id, "Claim attempted on non-Sunday");
+        return Err(AppError::ValidationError);
+    }
+
+    if today < week_start || today > week_end {
+        tracing::warn!(reward_id, "Claim attempted outside current week");
+        return Err(AppError::ValidationError);
+    }
+
+    let claim_result = db
+        .claim_reward_for_week(reward_id, week_start)
+        .await
+        .map_err(|e| {
+            tracing::error!(error = %e, reward_id, "💥 Database error claiming reward");
+            AppError::Database
+        })?;
+
+    if !claim_result {
+        tracing::warn!(
+            reward_id,
+            "Reward claim failed - either insufficient EXP or already claimed"
+        );
+        return Err(AppError::ValidationError);
+    }
+
+    let rewards = db
+        .get_weekly_reward_status(week_start, today)
+        .await
+        .unwrap_or_default();
+
+    let week_exp = db
+        .calculate_weekly_exp(week_start, week_end)
+        .await
+        .unwrap_or(0);
+
+    let rewards_template = WeeklyRewardsTemplate {
+        rewards: rewards.clone(),
+        week_exp,
+    };
+
+    let rewards_html = rewards_template.render().map_err(|e| {
+        tracing::error!(error = %e, "💥 Failed to render rewards template");
+        AppError::TemplateRender
+    })?;
+
+    let signals_json = serde_json::json!({
+        "rewardClaimed": reward_id,
+        "rewards": rewards,
+        "weekExp": week_exp
+    });
+
+    let origin = request.client_id.clone();
+    let _ = bcast.send(ServerMessage::Elements(
+        rewards_html.clone(),
+        origin.clone(),
+    ));
+    let _ = bcast.send(ServerMessage::Signals(signals_json.to_string(), origin));
+
+    let events: Vec<Event> = vec![
+        PatchElements::new(rewards_html)
+            .use_view_transition(true)
+            .into(),
+        PatchSignals::new(signals_json.to_string()).into(),
+    ];
+
+    let stream = stream::iter(events.into_iter().map(Ok));
+    Ok(Sse::new(stream))
 }
 
 // Test-only slow endpoint used by integration tests to simulate long-running requests.

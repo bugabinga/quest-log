@@ -1,0 +1,20 @@
+# EXAMPLE USAGE:
+#
+#   Refer for explanation to following link:
+#   https://lefthook.dev/configuration/
+#
+pre-push:
+  jobs:
+    - run: just fmt
+    - run: just check
+
+    - name: test for ci
+      tags:
+        - v*
+      run: just run-migrate
+
+pre-commit:
+  jobs:
+    - run: just fmt
+    - run: just lint
+    - run: just test

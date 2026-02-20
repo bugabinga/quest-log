@@ -4,8 +4,8 @@ use std::env;
 use std::path::Path;
 
 use crate::models::{
-    CreateQuestRequest, CreateRewardRequest, Quest, QuestCompletion, Reward, Settings,
-    ToggleResult, UpdateQuestRequest, UpdateSettingsRequest,
+    ClaimState, CreateQuestRequest, CreateRewardRequest, Quest, QuestCompletion, Reward, Settings,
+    ToggleResult, UpdateQuestRequest, UpdateSettingsRequest, WeeklyRewardDisplay,
 };
 
 #[derive(Clone, Debug)]
@@ -595,6 +595,117 @@ impl Database {
             .execute(&self.pool)
             .await?;
 
+        Ok(true)
+    }
+
+    pub async fn get_weekly_reward_status(
+        &self,
+        week_start: NaiveDate,
+        today: NaiveDate,
+    ) -> Result<Vec<WeeklyRewardDisplay>, sqlx::Error> {
+        let week_end = week_start + chrono::Duration::days(6);
+        let weekly_exp = self.calculate_weekly_exp(week_start, week_end).await?;
+
+        let is_sunday = today.weekday().num_days_from_sunday() == 0;
+        let can_claim_this_week = today >= week_start && today <= week_end && is_sunday;
+
+        let rewards = self.get_available_rewards().await?;
+
+        let mut result = Vec::new();
+        for reward in rewards {
+            let claimed_this_week: (i64,) = sqlx::query_as(
+                "SELECT COUNT(*) FROM reward_claims 
+                 WHERE reward_id = ? AND claimed_date >= ? AND claimed_date <= ?",
+            )
+            .bind(reward.id)
+            .bind(week_start)
+            .bind(week_end)
+            .fetch_one(&self.pool)
+            .await?;
+
+            let is_claimed = claimed_this_week.0 > 0;
+            let has_enough_exp = weekly_exp >= reward.required_exp;
+
+            let state = if is_claimed {
+                ClaimState::Claimed
+            } else if can_claim_this_week && has_enough_exp {
+                ClaimState::Claimable
+            } else {
+                ClaimState::Locked
+            };
+
+            result.push(WeeklyRewardDisplay {
+                id: reward.id,
+                title: reward.title,
+                description: reward.description,
+                required_exp: reward.required_exp,
+                weekly_exp,
+                state,
+                can_claim_today: can_claim_this_week,
+            });
+        }
+
+        Ok(result)
+    }
+
+    pub async fn claim_reward_for_week(
+        &self,
+        reward_id: i64,
+        week_start: NaiveDate,
+    ) -> Result<bool, sqlx::Error> {
+        let week_end = week_start + chrono::Duration::days(6);
+        let today = Utc::now().date_naive();
+        let is_sunday = today.weekday().num_days_from_sunday() == 0;
+
+        if today < week_start || today > week_end || !is_sunday {
+            tracing::warn!(reward_id, "Claim attempted outside valid period");
+            return Ok(false);
+        }
+
+        let reward =
+            sqlx::query_as::<_, Reward>("SELECT * FROM rewards WHERE id = ? AND is_active = TRUE")
+                .bind(reward_id)
+                .fetch_optional(&self.pool)
+                .await?;
+
+        let reward = match reward {
+            Some(r) => r,
+            None => return Ok(false),
+        };
+
+        let weekly_exp = self.calculate_weekly_exp(week_start, week_end).await?;
+        if weekly_exp < reward.required_exp {
+            tracing::warn!(
+                reward_id,
+                weekly_exp,
+                required = reward.required_exp,
+                "Insufficient EXP to claim reward"
+            );
+            return Ok(false);
+        }
+
+        let existing_claim: (i64,) = sqlx::query_as(
+            "SELECT COUNT(*) FROM reward_claims 
+             WHERE reward_id = ? AND claimed_date >= ? AND claimed_date <= ?",
+        )
+        .bind(reward_id)
+        .bind(week_start)
+        .bind(week_end)
+        .fetch_one(&self.pool)
+        .await?;
+
+        if existing_claim.0 > 0 {
+            return Ok(false);
+        }
+
+        let claimed_date = today;
+        sqlx::query("INSERT INTO reward_claims (reward_id, claimed_date) VALUES (?, ?)")
+            .bind(reward_id)
+            .bind(claimed_date)
+            .execute(&self.pool)
+            .await?;
+
+        tracing::info!(reward_id, title = %reward.title, "Reward claimed successfully!");
         Ok(true)
     }
 }

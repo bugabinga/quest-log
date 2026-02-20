@@ -3,9 +3,9 @@ mod database;
 mod handlers;
 mod models;
 mod state;
-mod tui;
 #[cfg(target_os = "linux")]
 mod systemd;
+mod tui;
 
 use crate::database::Database;
 use crate::handlers::ServerMessage;
@@ -116,6 +116,7 @@ async fn main() {
         .route("/day/{date}", get(handlers::quests))
         .route("/navigate/{date}", get(handlers::navigate))
         .route("/quests/toggle", post(handlers::toggle_quest))
+        .route("/rewards/claim", post(handlers::claim_reward))
         .route("/events", get(handlers::events))
         .route("/health", get(health));
 
@@ -152,29 +153,28 @@ async fn main() {
         #[cfg(target_os = "linux")]
         {
             let fds = systemd::take_listen_fds();
-            if let Some(fd) = fds.get(0) {
+            if let Some(fd) = fds.first() {
                 use std::os::unix::io::FromRawFd;
                 unsafe {
                     // Try to construct a std listener from the provided fd and
                     // convert it to a tokio listener. If this fails, fall back
                     // to binding normally.
-                    match std::net::TcpListener::from_raw_fd(*fd) {
-                        std_listener => match tokio::net::TcpListener::from_std(std_listener) {
-                            Ok(tokio_listener) => {
-                                tracing::info!(fd = %fd, "🔌 Serving on socket-activated fd");
-                                tokio_listener
-                            }
-                            Err(e) => {
-                                tracing::error!(error = %e, "💥 Failed to use socket-activated fd - falling back to bind");
-                                match tokio::net::TcpListener::bind(addr).await {
-                                    Ok(l) => l,
-                                    Err(e) => {
-                                        tracing::error!(error = %e, port = %port, "💥 Failed to bind to port - address may be in use");
-                                        return;
-                                    }
+                    let std_listener = std::net::TcpListener::from_raw_fd(*fd);
+                    match tokio::net::TcpListener::from_std(std_listener) {
+                        Ok(tokio_listener) => {
+                            tracing::info!(fd = %fd, "🔌 Serving on socket-activated fd");
+                            tokio_listener
+                        }
+                        Err(e) => {
+                            tracing::error!(error = %e, "💥 Failed to use socket-activated fd - falling back to bind");
+                            match tokio::net::TcpListener::bind(addr).await {
+                                Ok(l) => l,
+                                Err(e) => {
+                                    tracing::error!(error = %e, port = %port, "💥 Failed to bind to port - address may be in use");
+                                    return;
                                 }
                             }
-                        },
+                        }
                     }
                 }
             } else {
@@ -218,7 +218,7 @@ async fn main() {
             // Systemd passed socket activation fds; we detect and log them here.
             // A fuller integration would create a listener from the first fd and
             // avoid the manual bind above. For now we just log the presence of fds.
-            if let Some(fd) = fds.get(0) {
+            if let Some(fd) = fds.first() {
                 tracing::info!(fd = %fd, "🔌 Systemd provided socket activation fd(s) detected");
             }
         }

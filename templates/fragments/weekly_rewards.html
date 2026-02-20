@@ -1,0 +1,48 @@
+<details class="weekly-rewards" id="weekly-rewards">
+	<summary class="rewards-summary">
+		<span class="rewards-icon">🏆</span>
+		<span class="rewards-title">Weekly Rewards</span>
+		<span class="rewards-exp">{{ week_exp }} EXP</span>
+	</summary>
+	<div class="rewards-list">
+		{% for reward in rewards %}
+		<div class="reward-card" id="reward-{{ reward.id }}" data-reward-id="{{ reward.id }}">
+			<div class="reward-header">
+				<span class="reward-title">{{ reward.title }}</span>
+				<span class="reward-exp">{{ reward.required_exp }} EXP</span>
+			</div>
+			{% if reward.description.is_some() %}
+			<p class="reward-description">{{ reward.description.as_deref().unwrap() }}</p>
+			{% endif %}
+			<div class="reward-progress">
+				{% let progress = reward.weekly_exp * 100 / reward.required_exp %}
+				{% if progress > 100 %}{% let progress = 100 %}{% endif %}
+				<div class="progress-bar reward-progress-bar">
+					<div class="progress-fill" style="width: {{ progress }}%"></div>
+				</div>
+				<span class="progress-text">{{ reward.weekly_exp }} / {{ reward.required_exp }}</span>
+			</div>
+			<div class="reward-actions">
+				{% match reward.state %}
+				{% when ClaimState::Locked %}
+				<button class="claim-btn locked" disabled>
+					{% if reward.can_claim_today %}
+					Not Enough EXP
+					{% else %}
+					🔒 Available Sunday
+					{% endif %}
+				</button>
+				{% when ClaimState::Claimable %}
+				<button class="claim-btn claimable" type="button" data-on:click__prevent="@post('/rewards/claim', { payload: { reward_id: {{ reward.id }} } })">
+					⚔️ CLAIM REWARD! ⚔️
+				</button>
+				{% when ClaimState::Claimed %}
+				<button class="claim-btn claimed" disabled>
+					✨ CLAIMED ✨
+				</button>
+				{% endmatch %}
+			</div>
+		</div>
+		{% endfor %}
+	</div>
+</details>

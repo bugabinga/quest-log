@@ -66,6 +66,12 @@ document.addEventListener("datastar-signal-patch", (e) => {
     }
     previousExpToday = signals.expToday;
   }
+
+  if (signals.rewardClaimed) {
+    import("./ui-effects.js").then((m) =>
+      m.triggerRewardClaimedNotification(signals.rewardClaimed)
+    );
+  }
 });
 
 addEventListener("popstate", () => {
