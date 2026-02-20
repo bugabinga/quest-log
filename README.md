@@ -71,6 +71,67 @@ just lint
 just db-reset
 ```
 
+## Systemd integration (optional)
+
+This project supports optional systemd integration behind the Cargo feature
+`systemd`.
+
+How it works
+
+- Compile with `--features systemd` only on Linux; the code is target-gated so
+  non-Linux builds are unaffected.
+- When enabled the server will:
+  - Send `READY=1` via sd_notify once the HTTP listener is ready.
+  - If `WATCHDOG` is enabled (`WatchdogSec=` in the unit file), spawn a
+    background heartbeat that periodically sends `WATCHDOG=1` at one-third of
+    the configured interval.
+  - Detect socket activation fds (`LISTEN_FDS`) and use the first fd as the HTTP
+    listener if present.
+
+Enable it locally:
+
+```bash
+cargo run --features systemd --release
+```
+
+Example unit files (basic):
+
+my-server.service
+
+```ini
+[Unit]
+Description=Quest Log
+
+[Service]
+Type=notify
+ExecStart=/usr/bin/quest-log
+WatchdogSec=30s
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target
+```
+
+my-server.socket (optional, for socket activation)
+
+```ini
+[Unit]
+Description=Quest Log socket
+
+[Socket]
+ListenStream=3000
+
+[Install]
+WantedBy=sockets.target
+```
+
+Notes
+
+- Systemd behavior is tested manually; CI runners typically don't provide
+  systemd.
+- The integration uses the `sd-notify` crate (pure Rust) and avoids linking
+  libsystemd.
+
 ## Architecture Details
 
 **Backend Stack:**
