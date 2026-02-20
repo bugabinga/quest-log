@@ -23,6 +23,7 @@ futures = "0.3"
 ratatui = "0.28"
 crossterm = "0.28"
 hyper = { version = "0.14", features = ["full"] }
+sd-notify = { version = "0.4", optional = true }
 
 [dev-dependencies]
 reqwest = { version = "0.13", features = ["json", "stream"] }
@@ -45,3 +46,6 @@ opt-level = 3
 [profile.release]
 codegen-units = 1
 lto = "thin"
+
+[features]
+systemd = ["sd-notify"]

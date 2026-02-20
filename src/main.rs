@@ -4,6 +4,8 @@ mod handlers;
 mod models;
 mod state;
 mod tui;
+#[cfg(all(feature = "systemd", target_os = "linux"))]
+mod systemd;
 
 use crate::database::Database;
 use crate::handlers::ServerMessage;
@@ -141,6 +143,32 @@ async fn main() {
     let server = axum::serve(listener, app);
 
     tracing::info!(url = %format!("http://{}", addr), "🎉 Server listening! (◕‿◕)");
+    // If built with systemd support, send READY and start watchdog if enabled.
+    #[cfg(all(feature = "systemd", target_os = "linux"))]
+    {
+        // If systemd handed us sockets, prefer them instead of binding above.
+        let fds = systemd::take_listen_fds();
+        if !fds.is_empty() {
+            // Systemd passed socket activation fds; we detect and log them here.
+            // A fuller integration would create a listener from the first fd and
+            // avoid the manual bind above. For now we just log the presence of fds.
+            if let Some(fd) = fds.get(0) {
+                tracing::info!(fd = %fd, "🔌 Systemd provided socket activation fd(s) detected");
+            }
+        }
+
+        systemd::notify_ready(Some("HTTP server listening"));
+        let watchdog = systemd::start_watchdog();
+
+        // Ensure watchdog task is dropped on shutdown
+        // We attach it to a scope so the handle is dropped when main continues to shutdown.
+        if let Some(handle) = watchdog {
+            // spawn a task that awaits the handle so it keeps running until the handle is aborted
+            tokio::spawn(async move {
+                let _ = handle.await;
+            });
+        }
+    }
     tracing::info!("💡 Open your browser and start questing!");
 
     // a oneshot bridge we will trigger when a shutdown signal arrives
