@@ -48,20 +48,20 @@ methodology.
 
 ### Current Compliance Status
 
-| Factor                 | Status | Notes                            |
-| ---------------------- | ------ | -------------------------------- |
-| I. Codebase            | ✅     | Single git repo                  |
-| II. Dependencies       | ✅     | Cargo.toml declares all          |
-| III. Config            | ✅     | .env.example, RUST_LOG supported |
-| IV. Backing Services   | ✅     | SQLite via `QUEST_LOG_DATA_DIR`  |
-| V. Build, release, run | ❌     | No containerization, no CI/CD    |
-| VI. Processes          | ✅     | Stateless, DB-backed             |
-| VII. Port binding      | ✅     | `PORT` env var, self-contained   |
-| VIII. Concurrency      | ✅     | Can scale horizontally           |
-| IX. Disposability      | ❌     | No graceful shutdown             |
-| X. Dev/prod parity     | ❌     | No containerization              |
-| XI. Logs               | ✅     | Structured logging with emojis   |
-| XII. Admin processes   | ❌     | No CLI for migrations/admin      |
+| Factor                 | Status      | Notes                                               |
+| ---------------------- | ----------- | --------------------------------------------------- |
+| I. Codebase            | ✅          | Single git repo                                     |
+| II. Dependencies       | ✅          | Cargo.toml declares all                             |
+| III. Config            | ✅          | .env.example, RUST_LOG supported                    |
+| IV. Backing Services   | ✅          | SQLite via `QUEST_LOG_DATA_DIR`                     |
+| V. Build, release, run | in_progress | Containerization planned                            |
+| VI. Processes          | ✅          | Stateless, DB-backed                                |
+| VII. Port binding      | ✅          | `PORT` env var, self-contained                      |
+| VIII. Concurrency      | ✅          | Can scale horizontally                              |
+| IX. Disposability      | ✅          | Graceful shutdown implemented                       |
+| X. Dev/prod parity     | in_progress | No containerization                                 |
+| XI. Logs               | ✅          | Structured logging with emojis                      |
+| XII. Admin processes   | in_progress | Interactive TUI replaces CLI; no scripted admin CLI |
 
 ### 14.1 Environment Configuration ✅
 
@@ -79,6 +79,12 @@ methodology.
 **Files:**
 
 - `src/main.rs`
+
+**Status:** ✅ Implemented in `src/main.rs`. The server installs
+`tokio::signal::ctrl_c()` and a SIGTERM handler on unix, uses a oneshot bridge
+with `with_graceful_shutdown`, and waits up to 30s for in-flight requests to
+finish. See `Database::new()` for migration behavior and `systemd` module
+integration for readiness/watchdog notifications.
 
 **Implementation:**
 
@@ -98,6 +104,10 @@ methodology.
 - `src/cli.rs` - **Create**
 - `src/main.rs` - Dispatch to CLI subcommands
 - `Cargo.toml` - Add `clap` dependency
+
+**Status:** Interactive TUI implemented. `src/cli.rs` dispatches to `src/tui.rs`
+for interactive admin operations. A non-interactive `migrate-only` subcommand
+was added to apply embedded migrations and exit (useful for CI/release hooks).
 
 **Dependency:**
 

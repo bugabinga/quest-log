@@ -1,0 +1,6 @@
+[Unit]
+Description=Quest Log Database Volume
+Documentation=https://github.com/bugabinga/quest-log
+
+[Volume]
+VolumeName=quest-log-data

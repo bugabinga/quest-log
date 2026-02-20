@@ -6,8 +6,10 @@ use sd_notify::NotifyState;
 fn systemd_watchdog_and_notify_smoke() {
     // Simulate systemd setting WATCHDOG_USEC and LISTEN_PID for the current PID.
     // The test ensures the sd-notify crate is available and the basic APIs behave.
-    std::env::set_var("WATCHDOG_USEC", "30000000");
-    std::env::set_var("WATCHDOG_PID", std::process::id().to_string());
+    unsafe {
+        std::env::set_var("WATCHDOG_USEC", "30000000");
+        std::env::set_var("WATCHDOG_PID", std::process::id().to_string());
+    }
 
     let mut usec: u64 = 0;
     let enabled = sd_notify::watchdog_enabled(true, &mut usec);

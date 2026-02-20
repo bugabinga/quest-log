@@ -37,7 +37,10 @@ cd quest-log
 cargo build
 
 # Set up database
-just db-migrate
+# Migrations are embedded in the binary and applied automatically at startup.
+# To run migrations explicitly in CI or as a release/init step, use the
+# non-interactive command below (runs migrations then exits):
+just db-migrate   # runs `cargo run -- migrate-only` if present in justfile
 
 # Start development server
 just dev
@@ -131,6 +134,65 @@ Notes
   systemd.
 - The integration uses the `sd-notify` crate (pure Rust) and avoids linking
   libsystemd.
+
+## Container Registry
+
+The application is published as a container image to GitHub Container Registry
+(GHCR).
+
+### Authenticating to GHCR
+
+```bash
+# Login to GitHub Container Registry
+echo $GITHUB_TOKEN | podman login ghcr.io -u $GITHUB_USERNAME --password-stdin
+
+# Or using PAT
+podman login ghcr.io -u your-username --password-stdin
+```
+
+Replace `$GITHUB_TOKEN` with a personal access token (PAT) with `read:packages`
+scope, or use `$GITHUB_USERNAME` with a classic PAT.
+
+### Deployment with Podman Quadlet
+
+1. **Install quadlet files:**
+
+```bash
+# Copy volume and container files to systemd directory
+sudo cp quest-log.volume /etc/containers/systemd/
+sudo cp quest-log.container /etc/containers/systemd/
+
+# Reload systemd
+sudo systemctl daemon-reload
+```
+
+2. **Start services:**
+
+```bash
+# Create and start the volume
+sudo systemctl enable quest-log-data
+sudo systemctl start quest-log-data
+
+# Create and start the container
+sudo systemctl enable quest-log
+sudo systemctl start quest-log
+```
+
+3. **Check status:**
+
+```bash
+sudo systemctl status quest-log
+journalctl -u quest-log -f
+```
+
+### Auto-Update
+
+The container is configured with `AutoUpdate=registry` which enables automatic
+updates via `podman-auto-update`. Enable the timer:
+
+```bash
+systemctl --user enable --now podman-auto-update.timer
+```
 
 ## Architecture Details
 

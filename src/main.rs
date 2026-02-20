@@ -14,6 +14,8 @@ use axum::{
     Router,
     routing::{get, post},
 };
+// static assets are embedded via `static-serve` in normal builds. The
+// embed macro must be imported so the macro is in scope when used below.
 use static_serve::embed_assets;
 use std::net::SocketAddr;
 use tokio::sync::broadcast;
@@ -24,7 +26,13 @@ use tracing_subscriber::{EnvFilter, fmt, layer::SubscriberExt, util::SubscriberI
 embed_assets!("static", compress = true);
 
 #[cfg(not(debug_assertions))]
-embed_assets!("static", compress = true, ignore_paths = ["*.map"]);
+// In release builds we embed the static directory compressed. Avoid passing
+// ignore_paths here because the macro validation fails if a glob doesn't
+// match any files in the build context inside the container builder.
+// When building inside CI/container the static/ directory is copied into the
+// build context by the Containerfile so the macro can run. We keep the simple
+// form here without ignore_paths to avoid compile-time glob validation failures.
+embed_assets!("static", compress = true);
 
 fn setup_logging() {
     let filter = EnvFilter::try_from_default_env()
@@ -109,9 +117,7 @@ async fn main() {
         .route("/navigate/{date}", get(handlers::navigate))
         .route("/quests/toggle", post(handlers::toggle_quest))
         .route("/events", get(handlers::events))
-        .route("/health", get(health))
-        .merge(static_router())
-        .with_state(app_state.clone());
+        .route("/health", get(health));
 
     // Test-only endpoints are enabled via ENABLE_TEST_ENDPOINTS=1 at runtime.
     // This avoids exposing test routes in normal production runs.
@@ -120,7 +126,14 @@ async fn main() {
         router = router.route("/test/slow", get(handlers::slow));
     }
 
-    let app = router;
+    // Attach embedded static assets router. The `embed_assets!` macro above
+    // generates a `static_router()` function in this module scope which
+    // returns an `axum::Router` configured to serve the embedded files.
+    // We merge it into our application router so static files are served
+    // with the same application state type (`AppState`).
+    // Merge the generated static router for the same application state type
+    // so both routers expect `AppState` as their missing state.
+    let app = router.merge(static_router::<AppState>());
 
     let port: u16 = port.parse().expect("💢 PORT must be a number");
     let addr = SocketAddr::from(([127, 0, 0, 1], port));
@@ -131,60 +144,69 @@ async fn main() {
     // middleware: no-op when active_requests not present in AppState for test suites
     let app = app;
 
-    // If systemd provided socket activation fds, convert the first one to a TcpListener
-    // and use it. Otherwise, bind normally to the configured address.
-    let server = {
-        #[cfg(all(feature = "systemd", target_os = "linux"))]
+    // Resolve a tokio TcpListener first (prefer systemd socket activation if
+    // available). We then create the make-service from the router and pass
+    // it to axum::serve. This avoids moving the router multiple times across
+    // branches.
+    let listener = {
+        #[cfg(target_os = "linux")]
         {
             let fds = systemd::take_listen_fds();
             if let Some(fd) = fds.get(0) {
                 use std::os::unix::io::FromRawFd;
                 unsafe {
+                    // Try to construct a std listener from the provided fd and
+                    // convert it to a tokio listener. If this fails, fall back
+                    // to binding normally.
                     match std::net::TcpListener::from_raw_fd(*fd) {
                         std_listener => match tokio::net::TcpListener::from_std(std_listener) {
                             Ok(tokio_listener) => {
                                 tracing::info!(fd = %fd, "🔌 Serving on socket-activated fd");
-                                axum::serve(tokio_listener, app)
+                                tokio_listener
                             }
                             Err(e) => {
                                 tracing::error!(error = %e, "💥 Failed to use socket-activated fd - falling back to bind");
-                                let listener = match tokio::net::TcpListener::bind(addr).await {
+                                match tokio::net::TcpListener::bind(addr).await {
                                     Ok(l) => l,
                                     Err(e) => {
                                         tracing::error!(error = %e, port = %port, "💥 Failed to bind to port - address may be in use");
                                         return;
                                     }
-                                };
-                                axum::serve(listener, app)
+                                }
                             }
                         },
                     }
                 }
             } else {
                 // No socket activation fds; bind normally
-                let listener = match tokio::net::TcpListener::bind(addr).await {
+                match tokio::net::TcpListener::bind(addr).await {
                     Ok(l) => l,
                     Err(e) => {
                         tracing::error!(error = %e, port = %port, "💥 Failed to bind to port - address may be in use");
                         return;
                     }
-                };
-                axum::serve(listener, app)
+                }
             }
         }
 
-        #[cfg(not(all(feature = "systemd", target_os = "linux")))]
+        #[cfg(not(target_os = "linux"))]
         {
-            let listener = match tokio::net::TcpListener::bind(addr).await {
+            match tokio::net::TcpListener::bind(addr).await {
                 Ok(l) => l,
                 Err(e) => {
                     tracing::error!(error = %e, port = %port, "💥 Failed to bind to port - address may be in use");
                     return;
                 }
-            };
-            axum::serve(listener, app)
+            }
         }
     };
+
+    // Convert the router into a make-service once and hand it to the server.
+    // Attach the real application state and turn the router into a make
+    // service that `axum::serve` can accept.
+    let app = app.with_state(app_state.clone());
+    let make_service = app.into_make_service();
+    let server = axum::serve(listener, make_service);
 
     tracing::info!(url = %format!("http://{}", addr), "🎉 Server listening! (◕‿◕)");
     // On Linux, send READY and start watchdog if enabled.

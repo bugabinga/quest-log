@@ -13,6 +13,8 @@ struct Cli {
 enum Commands {
     Serve,
     Ui,
+    /// Apply embedded migrations and exit (useful for CI/release hooks)
+    MigrateOnly,
 }
 
 pub async fn run_cli() -> Result<bool, Box<dyn std::error::Error>> {
@@ -24,5 +26,11 @@ pub async fn run_cli() -> Result<bool, Box<dyn std::error::Error>> {
             Ok(false)
         }
         Some(Commands::Serve) => Ok(true),
+        Some(Commands::MigrateOnly) => {
+            // Construct the database which will apply embedded migrations in Database::new()
+            let _db = crate::database::Database::new().await?;
+            println!("Migrations applied");
+            Ok(false)
+        }
     }
 }

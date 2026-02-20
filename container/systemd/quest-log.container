@@ -1,0 +1,26 @@
+[Unit]
+Description=Quest Log Application
+Documentation=https://github.com/bugabinga/quest-log
+After=network.target
+
+[Container]
+Image=bugabinga/quest-log:latest
+PublishPort=3000:3000
+Volume=quest-log-data:/data
+AutoUpdate=registry
+Notify=true
+TZ=Europe/Berlin
+
+# Security
+UserNS=keep-id
+NoNewPrivileges=true
+ReadOnly=true
+Tmpfs=/tmp
+Mask=/proc/sys:/sys/kernel
+
+[Service]
+Restart=always
+WatchdogSec=30s
+
+[Install]
+WantedBy=multi-user.target
