@@ -72,6 +72,26 @@ pub fn get_week_bounds(date: NaiveDate) -> (NaiveDate, NaiveDate) {
     (week_start, week_end)
 }
 
+pub fn format_date_iso(date: NaiveDate) -> String {
+    date.format("%Y-%m-%d").to_string()
+}
+
+pub fn format_date_display(date: NaiveDate) -> String {
+    date.format("%B %-d").to_string()
+}
+
+pub fn prev_day(date: NaiveDate) -> NaiveDate {
+    date - chrono::Duration::days(1)
+}
+
+pub fn next_day(date: NaiveDate) -> NaiveDate {
+    date + chrono::Duration::days(1)
+}
+
+pub fn parse_date(date_str: &str) -> Option<NaiveDate> {
+    NaiveDate::parse_from_str(date_str, "%Y-%m-%d").ok()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -528,5 +548,47 @@ mod tests {
         // Just verify it returns some valid date in the valid range
         assert!(result.year() >= 2020 && result.year() <= 2030);
         cleanup();
+    }
+
+    #[test]
+    fn test_format_date_iso() {
+        let date = NaiveDate::from_ymd_opt(2024, 1, 15).unwrap();
+        assert_eq!(format_date_iso(date), "2024-01-15");
+    }
+
+    #[test]
+    fn test_format_date_display() {
+        let date = NaiveDate::from_ymd_opt(2024, 1, 15).unwrap();
+        assert_eq!(format_date_display(date), "January 15");
+    }
+
+    #[test]
+    fn test_prev_day() {
+        let date = NaiveDate::from_ymd_opt(2024, 1, 2).unwrap();
+        assert_eq!(prev_day(date), NaiveDate::from_ymd_opt(2024, 1, 1).unwrap());
+    }
+
+    #[test]
+    fn test_next_day() {
+        let date = NaiveDate::from_ymd_opt(2024, 1, 1).unwrap();
+        assert_eq!(next_day(date), NaiveDate::from_ymd_opt(2024, 1, 2).unwrap());
+    }
+
+    #[test]
+    fn test_parse_date_valid() {
+        let result = parse_date("2024-01-15");
+        assert_eq!(result, Some(NaiveDate::from_ymd_opt(2024, 1, 15).unwrap()));
+    }
+
+    #[test]
+    fn test_parse_date_invalid() {
+        let result = parse_date("15-01-2024");
+        assert_eq!(result, None);
+    }
+
+    #[test]
+    fn test_parse_date_empty() {
+        let result = parse_date("");
+        assert_eq!(result, None);
     }
 }

@@ -225,10 +225,15 @@ pub async fn quests(
 ) -> Result<impl IntoResponse, AppError> {
     let db = &state.db;
     let today = time::today();
-    let selected_date = if let Some(date_str) = query.date {
-        NaiveDate::parse_from_str(&date_str, "%Y-%m-%d").unwrap_or(today)
-    } else {
-        today
+    let selected_date = match &query.date {
+        Some(date_str) => match time::parse_date(date_str) {
+            Some(date) => date,
+            None => {
+                tracing::warn!(date_str = %date_str, "⚠️  Invalid date format - rejecting");
+                return Ok(Html("Invalid date format. Use YYYY-MM-DD".to_string()).into_response());
+            }
+        },
+        None => today,
     };
 
     tracing::debug!(date = %selected_date, "📜 Loading quests for day");
@@ -287,15 +292,11 @@ pub async fn quests(
     let is_today = selected_date == today;
     let day_name = get_fantasy_day_name(selected_date.weekday());
     let weekday_num = selected_date.weekday().num_days_from_monday() as u8;
-    let selected_date_formatted = selected_date.format("%B %-d").to_string(); // e.g., "December 16"
+    let selected_date_formatted = time::format_date_display(selected_date);
     let can_navigate_left = selected_date > week_start;
     let can_navigate_right = selected_date < week_end;
-    let prev_date = (selected_date - chrono::Duration::days(1))
-        .format("%Y-%m-%d")
-        .to_string();
-    let next_date = (selected_date + chrono::Duration::days(1))
-        .format("%Y-%m-%d")
-        .to_string();
+    let prev_date = time::format_date_iso(time::prev_day(selected_date));
+    let next_date = time::format_date_iso(time::next_day(selected_date));
     let class_left = if can_navigate_left {
         "nav-btn left".to_string()
     } else {
@@ -564,17 +565,13 @@ pub async fn navigate(
     }
 
     let day_name = get_fantasy_day_name(selected_date.weekday()).to_string();
-    let selected_date_formatted = selected_date.format("%B %-d").to_string();
+    let selected_date_formatted = time::format_date_display(selected_date);
     let weekday_num = selected_date.weekday().num_days_from_monday() as u8;
 
     let can_navigate_left = selected_date > week_start;
     let can_navigate_right = selected_date < week_end;
-    let prev_date = (selected_date - chrono::Duration::days(1))
-        .format("%Y-%m-%d")
-        .to_string();
-    let next_date = (selected_date + chrono::Duration::days(1))
-        .format("%Y-%m-%d")
-        .to_string();
+    let prev_date = time::format_date_iso(time::prev_day(selected_date));
+    let next_date = time::format_date_iso(time::next_day(selected_date));
 
     let class_left = if can_navigate_left {
         "nav-btn left"
@@ -635,16 +632,15 @@ pub async fn navigate(
         AppError::TemplateRender
     })?;
 
+    let date_iso = time::format_date_iso(selected_date);
     let url_path = if is_today {
         "/".to_string()
     } else {
-        format!("/day/{}", selected_date.format("%Y-%m-%d"))
+        format!("/day/{}", date_iso)
     };
     let history_script = format!(
         "window.history.pushState({{date:'{}'}}, '', '{}'); document.body.setAttribute('data-weekday', '{}');",
-        selected_date.format("%Y-%m-%d"),
-        url_path,
-        weekday_num
+        date_iso, url_path, weekday_num
     );
 
     let signals_json = serde_json::json!({
