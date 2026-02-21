@@ -16,7 +16,7 @@ use std::convert::Infallible;
 use tokio_stream::StreamExt;
 use tokio_stream::wrappers::BroadcastStream;
 
-use crate::models::{ClaimState, QuestStats, ToggleResult};
+use crate::models::{ClaimState, Quest, QuestStats, ToggleResult};
 use crate::state::AppState;
 use crate::time;
 
@@ -199,6 +199,18 @@ struct QuestDisplay {
     pub completed_today: bool,
 }
 
+impl QuestDisplay {
+    fn from_quest(quest: Quest, completed_today: bool) -> Self {
+        Self {
+            id: quest.id,
+            title: quest.title,
+            description: quest.description.unwrap_or_default(),
+            exp_value: quest.exp_value,
+            completed_today,
+        }
+    }
+}
+
 #[derive(Template)]
 #[template(path = "quests.html")]
 struct QuestsTemplate {
@@ -278,13 +290,7 @@ pub async fn quests(
         .into_iter()
         .map(|quest| {
             let completed_today = *completion_status.get(&quest.id).unwrap_or(&false);
-            QuestDisplay {
-                id: quest.id,
-                title: quest.title,
-                description: quest.description.unwrap_or_default(),
-                exp_value: quest.exp_value,
-                completed_today,
-            }
+            QuestDisplay::from_quest(quest, completed_today)
         })
         .collect();
 
@@ -417,13 +423,7 @@ pub async fn toggle_quest(
     let was_just_completed = toggle_result == ToggleResult::NewlyCompleted;
     let was_just_uncompleted = toggle_result == ToggleResult::NewlyUncompleted;
 
-    let quest_display = QuestDisplay {
-        id: quest.id,
-        title: quest.title,
-        description: quest.description.unwrap_or_default(),
-        exp_value: quest.exp_value,
-        completed_today,
-    };
+    let quest_display = QuestDisplay::from_quest(quest, completed_today);
 
     let day_of_week = today.weekday().num_days_from_sunday() as i32;
     let all_quests = db.get_quests_for_day(day_of_week).await.unwrap_or_default();
@@ -540,13 +540,7 @@ pub async fn navigate(
                 tracing::warn!(error = %e, quest_id = quest.id, "⚠️  Failed to check completion status");
                 false
             });
-        quests_display.push(QuestDisplay {
-            id: quest.id,
-            title: quest.title,
-            description: quest.description.unwrap_or_default(),
-            exp_value: quest.exp_value,
-            completed_today,
-        });
+        quests_display.push(QuestDisplay::from_quest(quest, completed_today));
     }
 
     let total_exp: i32 = quests_display
