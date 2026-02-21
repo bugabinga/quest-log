@@ -262,32 +262,35 @@ pub async fn quests(
         }
     };
 
-    let mut quests_display = Vec::new();
-    let mut error_message = String::new();
+    let quest_ids: Vec<i64> = quests.iter().map(|q| q.id).collect();
+    let completion_status = match db.get_quests_completion_status(&quest_ids, selected_date).await {
+        Ok(status) => status,
+        Err(e) => {
+            tracing::error!(error = %e, "💥 Failed to load completion status");
+            return Err(AppError::Database);
+        }
+    };
 
-    for quest in quests {
-        let completed_today = match db.is_quest_completed_today(quest.id, selected_date).await {
-            Ok(completed) => completed,
-            Err(e) => {
-                error_message = format!("Failed to check quest completion: {}", e);
-                false
+    let quests_display: Vec<QuestDisplay> = quests
+        .into_iter()
+        .map(|quest| {
+            let completed_today = *completion_status.get(&quest.id).unwrap_or(&false);
+            QuestDisplay {
+                id: quest.id,
+                title: quest.title,
+                description: quest.description.unwrap_or_default(),
+                exp_value: quest.exp_value,
+                completed_today,
             }
-        };
-
-        quests_display.push(QuestDisplay {
-            id: quest.id,
-            title: quest.title,
-            description: quest.description.unwrap_or_default(),
-            exp_value: quest.exp_value,
-            completed_today,
-        });
-    }
+        })
+        .collect();
 
     let total_exp: i32 = quests_display
         .iter()
-        .filter(|q| q.completed_today)
-        .map(|q| q.exp_value)
+        .filter_map(|q| q.completed_today.then_some(q.exp_value))
         .sum();
+
+    let error_message = String::new();
 
     let is_today = selected_date == today;
     let day_name = get_fantasy_day_name(selected_date.weekday());

@@ -1,5 +1,5 @@
 use chrono::{Datelike, NaiveDate, Utc};
-use sqlx::SqlitePool;
+use sqlx::{Row, SqlitePool};
 use std::env;
 use std::path::Path;
 
@@ -356,6 +356,42 @@ impl Database {
         .await?;
 
         Ok(count.0 > 0)
+    }
+
+    pub async fn get_quests_completion_status(
+        &self,
+        quest_ids: &[i64],
+        date: NaiveDate,
+    ) -> Result<std::collections::HashMap<i64, bool>, sqlx::Error> {
+        if quest_ids.is_empty() {
+            return Ok(std::collections::HashMap::new());
+        }
+
+        let placeholders: Vec<&str> = quest_ids.iter().map(|_| "?").collect();
+        let query = format!(
+            "SELECT quest_id FROM quest_completions WHERE quest_id IN ({}) AND completed_date = ?",
+            placeholders.join(", ")
+        );
+
+        let mut sql_query = sqlx::query(&query);
+        for id in quest_ids {
+            sql_query = sql_query.bind(id);
+        }
+        sql_query = sql_query.bind(date);
+
+        let completed_rows = sql_query.fetch_all(&self.pool).await?;
+
+        let completed_set: std::collections::HashSet<i64> = completed_rows
+            .into_iter()
+            .map(|row| row.get::<i64, _>(0))
+            .collect();
+
+        let mut result = std::collections::HashMap::new();
+        for id in quest_ids {
+            result.insert(*id, completed_set.contains(id));
+        }
+
+        Ok(result)
     }
 
     pub async fn toggle_quest_completion(
