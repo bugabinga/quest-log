@@ -925,16 +925,15 @@ async fn handle_create_input(
                 app.input_buffer.push(c);
             }
             InputMode::Exp => {
-                if c.is_numeric() {
-                    app.input_exp = app.input_exp * 10 + c.to_digit(10).unwrap() as i32;
+                if let Some(digit) = c.to_digit(10) {
+                    app.input_exp = app.input_exp * 10 + digit as i32;
                 }
             }
             InputMode::Day => {
-                if c.is_numeric() {
-                    let d = c.to_digit(10).unwrap() as i32;
-                    if d <= 6 {
-                        app.input_day = d;
-                    }
+                if let Some(digit) = c.to_digit(10)
+                    && digit <= 6
+                {
+                    app.input_day = digit as i32;
                 }
             }
             InputMode::Goal => {

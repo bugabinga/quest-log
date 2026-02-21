@@ -68,6 +68,64 @@ async fn test_quest_listing_integration() {
     println!("Quest listing integration test completed successfully");
 }
 
+// Regression test: invalid date should return error, not silently fall back to today
+#[tokio::test]
+async fn test_invalid_date_returns_error() {
+    let pool = SqlitePool::connect("sqlite::memory:")
+        .await
+        .expect("Failed to create in-memory database");
+    let db: Database = Database::with_pool(pool);
+    db.migrate().await.expect("Failed to run migrations");
+
+    // Create test quest
+    let quest_req = CreateQuestRequest {
+        title: "Test Quest".to_string(),
+        description: None,
+        exp_value: Some(10),
+        day_of_week: 1,
+    };
+    db.create_quest(quest_req)
+        .await
+        .expect("Failed to create quest");
+
+    let (bcast_tx, _) = broadcast::channel(128);
+    let app_state = AppState {
+        db,
+        bcast: bcast_tx,
+    };
+    let app = Router::new()
+        .route("/", get(handlers::quests))
+        .with_state(app_state);
+
+    // Test invalid date format - should return error, not silently use today
+    let response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri("/?date=invalid-date")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    // Should return OK (200) but with error message in body
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let body_str = String::from_utf8(body.to_vec()).unwrap();
+
+    // Should contain error message about invalid date format
+    assert!(
+        body_str.contains("Invalid date format"),
+        "Expected error message about invalid date format, got: {}",
+        body_str
+    );
+
+    time::reset_today();
+}
+
 // Test quest listing on a known Sunday (using set_today)
 #[tokio::test]
 async fn test_quest_listing_on_sunday() {

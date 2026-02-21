@@ -263,7 +263,10 @@ pub async fn quests(
     };
 
     let quest_ids: Vec<i64> = quests.iter().map(|q| q.id).collect();
-    let completion_status = match db.get_quests_completion_status(&quest_ids, selected_date).await {
+    let completion_status = match db
+        .get_quests_completion_status(&quest_ids, selected_date)
+        .await
+    {
         Ok(status) => status,
         Err(e) => {
             tracing::error!(error = %e, "💥 Failed to load completion status");
