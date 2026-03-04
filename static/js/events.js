@@ -36,9 +36,38 @@ function _parseSseData(data) {
   "use strict";
 
   let eventSource = null;
-  let reconnectAttempts = 0;
-  const maxReconnectAttempts = 10;
-  const baseReconnectDelay = 1000;
+  let shutdownOverlay = null;
+  let isConnected = false;
+  let healthCheckTimer = null;
+
+  function startServerPolling() {
+    console.log("[Shutdown] Starting server polling...");
+    stopProactiveHealthCheck(); // Stop the DOMContentLoaded health check
+    let pollingActive = true;
+    function poll() {
+      if (!pollingActive) return;
+      console.log("[Shutdown] Polling /health...");
+      fetch("/health", { method: "HEAD", cache: "no-cache" })
+        .then(function (response) {
+          console.log("[Shutdown] /health returned:", response.status);
+          if (response.ok) {
+            console.log("[Shutdown] Server is back! Reconnecting...");
+            pollingActive = false;
+            // Hide overlay immediately - don't wait for EventSource onopen which may not fire
+            hideShutdownOverlay();
+            connect();
+          } else {
+            console.log("[Shutdown] Server not ready, retrying in 2s...");
+            setTimeout(poll, 2000);
+          }
+        })
+        .catch(function (err) {
+          console.log("[Shutdown] Server unreachable, retrying in 2s...", err);
+          setTimeout(poll, 2000);
+        });
+    }
+    poll();
+  }
 
   function applyPatchElements(html) {
     const temp = document.createElement("div");
@@ -105,6 +134,58 @@ function _parseSseData(data) {
     }
   }
 
+  function showShutdownOverlay() {
+    if (shutdownOverlay) return;
+    console.log("[SSE] 🎭 Creating shutdown overlay...");
+    const overlay = document.createElement("div");
+    overlay.id = "shutdown-overlay";
+    overlay.innerHTML =
+      '<div class="realm-shutdown"><div class="realm-content"><h1>⚔️ THE REALM REBIRTHS ⚔️</h1><span class="skull-icon">💀</span><p>The Quest Log realm is undergoing mystical regeneration...</p><p class="sub-message">Thy progress is safe. Return shortly, brave adventurer.</p><div class="progress-bar"><div class="progress-bar-fill"></div></div><div class="retry-dots"><div class="retry-dot"></div><div class="retry-dot"></div><div class="retry-dot"></div></div><p class="tip">Waiting for realm to revive...</p></div></div>';
+    document.body.appendChild(overlay);
+    shutdownOverlay = overlay;
+    console.log("[SSE] 🎭 Overlay created and added to DOM");
+  }
+
+  function hideShutdownOverlay() {
+    if (!shutdownOverlay) return;
+    console.log("[SSE] 🎭 hideShutdownOverlay called");
+    shutdownOverlay.remove();
+    shutdownOverlay = null;
+    console.log("[SSE] 🎭 Overlay removed from DOM");
+  }
+
+  // Proactive health check - detects server death even if EventSource doesn't fire onerror
+  function startProactiveHealthCheck() {
+    if (healthCheckTimer) return;
+
+    function check() {
+      fetch("/health", { method: "HEAD", cache: "no-cache" })
+        .then(function (response) {
+          if (!response.ok) {
+            console.log(
+              "[Health] Server returned non-OK status, showing overlay",
+            );
+            showShutdownOverlay();
+          }
+        })
+        .catch(function () {
+          console.log("[Health] Server unreachable, showing overlay");
+          showShutdownOverlay();
+        });
+    }
+
+    // Check every 5 seconds
+    healthCheckTimer = setInterval(check, 5000);
+    check(); // Also check immediately
+  }
+
+  function stopProactiveHealthCheck() {
+    if (healthCheckTimer) {
+      clearInterval(healthCheckTimer);
+      healthCheckTimer = null;
+    }
+  }
+
   function connect() {
     if (eventSource) {
       eventSource.close();
@@ -141,30 +222,54 @@ function _parseSseData(data) {
       }
     });
 
+    eventSource.addEventListener("server-death", function (_e) {
+      // Ignore if we're connected - this is a late event from old connection
+      if (isConnected) {
+        console.log(
+          "[SSE] Ignoring late server-death event (already connected)",
+        );
+        return;
+      }
+      console.log("[SSE] ⚠️ Server shutting down");
+      showShutdownOverlay();
+    });
+
+    eventSource.addEventListener("shutdown-complete", function (_e) {
+      console.log("[SSE] 🛑 Shutdown complete");
+      eventSource.close();
+      stopProactiveHealthCheck();
+      startServerPolling();
+    });
+
     eventSource.onopen = function () {
+      isConnected = true;
       console.log("[SSE] Connected to /events");
-      reconnectAttempts = 0;
+      console.log("[SSE] 🎭 Calling hideShutdownOverlay...");
+      hideShutdownOverlay();
+      stopProactiveHealthCheck();
+      console.log(
+        "[SSE] 🎭 hideShutdownOverlay done, shutdownOverlay =",
+        shutdownOverlay,
+      );
     };
 
-    eventSource.onerror = function (err) {
-      console.error("[SSE] Error:", err);
+    eventSource.onerror = function (_err) {
+      console.error("[SSE] Error");
+      isConnected = false;
       eventSource.close();
-
-      if (reconnectAttempts < maxReconnectAttempts) {
-        const delay = baseReconnectDelay * Math.pow(2, reconnectAttempts);
-        console.log(
-          `[SSE] Reconnecting in ${delay}ms (attempt ${reconnectAttempts + 1})`,
-        );
-        setTimeout(connect, delay);
-        reconnectAttempts++;
-      } else {
-        console.error("[SSE] Max reconnect attempts reached");
-      }
+      showShutdownOverlay();
+      // Always use health polling - EventSource reconnection is unreliable
+      console.log(
+        "[SSE] Starting health polling to detect when server is back...",
+      );
+      startServerPolling();
     };
   }
 
   document.addEventListener("DOMContentLoaded", function () {
     connect();
+    // Start proactive health check to detect server death even if EventSource doesn't fire onerror
+    startProactiveHealthCheck();
   });
 
   document.addEventListener("visibilitychange", function () {
@@ -173,7 +278,6 @@ function _parseSseData(data) {
       (!eventSource || eventSource.readyState === EventSource.CLOSED)
     ) {
       console.log("[SSE] Page visible, reconnecting...");
-      reconnectAttempts = 0;
       connect();
     }
   });
