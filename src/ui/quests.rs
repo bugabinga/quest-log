@@ -64,8 +64,8 @@ pub fn quests_page(
         div data-signals=(PreEscaped(&signals)) data-computed=(PreEscaped(&computed)) {}
 
         div id="day-change-detector" style="display: none;"
-            data-on-interval="60000; if ($isToday && new Date().getDay() !== $currentDay) { window.location.href = '/navigate/today' }"
-            data-on:questlog_simulate_day_change__window="if ($isToday && new Date().getDay() !== $currentDay) { window.location.href = '/navigate/today' }"
+            data-on-interval="60000; if ($isToday && new Date().getDay() !== $currentDay) { @get('/navigate/today') }"
+            data-on:questlog_simulate_day_change__window="if ($isToday && new Date().getDay() !== $currentDay) { @get('/navigate/today') }"
         {}
 
         div class="notifications" {}

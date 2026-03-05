@@ -2176,3 +2176,85 @@ async fn test_navigation_includes_bounty_link() {
 
     println!("Navigation includes bounty link test completed successfully");
 }
+
+// Test: Day-change detector should use Datastar navigation, not window.location.href
+//
+// BUG: The day-change detector uses `window.location.href = '/navigate/today'` which
+// does a full page load, but /navigate/today returns SSE (not HTML), causing the browser
+// to display raw SSE text.
+//
+// FIX: Should use Datastar navigation: `@get('/navigate/today')` which properly handles
+// the SSE response for day changes.
+//
+// This test verifies:
+// 1. The HTML contains @get('/navigate/today') in the day-change-detector element
+// 2. The HTML does NOT contain window.location.href
+#[tokio::test]
+async fn test_day_change_detector_uses_datastar_navigation() {
+    // Setup test database
+    let pool = SqlitePool::connect("sqlite::memory:")
+        .await
+        .expect("Failed to create in-memory database");
+    let db: Database = Database::with_pool(pool);
+    db.migrate().await.expect("Failed to run migrations");
+
+    // Create test quest so the page has content
+    let today = Utc::now().date_naive();
+    let day_of_week = today.weekday().num_days_from_sunday() as i32;
+
+    let quest_req = CreateQuestRequest {
+        title: "Test Quest".to_string(),
+        description: Some("Test description".to_string()),
+        exp_value: Some(25),
+        day_of_week,
+    };
+    let _quest = db
+        .create_quest(quest_req)
+        .await
+        .expect("Failed to create test quest");
+
+    // Create test app with the quests route
+    let (bcast_tx, _) = broadcast::channel::<ServerMessage>(128);
+    let app_state = AppState::new(db, bcast_tx);
+    let app = Router::new()
+        .route("/", get(handlers::quests))
+        .with_state(app_state);
+
+    // Make a request to the home page
+    let response = app
+        .oneshot(Request::builder().uri("/").body(Body::empty()).unwrap())
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let html = String::from_utf8(body.to_vec()).unwrap();
+
+    // Verify the day-change-detector element exists
+    assert!(
+        html.contains("id=\"day-change-detector\""),
+        "HTML should contain day-change-detector element"
+    );
+
+    // CRITICAL: The day-change detector should use Datastar navigation (@get)
+    // instead of window.location.href which causes full page load with SSE
+    assert!(
+        html.contains("@get('/navigate/today')"),
+        "Day-change detector should use @get('/navigate/today') for Datastar navigation. \
+         The current implementation uses window.location.href which causes the browser \
+         to display raw SSE text instead of properly handling the day change."
+    );
+
+    // CRITICAL: Should NOT use window.location.href
+    // This causes full page load and displays raw SSE text
+    assert!(
+        !html.contains("window.location.href"),
+        "Day-change detector should NOT use window.location.href. \
+         This causes a full page load which displays raw SSE text from /navigate/today. \
+         Should use @get('/navigate/today') instead for proper Datastar navigation."
+    );
+
+    println!("Day change detector uses Datastar navigation test completed successfully");
+}
