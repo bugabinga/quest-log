@@ -469,7 +469,10 @@ impl Database {
         &self,
         req: UpdateSettingsRequest,
     ) -> Result<Settings, sqlx::Error> {
-        tracing::debug!(weekly_exp_goal = req.weekly_exp_goal, "⚙️ Updating settings");
+        tracing::debug!(
+            weekly_exp_goal = req.weekly_exp_goal,
+            "⚙️ Updating settings"
+        );
         let now = Utc::now();
         sqlx::query_as::<_, Settings>(
             "UPDATE settings SET weekly_exp_goal = ?, updated_at = ? WHERE id = 1 RETURNING *",

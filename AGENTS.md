@@ -10,6 +10,23 @@ All build/deploy/maintenance commands MUST run through the justfile. Direct
 `cargo`, `rustc`, or other tool commands are forbidden. If a command is missing
 from the justfile, add it there instead.
 
+## Skills
+
+Load these skills for this codebase:
+
+- **rust** - Core Rust patterns and build optimization
+- **rust-maud** - HTML template compilation
+- **datastar** - Frontend reactivity and SSE
+- **logging-monitoring** - Tracing and observability
+- **testing-rust** - Unit and integration tests
+- **error-handling** - Error patterns
+- **security-checklist** - Input validation
+- **git-commit** - Semantic commits, conventional format
+- **git-merge** - Merge branches, resolve conflicts
+- **git-branch** - Feature branch management
+
+Use `/skill name <name>` to load before working on relevant tasks.
+
 ## Code Quality
 
 Extreme high production quality, well compressed (DRY), simple structural style
@@ -17,8 +34,7 @@ avoiding abstractions and indirection.
 
 ## Testing
 
-**Unit Tests:** `src/*` - fast feedback for core
-logic
+**Unit Tests:** `src/*` - fast feedback for core logic
 
 **Integration Tests:** `tests/` directory - complete workflows
 
@@ -40,16 +56,6 @@ Use in-memory SQLite databases for isolation.
 - Never hardcode colors - derive everything from 3 base colors
 - Use data attributes for datastar
 
-## File Structure
-
-```
-/src
-  /main.rs /database.rs /models.rs
-  /handlers/{mod,quests,parent,stats}.rs
-  /templates/ /static/css/images/
-/migrations/ /tests/
-```
-
 ## Commit Guidelines
 
 Present tense, focused single changes, reference issues.
@@ -60,4 +66,5 @@ Validate inputs, parameterized queries, sanitize HTML output.
 
 ## Documentation
 
-rustdoc all public APIs, keep README updated.
+rustdoc all public APIs. See ARCHITECTURE.md for architecture details,
+logging/tracing setup, and ADRs in documentation/adrs/.

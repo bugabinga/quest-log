@@ -236,7 +236,8 @@ async fn quests_handler(
                 exp_today_max: quests_display.iter().map(|q| q.exp_value).sum(),
                 week_exp: 0,
                 week_exp_max: 0,
-                quests_completed: quests_display.iter().filter(|q| q.completed_today).count() as i32,
+                quests_completed: quests_display.iter().filter(|q| q.completed_today).count()
+                    as i32,
                 quests_total: quests_display.len() as i32,
             }
         });
