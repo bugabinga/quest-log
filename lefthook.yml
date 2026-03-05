@@ -6,16 +6,16 @@ verbose: true
 pre-push:
   parallel: true
   jobs:
-    - run: just fmt
-    - run: just lint
+    - run: cargo x fmt
+    - run: cargo x lint
 
 pre-commit:
   parallel: true
   jobs:
-    - run: just fmt
-    - run: just lint
-    - run: just test
+    - run: cargo x fmt
+    - run: cargo x lint
+    - run: cargo x test
 
 commit-msg:
   jobs:
-    - run: just validate-commit-msg {1}
+    - run: cargo x commit validate {1}

@@ -16,15 +16,13 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
-      - uses: extractions/setup-just@v3
-      - run: just check
+      - run: cargo x check
 
   coverage:
     needs: check
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: extractions/setup-just@v3
       - name: Install cargo-tarpaulin
         uses: actions-rs/tarpaulin@release-0.3.0
         with:
@@ -47,7 +45,6 @@ jobs:
       packages: write
     steps:
       - uses: actions/checkout@v4
-      - uses: extractions/setup-just@v3
       - uses: gacts/install-podman@v1
       - uses: docker/login-action@v3
         with:
@@ -55,22 +52,21 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
       - name: Build and push
-        run: just push-container-release
+        run: cargo x container push --release
 
   migrate-db:
     needs: build-image
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: extractions/setup-just@v3
       - uses: gacts/install-podman@v1
       - name: Test database migrations
         run: |
           # Create temporary volume for testing
           podman volume create quest-log-test-data || true
 
-          # Run migrations using just (builds image if needed)
-          just run-migrate --volume quest-log-test-data
+          # Run migrations using cargo x (builds image if needed)
+          cargo x container migrate --volume quest-log-test-data
 
           # Verify database file exists
           podman volume inspect quest-log-test-data --format '{{.Mountpoint}}' | xargs ls -la

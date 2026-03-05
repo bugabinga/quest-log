@@ -1,5 +1,5 @@
 /target
-/xtask/target
-/xtask/Cargo.lock
+/x/target
+/x/Cargo.lock
 quests.db
 deno.lock
