@@ -1,4 +1,4 @@
-use maud::{html, Markup, PreEscaped};
+use maud::{Markup, PreEscaped, html};
 
 pub fn today_button(is_today: bool) -> Markup {
     let onclick: Option<String> = if !is_today {

@@ -1,4 +1,4 @@
-use crate::ui::base::{base_page, PageData};
+use crate::ui::base::{PageData, base_page};
 use maud::html;
 
 pub fn error_page(title: &str, heading: &str, message: &str) -> maud::Markup {

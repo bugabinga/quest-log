@@ -1,4 +1,4 @@
-use maud::{html, Markup, PreEscaped};
+use maud::{Markup, PreEscaped, html};
 
 pub fn nav_buttons(class: &str, can_navigate: bool, target_date: &str) -> Markup {
     let id = if class.contains("left") {

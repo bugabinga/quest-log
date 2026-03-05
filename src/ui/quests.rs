@@ -1,8 +1,8 @@
 use crate::models::{QuestStats, WeeklyRewardDisplay};
-use crate::ui::base::{base_page, PageData};
+use crate::ui::base::{PageData, base_page};
 use crate::ui::fragments::toggle::QuestDisplay;
 use crate::ui::fragments::weekly_rewards::weekly_rewards;
-use maud::{html, PreEscaped};
+use maud::{PreEscaped, html};
 
 #[allow(clippy::too_many_arguments)]
 pub fn quests_page(

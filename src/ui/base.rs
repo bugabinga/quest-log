@@ -1,4 +1,4 @@
-use maud::{html, PreEscaped, DOCTYPE};
+use maud::{DOCTYPE, PreEscaped, html};
 
 pub struct PageData {
     pub title: String,
