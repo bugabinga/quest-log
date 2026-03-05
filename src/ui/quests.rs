@@ -124,7 +124,7 @@ pub fn quests_page(
             }
         }
 
-                        (weekly_rewards(week_exp, rewards))
+                        (weekly_rewards(week_exp, rewards, false))
 
                         @if !error_message.is_empty() {
             div class="error-message" { (error_message) }

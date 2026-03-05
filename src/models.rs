@@ -144,3 +144,11 @@ pub struct QuestStats {
     pub quests_completed: i32,
     pub quests_total: i32,
 }
+
+#[allow(dead_code)]
+#[derive(Debug, Clone, FromRow, Serialize, Deserialize)]
+pub struct WeeklyChampion {
+    pub id: i64,
+    pub week_start: NaiveDate,
+    pub earned_at: DateTime<Utc>,
+}

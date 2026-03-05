@@ -107,6 +107,7 @@ async fn main() {
     tracing::debug!("🏗️  Building router...");
     let mut router = Router::new()
         .route("/", get(handlers::quests))
+        .route("/bounty", get(handlers::bounty))
         .route("/day/{date}", get(handlers::quests_with_date))
         .route("/navigate/{date}", get(handlers::navigate))
         .route("/quests/toggle", post(handlers::toggle_quest))

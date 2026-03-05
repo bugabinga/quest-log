@@ -41,6 +41,10 @@ pub fn base_page(data: PageData) -> maud::Markup {
                                 span class="nav-icon nav-icon--sword" {}
                                 span { "Quests" }
                             }
+                            a href="/bounty" class="nav-link" {
+                                span class="nav-icon nav-icon--chest" {}
+                                span { "Bounty" }
+                            }
                             a href="/highscore" class="nav-link" {
                                 span class="nav-icon nav-icon--trophy" {}
                                 span { "Highscore" }

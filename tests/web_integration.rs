@@ -2106,3 +2106,73 @@ async fn test_day_change_detection_signals_and_logic() {
 
     println!("Day change detection test completed successfully");
 }
+
+// Test: Navigation should include a link to the Bounty Board page
+//
+// This test verifies that the base template navigation includes a link to /bounty
+// so users can navigate to the Bounty Board from any page.
+//
+// Current behavior: FAILS - navigation does not include /bounty link
+// After adding the bounty nav link: Test PASSES
+#[tokio::test]
+async fn test_navigation_includes_bounty_link() {
+    // Setup test database
+    let pool = SqlitePool::connect("sqlite::memory:")
+        .await
+        .expect("Failed to create in-memory database");
+    let db: Database = Database::with_pool(pool);
+    db.migrate().await.expect("Failed to run migrations");
+
+    // Create test quest so the page has content
+    let today = Utc::now().date_naive();
+    let day_of_week = today.weekday().num_days_from_sunday() as i32;
+
+    let quest_req = CreateQuestRequest {
+        title: "Test Quest".to_string(),
+        description: Some("Test description".to_string()),
+        exp_value: Some(25),
+        day_of_week,
+    };
+    let _quest = db
+        .create_quest(quest_req)
+        .await
+        .expect("Failed to create test quest");
+
+    // Create test app with the quests route
+    let (bcast_tx, _) = broadcast::channel::<ServerMessage>(128);
+    let app_state = AppState::new(db, bcast_tx);
+    let app = Router::new()
+        .route("/", get(handlers::quests))
+        .route("/bounty", get(handlers::bounty))
+        .with_state(app_state);
+
+    // Make a request to the home page
+    let response = app
+        .oneshot(Request::builder().uri("/").body(Body::empty()).unwrap())
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let html = String::from_utf8(body.to_vec()).unwrap();
+
+    // The navigation should contain an anchor tag linking to /bounty
+    // This is needed so users can navigate to the Bounty Board from any page
+    assert!(
+        html.contains("href=\"/bounty\""),
+        "Navigation should contain a link to /bounty. \
+         Expected to find href=\"/bounty\" in the HTML, but it was not found. \
+         The base template should include a bounty link in the navigation bar."
+    );
+
+    // Verify it's actually in the navigation (not just somewhere in the page)
+    // Look for nav-link class with bounty href
+    assert!(
+        html.contains("class=\"nav-link\"") && html.contains("href=\"/bounty\""),
+        "The /bounty link should be a navigation link (nav-link class)"
+    );
+
+    println!("Navigation includes bounty link test completed successfully");
+}

@@ -15,7 +15,7 @@ use serde::Deserialize;
 use std::convert::Infallible;
 use tokio_stream::wrappers::BroadcastStream;
 
-use crate::models::{QuestStats, ToggleResult};
+use crate::models::{ClaimState, QuestStats, ToggleResult};
 use crate::state::AppState;
 use crate::time;
 use crate::ui;
@@ -362,8 +362,12 @@ pub async fn toggle_quest(
         .await
         .unwrap_or_default();
 
+    let all_rewards_claimed =
+        !rewards.is_empty() && rewards.iter().all(|r| r.state == ClaimState::Claimed);
+
     let rewards_html =
-        ui::fragments::weekly_rewards::weekly_rewards(week_exp, &rewards).into_string();
+        ui::fragments::weekly_rewards::weekly_rewards(week_exp, &rewards, all_rewards_claimed)
+            .into_string();
 
     let mut week_exp_max = 0i32;
     for dow in 0..7 {
@@ -670,13 +674,22 @@ pub async fn claim_reward(
         .await
         .unwrap_or(0);
 
+    let all_rewards_claimed =
+        !rewards.is_empty() && rewards.iter().all(|r| r.state == ClaimState::Claimed);
+
     let rewards_html =
-        ui::fragments::weekly_rewards::weekly_rewards(week_exp, &rewards).into_string();
+        ui::fragments::weekly_rewards::weekly_rewards(week_exp, &rewards, all_rewards_claimed)
+            .into_string();
+
+    if all_rewards_claimed {
+        let _ = db.create_weekly_champion(week_start).await;
+    }
 
     let signals_json = serde_json::json!({
         "rewardClaimed": reward_id,
         "rewards": rewards,
-        "weekExp": week_exp
+        "weekExp": week_exp,
+        "allRewardsClaimed": all_rewards_claimed
     });
 
     let origin = request.client_id.clone();
@@ -695,6 +708,41 @@ pub async fn claim_reward(
 
     let stream = stream::iter(events.into_iter().map(Ok));
     Ok(Sse::new(stream))
+}
+
+#[instrument(name = "🏴‍☠️ GET /bounty", skip(state))]
+pub async fn bounty(State(state): State<AppState>) -> Result<impl IntoResponse, AppError> {
+    tracing::debug!("🏴‍☠️ GET /bounty request received");
+    bounty_handler(state).await
+}
+
+async fn bounty_handler(state: AppState) -> Result<impl IntoResponse, AppError> {
+    let db = &state.db;
+    let today = time::today();
+    let (week_start, week_end) = time::get_week_bounds(today);
+
+    let week_exp = db
+        .calculate_weekly_exp(week_start, week_end)
+        .await
+        .unwrap_or_else(|e| {
+            tracing::warn!(error = %e, "⚠️ Failed to calculate weekly EXP");
+            0
+        });
+
+    let rewards = db
+        .get_weekly_reward_status(week_start, today)
+        .await
+        .unwrap_or_else(|e| {
+            tracing::warn!(error = %e, "⚠️ Failed to get reward status");
+            Default::default()
+        });
+
+    let all_rewards_claimed =
+        !rewards.is_empty() && rewards.iter().all(|r| r.state == ClaimState::Claimed);
+
+    let html = ui::bounty_page(week_exp, &rewards, all_rewards_claimed);
+
+    Ok(Html(html.into_string()).into_response())
 }
 
 // Test-only slow endpoint used by integration tests to simulate long-running requests.

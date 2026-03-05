@@ -231,6 +231,39 @@ function createConfetti() {
   }
 }
 
+function handleWeeklyChampionCelebration() {
+  // Get the current week start from the day title or calculate it
+  const dayTitle = document.querySelector(".day-title");
+  if (!dayTitle) return;
+
+  // Try to get the week start from the page - we'll use the current week
+  const now = new Date();
+  const day = now.getDay();
+  const diff = now.getDate() - day + (day === 0 ? -6 : 1); // Adjust for Sunday
+  const weekStart = new Date(now.setDate(diff));
+  const weekStartStr = weekStart.toISOString().split("T")[0];
+
+  const storageKey = `celebrated_for_week_${weekStartStr}`;
+
+  // Check if we've already celebrated for this week
+  if (localStorage.getItem(storageKey)) {
+    console.debug("[Celebration] Already celebrated for week:", weekStartStr);
+    return;
+  }
+
+  // Mark as celebrated for this week
+  localStorage.setItem(storageKey, "true");
+  console.debug(
+    "[Celebration] Weekly Champion celebration triggered for week:",
+    weekStartStr,
+  );
+
+  // Trigger extra confetti burst
+  createConfetti();
+  setTimeout(createConfetti, 300);
+  setTimeout(createConfetti, 600);
+}
+
 // ============================================================================
 // SECTION 5: Video Modal (runs on DOMContentLoaded)
 // ============================================================================
@@ -361,6 +394,11 @@ function initQuestUI() {
 
     if (signals.rewardClaimed) {
       triggerRewardClaimedNotification(signals.rewardClaimed);
+    }
+
+    // Handle celebration when all rewards are claimed
+    if (signals.allRewardsClaimed === true) {
+      handleWeeklyChampionCelebration();
     }
   });
 

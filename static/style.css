@@ -153,6 +153,30 @@
   clip-path: polygon(50% 0%, 100% 35%, 80% 100%, 20% 100%, 0% 35%);
 }
 
+/* Chest icon - Bounty */
+.nav-icon--chest::before,
+.nav-icon--chest::after {
+  content: "";
+  position: absolute;
+  background: currentColor;
+}
+
+.nav-icon--chest::before {
+  width: 10px;
+  height: 8px;
+  top: 5px;
+  left: 3px;
+  border-radius: 2px;
+}
+
+.nav-icon--chest::after {
+  width: 10px;
+  height: 3px;
+  top: 2px;
+  left: 3px;
+  border-radius: 2px 2px 0 0;
+}
+
 .nav-link--active {
   color: var(--glow-emerald);
   text-shadow: 0 0 8px oklch(0.6 0.18 160 / 0.5);
@@ -2807,5 +2831,220 @@ h1 {
   40% {
     background: #ffa502;
     transform: scale(1.2);
+  }
+}
+
+/* ===== CELEBRATION ANIMATIONS ===== */
+
+/* Celebration banner - achievement unlocked */
+.celebration-banner {
+  background: linear-gradient(
+    135deg,
+    oklch(0.85 0.15 70) 0%,
+    oklch(0.75 0.18 50) 50%,
+    oklch(0.85 0.15 70) 100%
+  );
+  border-radius: var(--radius-lg);
+  padding: var(--space-lg);
+  margin-bottom: var(--space-md);
+  text-align: center;
+  border: 3px solid oklch(0.9 0.15 50);
+  box-shadow:
+    0 0 30px oklch(0.7 0.2 50 / 0.4),
+    inset 0 0 20px oklch(1 0 0 / 0.2);
+  animation: celebration-banner-appear 0.6s var(--ease-out) forwards;
+  position: relative;
+  overflow: hidden;
+}
+
+.celebration-banner::before {
+  content: "";
+  position: absolute;
+  top: -50%;
+  left: -50%;
+  width: 200%;
+  height: 200%;
+  background: conic-gradient(
+    from 0deg,
+    transparent 0deg,
+    oklch(1 0 0 / 0.1) 60deg,
+    transparent 120deg
+  );
+  animation: celebration-shine 3s linear infinite;
+}
+
+@keyframes celebration-banner-appear {
+  0% {
+    opacity: 0;
+    transform: scale(0.8) translateY(-20px);
+  }
+  50% {
+    transform: scale(1.05) translateY(5px);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+@keyframes celebration-shine {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.celebration-content {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+.celebration-icon {
+  font-size: 3em;
+  animation: celebration-bounce 1s ease-in-out infinite;
+}
+
+@keyframes celebration-bounce {
+  0%, 100% {
+    transform: translateY(0) rotate(-5deg);
+  }
+  50% {
+    transform: translateY(-10px) rotate(5deg);
+  }
+}
+
+.celebration-title {
+  font-size: 1.4em;
+  font-weight: bold;
+  color: oklch(0.15 0.02 250);
+  text-shadow: 0 0 10px oklch(0.9 0.1 70 / 0.5);
+  letter-spacing: 1px;
+}
+
+.celebration-subtitle {
+  font-size: 1em;
+  color: oklch(0.2 0.02 250);
+  font-style: italic;
+}
+
+/* Weekly Champion Badge */
+.weekly-champion-badge {
+  background: linear-gradient(
+    135deg,
+    oklch(0.85 0.15 50) 0%,
+    oklch(0.75 0.18 40) 100%
+  );
+  color: oklch(0.1 0.02 250);
+  padding: var(--space-xs) var(--space-md);
+  border-radius: 20px;
+  font-size: 0.85em;
+  font-weight: bold;
+  margin-left: var(--space-md);
+  border: 2px solid oklch(0.9 0.15 50);
+  box-shadow:
+    0 0 15px oklch(0.7 0.2 50 / 0.4),
+    inset 0 0 8px oklch(1 0 0 / 0.2);
+  animation: badge-pulse 2s ease-in-out infinite;
+  display: inline-block;
+}
+
+@keyframes badge-pulse {
+  0%, 100% {
+    transform: scale(1);
+    box-shadow:
+      0 0 15px oklch(0.7 0.2 50 / 0.4),
+      inset 0 0 8px oklch(1 0 0 / 0.2);
+  }
+  50% {
+    transform: scale(1.05);
+    box-shadow:
+      0 0 25px oklch(0.8 0.2 50 / 0.6),
+      inset 0 0 10px oklch(1 0 0 / 0.3);
+  }
+}
+
+/* Golden pulse animation for reward cards */
+.celebration-pulse {
+  animation: golden-pulse 2s ease-in-out infinite;
+  border-color: oklch(0.8 0.15 50) !important;
+  box-shadow:
+    0 0 20px oklch(0.7 0.2 50 / 0.3),
+    inset 0 0 15px oklch(0.9 0.1 50 / 0.1) !important;
+  position: relative;
+}
+
+.celebration-pulse::before {
+  content: "";
+  position: absolute;
+  inset: -2px;
+  border-radius: inherit;
+  background: linear-gradient(
+    45deg,
+    transparent 30%,
+    oklch(0.9 0.15 50 / 0.3) 50%,
+    transparent 70%
+  );
+  z-index: -1;
+  animation: golden-rotate 3s linear infinite;
+}
+
+@keyframes golden-pulse {
+  0%, 100% {
+    box-shadow:
+      0 0 20px oklch(0.7 0.2 50 / 0.3),
+      inset 0 0 15px oklch(0.9 0.1 50 / 0.1);
+  }
+  50% {
+    box-shadow:
+      0 0 35px oklch(0.8 0.2 50 / 0.5),
+      inset 0 0 20px oklch(0.9 0.1 50 / 0.2);
+  }
+}
+
+@keyframes golden-rotate {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Golden glow effect on claimed rewards */
+.reward-card.celebration-pulse .reward-header {
+  background: linear-gradient(
+    90deg,
+    oklch(0.8 0.1 50 / 0.2),
+    oklch(0.9 0.12 50 / 0.3),
+    oklch(0.8 0.1 50 / 0.2)
+  );
+}
+
+/* Responsive adjustments */
+@media (max-width: 480px) {
+  .celebration-banner {
+    padding: var(--space-md);
+  }
+
+  .celebration-icon {
+    font-size: 2em;
+  }
+
+  .celebration-title {
+    font-size: 1.1em;
+  }
+
+  .weekly-champion-badge {
+    display: block;
+    margin-left: 0;
+    margin-top: var(--space-sm);
+    width: fit-content;
+    margin-inline: auto;
   }
 }

@@ -36,6 +36,19 @@ Application entry point. Sets up:
 - Broadcast channel for SSE
 - Graceful shutdown handling
 
+### Routes
+
+All routes are defined in `src/main.rs`:
+
+- `GET /` - Main quests page
+- `GET /bounty` - Bounty Board (weekly rewards)
+- `GET /day/{date}` - Date-specific quest page
+- `GET /navigate/{date}` - Day navigation (returns HTML fragments)
+- `POST /quests/toggle` - Toggle quest completion
+- `POST /rewards/claim` - Claim weekly reward
+- `GET /events` - SSE endpoint for real-time updates
+- `GET /health` - Health check endpoint
+
 ### `src/handlers.rs`
 
 HTTP request handlers:
@@ -45,11 +58,12 @@ HTTP request handlers:
 - `navigate` - Day navigation (returns HTML fragments)
 - `events` - SSE endpoint for real-time updates
 - `claim_reward` - Weekly reward claims
+- `bounty` - Bounty Board page (weekly rewards)
 
 ### `src/database.rs`
 
 SQLite database operations via sqlx. Handles quests, rewards, completion
-tracking.
+tracking, and weekly champion records.
 
 ### `src/models.rs`
 
@@ -74,8 +88,10 @@ Server-side HTML rendering using Maud:
 - `base.rs` - Base template with common HTML scaffolding (head, nav, video
   modal)
 - `quests.rs` - Main page template (uses base.rs)
+- `bounty.rs` - Bounty Board page for weekly rewards
 - `error.rs` - Error page template (uses base.rs)
 - `fragments/` - Reusable UI components (toggle, nav_buttons, etc.)
+  - `weekly_rewards.rs` - Weekly rewards display with celebration animations
 
 ### `static/`
 
@@ -150,6 +166,8 @@ Consolidated application JavaScript (all in one file for simplicity):
 - UI effects (notifications, confetti)
 - Keyboard navigation
 - Mutation observer for quest updates
+- Weekly Champion celebration (achievement banner, golden pulse, badge)
+- localStorage tracking to prevent celebration replay on refresh
 
 ### `static/js/datastar.js`
 
@@ -182,6 +200,7 @@ logging:
 
 - `📜 GET /` - Main page
 - `📜 GET /day/:date` - Date-specific page
+- `📜 GET /bounty` - Bounty Board page
 - `✨ toggle_quest` - Quest completion toggle
 - `🧭 navigate` - Day navigation
 - `📡 events` - SSE endpoint
@@ -196,6 +215,8 @@ logging:
 - `📊 get_week_stats`
 - `🎁 get_weekly_reward_status`
 - `🏆 claim_reward_for_week`
+- `🏅 get_weekly_champion` - Check if user earned Weekly Champion
+- `🏅 create_weekly_champion` - Record Weekly Champion achievement
 
 ### Log Levels
 
@@ -228,6 +249,7 @@ JavaScript uses `console.log`/`console.error` with prefixes:
 - `[Signals]` - Datastar signal patches
 - `[Health]` - Health check polling
 - `[JS]` - Uncaught errors
+- `[Celebration]` - Weekly Champion celebration triggers
 
 ### Best Practices
 

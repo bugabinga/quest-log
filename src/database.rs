@@ -6,7 +6,7 @@ use tracing::instrument;
 
 use crate::models::{
     ClaimState, CreateQuestRequest, CreateRewardRequest, Quest, QuestCompletion, Reward, Settings,
-    ToggleResult, UpdateQuestRequest, UpdateSettingsRequest, WeeklyRewardDisplay,
+    ToggleResult, UpdateQuestRequest, UpdateSettingsRequest, WeeklyChampion, WeeklyRewardDisplay,
 };
 use crate::time;
 
@@ -764,8 +764,46 @@ impl Database {
             .execute(&self.pool)
             .await?;
 
+        let rewards = self.get_weekly_reward_status(week_start, today).await?;
+        let all_rewards_claimed = rewards
+            .iter()
+            .filter(|r| r.state == ClaimState::Claimed)
+            .count()
+            == rewards.len()
+            && !rewards.is_empty();
+
+        if all_rewards_claimed {
+            let _ = self.create_weekly_champion(week_start).await;
+        }
+
         tracing::info!(reward_id, title = %reward.title, "Reward claimed successfully!");
         Ok(true)
+    }
+
+    pub async fn get_weekly_champion(
+        &self,
+        week_start: NaiveDate,
+    ) -> Result<Option<WeeklyChampion>, sqlx::Error> {
+        tracing::trace!(week_start = %week_start, "🏆 Fetching weekly champion");
+        sqlx::query_as::<_, WeeklyChampion>("SELECT * FROM weekly_champions WHERE week_start = ?")
+            .bind(week_start)
+            .fetch_optional(&self.pool)
+            .await
+    }
+
+    pub async fn create_weekly_champion(
+        &self,
+        week_start: NaiveDate,
+    ) -> Result<WeeklyChampion, sqlx::Error> {
+        tracing::info!(week_start = %week_start, "🏆 Creating weekly champion record");
+        let now = Utc::now();
+        sqlx::query_as::<_, WeeklyChampion>(
+            "INSERT INTO weekly_champions (week_start, earned_at) VALUES (?, ?) RETURNING *",
+        )
+        .bind(week_start)
+        .bind(now)
+        .fetch_one(&self.pool)
+        .await
     }
 }
 
