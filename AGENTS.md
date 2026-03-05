@@ -2,13 +2,13 @@
 
 ## Essential Directives
 
-**ALWAYS** use the just MCP tools (`just_dev`, `just_test`, `just_verify`,
-`just_lint`, `just_check`, `just_default`, `just_watch`) to run just commands.
-Never use bash with `just` command - always use the dedicated just MCP tools.
+**ALWAYS** use `cargo x` for development tasks. Commands like `cargo x test`,
+`cargo x lint`, `cargo x check` should be used instead of calling cargo
+directly.
 
-All build/deploy/maintenance commands MUST run through the justfile. Direct
+All build/deploy/maintenance commands MUST run through `cargo x`. Direct
 `cargo`, `rustc`, or other tool commands are forbidden. If a command is missing
-from the justfile, add it there instead.
+from `x/src/main.rs`, add it there instead.
 
 ## Skills
 

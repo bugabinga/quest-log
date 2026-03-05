@@ -17,7 +17,7 @@ State is managed by the server in a sqlite database. The web app is a simple
 Hypermedia server side rendered site, with interactivity implementen in HTML
 with datastar. The backend is a simple rust HTTP server (no TLS).
 
-All build, deploy and maintenance commands are centralized in the justfile.
+All build, deploy and maintenance commands are centralized in `cargo x`.
 
 ## Installation & Setup
 
@@ -40,10 +40,10 @@ cargo build
 # Migrations are embedded in the binary and applied automatically at startup.
 # To run migrations explicitly in CI or as a release/init step, use the
 # non-interactive command below (runs migrations then exits):
-just db-migrate   # runs `cargo run -- migrate-only` if present in justfile
+cargo x container migrate
 
 # Start development server
-just dev
+cargo x run
 ```
 
 Open http://localhost:3000 in your browser.
@@ -62,16 +62,13 @@ The application uses the following environment variables:
 
 ```bash
 # Start development server with hot reload
-just dev
+cargo x run
 
 # Run tests
-just test
+cargo x test
 
 # Run linter and formatter
-just lint
-
-# Reset database
-just db-reset
+cargo x lint
 ```
 
 ## Systemd integration (optional)
@@ -232,8 +229,8 @@ src/
 1. Fork the repository
 2. Create a feature branch
 3. Make changes following the guidelines in `AGENTS.md`
-4. Run tests: `just test`
-5. Run linting: `just lint`
+4. Run tests: `cargo x test`
+5. Run linting: `cargo x lint`
 6. Commit with clear messages
 7. Submit a pull request
 

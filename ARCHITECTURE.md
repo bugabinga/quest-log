@@ -8,6 +8,24 @@ via Server-Sent Events (SSE).
 
 ## Code Map
 
+### `x/`
+
+Development task runner using cargo-xtask pattern. Provides `cargo x`
+subcommands:
+
+- `cargo x test` - Unit tests
+- `cargo x verify` - All tests (including integration)
+- `cargo x fmt` - Format Rust and JS
+- `cargo x lint` - Format check + clippy + deno lint
+- `cargo x check` - Full check (lint + verify + cargo check)
+- `cargo x run [log_level] [cmd]` - Run application
+- `cargo x watch` - Watch for changes
+- `cargo x clean` - Clean build artifacts
+- `cargo x container build [--release]` - Build container
+- `cargo x container push [--release]` - Push to registry
+- `cargo x bundle datastar [version]` - Bundle datastar JS
+- `cargo x commit validate <file>` - Validate commit message
+
 ### `src/main.rs`
 
 Application entry point. Sets up:
@@ -183,13 +201,13 @@ logging:
 
 ```bash
 # Debug (default)
-just run
+cargo x run
 
-# Trace - see spans
-just run trace
+# With trace logging
+cargo x run trace
 
 # Or manually
-RUST_LOG=trace cargo run
+RUST_LOG=trace cargo run -- serve
 ```
 
 ### Client-Side Logging
