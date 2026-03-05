@@ -17,7 +17,8 @@ pub fn base_page(data: PageData) -> maud::Markup {
                 meta charset="UTF-8";
                 meta name="viewport" content="width=device-width, initial-scale=1.0";
                 title { (data.title) }
-                link rel="icon" href="/images/favicon.png" type="image/png";
+                link rel="manifest" href="/manifest.json";
+                link rel="icon" href="/favicon.png" type="image/png";
                 link rel="stylesheet" href="/style.css";
                 script type="module" src="/js/datastar.js" {}
                 script type="module" src="/js/app.js" {}

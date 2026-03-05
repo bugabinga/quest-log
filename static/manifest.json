@@ -1,16 +1,25 @@
 {
   "name": "Quest Log",
-  "short_name": ".Quest Log",
+  "short_name": "Quest Log",
+  "id": "/",
   "description": "Gamified quest tracker for kids",
   "start_url": "/",
+  "scope": "/",
   "display": "standalone",
   "background_color": "#1a1a2e",
   "theme_color": "#5466ff",
   "icons": [
     {
-      "src": "/favicon.png",
-      "sizes": "any",
-      "type": "image/png"
+      "src": "/images/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/images/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
     }
   ]
 }

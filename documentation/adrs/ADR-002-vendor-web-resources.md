@@ -89,6 +89,42 @@ This ensures the embedding macro has access to files during the build.
 4. **CSS**: Put in `static/style.css`, load via `<link rel="stylesheet">`
 5. **Images**: Put in `static/images/`, reference as `/images/filename.png`
 
+### Asset Pipeline
+
+Source images are stored in `assets/` at the project root. Run `cargo x assets`
+to generate optimized versions to `static/`:
+
+```
+assets/                    # Source files (original quality)
+├── favicon.png           # 1024x1024 original
+└── monday.png ...       # Day sprite sheets
+
+static/                   # Generated (web-optimized)
+├── favicon.png           # 32x32
+├── images/
+│   ├── icon-192.png      # PWA icon
+│   ├── icon-512.png      # PWA icon
+│   └── monday.png ...   # 512x512, Nearest filter for pixel art
+```
+
+**Why two directories?**
+
+- `assets/` keeps originals clean for re-generation
+- `static/` contains web-ready versions (smaller, optimized)
+
+**Image processing:**
+
+- Favicon/icons: Resized with Lanczos3 filter (smooth)
+- Pixel art sprites: Resized with Nearest filter (preserves crisp edges)
+- Compression happens automatically via `static-serve`
+
+**Adding new images:**
+
+1. Place source in `assets/`
+2. Add to `cargo x assets` command in `x/src/main.rs`
+3. Run `cargo x assets` to generate
+4. Reference in HTML/CSS normally
+
 ## Alternative Considered
 
 ### External CDN

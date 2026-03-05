@@ -51,6 +51,8 @@ enum Commands {
         #[command(subcommand)]
         command: CommitCommands,
     },
+    /// Process assets (favicons, icons)
+    Assets,
 }
 
 #[derive(Subcommand)]
@@ -114,6 +116,7 @@ fn main() -> Result<()> {
         Commands::Container { command } => container(command),
         Commands::Bundle { command } => bundle(command),
         Commands::Commit { command } => commit(command),
+        Commands::Assets => assets(),
     }
 }
 
@@ -316,6 +319,52 @@ fn bundle_datastar(version: &str) -> Result<()> {
             "static/js/datastar.js",
         ],
     )
+}
+
+fn assets() -> Result<()> {
+    use image::{ImageFormat, ImageReader};
+
+    let static_dir = std::path::Path::new("static/images");
+    std::fs::create_dir_all(static_dir)?;
+
+    // Favicon and PWA icons
+    let src = std::path::Path::new("assets/favicon.png");
+    let img = ImageReader::open(src)?.decode()?;
+
+    let img192 = img.resize(192, 192, image::imageops::FilterType::Lanczos3);
+    img192.save_with_format("static/images/icon-192.png", ImageFormat::Png)?;
+    println!("Generated: static/images/icon-192.png");
+
+    let img512 = img.resize(512, 512, image::imageops::FilterType::Lanczos3);
+    img512.save_with_format("static/images/icon-512.png", ImageFormat::Png)?;
+    println!("Generated: static/images/icon-512.png");
+
+    let img32 = img.resize(32, 32, image::imageops::FilterType::Lanczos3);
+    img32.save_with_format("static/favicon.png", ImageFormat::Png)?;
+    println!("Generated: static/favicon.png");
+
+    // Day sprite sheets - resize to 512x512 with Nearest neighbor for pixel art
+    let day_names = [
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday",
+        "saturday",
+        "sunday",
+    ];
+    for day in day_names {
+        let src_path = format!("assets/{}.png", day);
+        let dst_path = format!("static/images/{}.png", day);
+
+        let img = ImageReader::open(&src_path)?.decode()?;
+        let resized = img.resize(512, 512, image::imageops::FilterType::Nearest);
+        resized.save_with_format(&dst_path, ImageFormat::Png)?;
+        println!("Generated: {}", dst_path);
+    }
+
+    println!("\nAll assets processed successfully!");
+    Ok(())
 }
 
 fn commit(command: CommitCommands) -> Result<()> {

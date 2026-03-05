@@ -24,6 +24,7 @@ subcommands:
 - `cargo x container build [--release]` - Build container
 - `cargo x container push [--release]` - Push to registry
 - `cargo x bundle datastar [version]` - Bundle datastar JS
+- `cargo x assets` - Generate optimized images from assets/
 - `cargo x commit validate <file>` - Validate commit message
 
 ### `src/main.rs`
@@ -78,13 +79,20 @@ Server-side HTML rendering using Maud:
 
 ### `static/`
 
-Static assets:
+Static assets (generated from `assets/` via `cargo x assets`):
 
 - `js/app.js` - Consolidated application JavaScript (SSE, UI interactions, death
   screen)
 - `js/datastar.js` - Datastar library for reactive UI
 - `style.css` - All styles including death screen overlay
 - `images/`, `video/`, `fonts/`
+- `manifest.json` - PWA manifest
+- `favicon.png` - 32x32 favicon
+
+### `assets/`
+
+Source images for asset pipeline. Run `cargo x assets` to generate optimized
+versions in `static/`. See ADR-002 for details.
 
 ## Architecture Invariants
 
