@@ -2020,3 +2020,89 @@ async fn test_weekly_rewards_details_preserves_open_state() {
 
     println!("Weekly rewards details state preservation test completed successfully");
 }
+
+// Test for day change auto-detection feature
+// This test verifies that the quests page includes signals and logic to detect
+// when the day changes (midnight pass) and automatically navigate to today
+#[tokio::test]
+async fn test_day_change_detection_signals_and_logic() {
+    use axum::{
+        body::Body,
+        http::{Request, StatusCode},
+    };
+    use chrono::Utc;
+    use quest_log::{database::Database, handlers, models::*, state::AppState};
+    use sqlx::SqlitePool;
+    use tower::ServiceExt;
+
+    // Setup test database with in-memory SQLite
+    let pool = SqlitePool::connect("sqlite::memory:")
+        .await
+        .expect("Failed to create in-memory database");
+    let db: Database = Database::with_pool(pool);
+    db.migrate().await.expect("Failed to run migrations");
+
+    // Create test app
+    let (bcast_tx, _) = broadcast::channel::<ServerMessage>(128);
+    let app_state = AppState::new(db.clone(), bcast_tx);
+    let app = Router::new()
+        .route("/", get(handlers::quests))
+        .with_state(app_state.clone());
+
+    // Create test quest
+    let today = Utc::now().date_naive();
+    let day_of_week = today.weekday().num_days_from_sunday() as i32;
+
+    let quest_req = CreateQuestRequest {
+        title: "Test Quest".to_string(),
+        description: Some("Test description".to_string()),
+        exp_value: Some(25),
+        day_of_week,
+    };
+    let _quest = db
+        .create_quest(quest_req)
+        .await
+        .expect("Failed to create test quest");
+
+    // Fetch the quests page HTML
+    let response = app
+        .oneshot(Request::builder().uri("/").body(Body::empty()).unwrap())
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let html = String::from_utf8(body.to_vec()).unwrap();
+
+    // Check 1: The HTML should have $currentDay signal
+    // This tracks the current weekday (0-6) from server-side
+    assert!(
+        html.contains("$currentDay"),
+        "HTML should contain $currentDay signal to track the current weekday"
+    );
+
+    // Check 2: The HTML should have $isToday signal
+    // This indicates whether user is viewing "today"
+    assert!(
+        html.contains("$isToday"),
+        "HTML should contain $isToday signal to track if viewing today"
+    );
+
+    // Check 3: The HTML should have day change detector element with interval
+    // This checks every 60 seconds if day has changed
+    assert!(
+        html.contains("day-change-detector") && html.contains("data-on-interval"),
+        "HTML should contain day-change-detector with data-on-interval for automatic day change detection"
+    );
+
+    // Check 4: The day change logic should navigate to today when day changes
+    // The condition checks: $isToday && new Date().getDay() !== $currentDay
+    assert!(
+        html.contains("/navigate/today"),
+        "HTML should contain navigation to /navigate/today when day change is detected"
+    );
+
+    println!("Day change detection test completed successfully");
+}

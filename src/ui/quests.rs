@@ -23,13 +23,15 @@ pub fn quests_page(
     stats: &QuestStats,
 ) -> maud::Markup {
     let signals = format!(
-        "{{expToday: {}, expTodayMax: {}, weekExp: {}, weekExpMax: {}, questsCompleted: {}, questsTotal: {}, $weeklyRewardsOpen: false}}",
+        "{{expToday: {}, expTodayMax: {}, weekExp: {}, weekExpMax: {}, questsCompleted: {}, questsTotal: {}, weeklyRewardsOpen: false, currentDay: {}, isToday: {}}}",
         stats.exp_today,
         stats.exp_today_max,
         stats.week_exp,
         stats.week_exp_max,
         stats.quests_completed,
-        stats.quests_total
+        stats.quests_total,
+        weekday_num,
+        if is_today { "true" } else { "false" }
     );
 
     let computed = "{expTodayPercent: () => Math.round($expToday / Math.max($expTodayMax, 1) * 100), weekExpPercent: () => Math.round($weekExp / Math.max($weekExpMax, 1) * 100)}".to_string();
@@ -60,6 +62,11 @@ pub fn quests_page(
 
     let body_content = html! {
         div data-signals=(PreEscaped(&signals)) data-computed=(PreEscaped(&computed)) {}
+
+        div id="day-change-detector" style="display: none;"
+            data-on-interval="60000; if ($isToday && new Date().getDay() !== $currentDay) { window.location.href = '/navigate/today' }"
+            data-on:questlog_simulate_day_change__window="if ($isToday && new Date().getDay() !== $currentDay) { window.location.href = '/navigate/today' }"
+        {}
 
         div class="notifications" {}
         h1 class="rainbow-text" { "Quest Log" }

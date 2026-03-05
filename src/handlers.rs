@@ -380,7 +380,9 @@ pub async fn toggle_quest(
         "weekExp": week_exp,
         "weekExpMax": week_exp_max,
         "questsCompleted": quests_completed,
-        "questsTotal": quests_total
+        "questsTotal": quests_total,
+        "currentDay": day_of_week,
+        "isToday": true
     });
 
     let origin = request.client_id.clone();
@@ -549,7 +551,9 @@ pub async fn navigate(
         "weekExp": week_exp,
         "weekExpMax": week_exp_max,
         "questsCompleted": quests_completed,
-        "questsTotal": quests_total
+        "questsTotal": quests_total,
+        "currentDay": day_of_week,
+        "isToday": is_today
     });
 
     let combined_html = format!(
