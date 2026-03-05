@@ -135,3 +135,77 @@ features.
 - `QUEST_LOG_DB` - Path to SQLite database (default: `~/.quest-log/questlog.db`)
 - `QUEST_LOG_PORT` - HTTP port (default: 3000)
 - `QUEST_LOG_TODAY` - Override "today" for testing (format: YYYY-MM-DD)
+- `RUST_LOG` - Log level filter (default:
+  `quest_log=debug,tokio=info,axum=warn`)
+
+## Logging & Observability
+
+### Tracing Setup
+
+The project uses the `tracing` crate with `tracing-error` for structured
+logging:
+
+- **Tracing**: Auto-creates spans with timing for functions
+- **ErrorLayer**: Captures span context with errors for debugging
+- **Instrumented handlers**: All HTTP handlers have spans with emoji names
+- **Instrumented DB methods**: Key database operations are traced
+
+### Instrumented Functions
+
+**Handlers** (with emoji span names):
+
+- `📜 GET /` - Main page
+- `📜 GET /day/:date` - Date-specific page
+- `✨ toggle_quest` - Quest completion toggle
+- `🧭 navigate` - Day navigation
+- `📡 events` - SSE endpoint
+- `🏆 claim_reward` - Reward claiming
+
+**Database methods**:
+
+- `📋 get_quests_for_day`
+- `📋 get_quests_completion_status`
+- `🎯 toggle_quest_completion`
+- `🧮 calculate_weekly_exp`
+- `📊 get_week_stats`
+- `🎁 get_weekly_reward_status`
+- `🏆 claim_reward_for_week`
+
+### Log Levels
+
+- `trace` - Most verbose, shows span enter/exit
+- `debug` - Default for development, shows request handling
+- `info` - General operational events
+- `warn` - Unexpected but handled situations
+- `error` - Failures
+
+### Viewing Logs
+
+```bash
+# Debug (default)
+just run
+
+# Trace - see spans
+just run trace
+
+# Or manually
+RUST_LOG=trace cargo run
+```
+
+### Client-Side Logging
+
+JavaScript uses `console.log`/`console.error` with prefixes:
+
+- `[SSE]` - Server-Sent Events
+- `[Client]` - Client ID generation
+- `[Fetch]` - Fetch wrapper
+- `[Signals]` - Datastar signal patches
+- `[Health]` - Health check polling
+- `[JS]` - Uncaught errors
+
+### Best Practices
+
+- All database operations go through instrumented methods
+- Errors include context via structured fields (`quest_id`, `date`, etc.)
+- SSE events include correlation for debugging
+- Tests use in-memory SQLite with debug logging disabled

@@ -21,6 +21,7 @@ use static_serve::embed_assets;
 use std::net::SocketAddr;
 use tokio::sync::broadcast;
 use tokio::time::Duration;
+use tracing_error::ErrorLayer;
 use tracing_subscriber::{EnvFilter, fmt, layer::SubscriberExt, util::SubscriberInitExt};
 
 #[cfg(debug_assertions)]
@@ -58,6 +59,7 @@ fn setup_logging() {
     tracing_subscriber::registry()
         .with(filter)
         .with(fmt_layer)
+        .with(ErrorLayer::default())
         .init();
 }
 

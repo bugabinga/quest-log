@@ -21,6 +21,7 @@ import {
 // but there's no standard HTTP header for timezone, so we use a custom header.
 (function () {
   const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  console.debug("[Fetch] Timezone:", timezone);
   const originalFetch = globalThis.fetch;
 
   globalThis.fetch = function (input, init = {}) {
@@ -82,6 +83,7 @@ function generateClientId() {
   if (!clientId) {
     clientId = crypto.randomUUID();
     sessionStorage.setItem("quest_log_client_id", clientId);
+    console.debug("[Client] Generated new client ID:", clientId);
   }
   return clientId;
 }
@@ -245,7 +247,9 @@ function initVideoModal() {
     modal.style.display = "flex";
     modal.style.opacity = "1";
     video.currentTime = 0;
-    video.play().catch(function () {});
+    video.play().catch(function (err) {
+      console.warn("[Video] Autoplay blocked:", err.message);
+    });
   }
 
   function closeVideoModal() {
@@ -339,6 +343,7 @@ function initQuestUI() {
   // Listen to Datastar signal patches
   document.addEventListener("datastar-signal-patch", (e) => {
     const signals = e.detail;
+    console.debug("[Signals] Received:", Object.keys(signals).join(", "));
     if (signals.error) {
       triggerErrorNotification(signals.error);
     }
@@ -361,6 +366,7 @@ function initQuestUI() {
 
   // Handle browser back/forward
   addEventListener("popstate", () => {
+    console.debug("[History] Browser back/forward pressed, reloading");
     location.reload();
   });
 }
@@ -646,5 +652,21 @@ function _parseSseData(data) {
       console.log("[SSE] Page visible, reconnecting...");
       connect();
     }
+  });
+
+  // Global error handler for uncaught JS errors
+  globalThis.addEventListener("error", function (event) {
+    console.error(
+      "[JS] Uncaught error:",
+      event.message,
+      "at",
+      event.filename,
+      ":",
+      event.lineno,
+    );
+  });
+
+  globalThis.addEventListener("unhandledrejection", function (event) {
+    console.error("[JS] Unhandled promise rejection:", event.reason);
   });
 })();

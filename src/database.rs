@@ -2,6 +2,7 @@ use chrono::{Datelike, NaiveDate, Utc};
 use sqlx::{Row, SqlitePool};
 use std::env;
 use std::path::Path;
+use tracing::instrument;
 
 use crate::models::{
     ClaimState, CreateQuestRequest, CreateRewardRequest, Quest, QuestCompletion, Reward, Settings,
@@ -206,6 +207,7 @@ impl Database {
     }
 
     // Quest operations
+    #[instrument(name = "📋 get_quests_for_day", skip(self))]
     pub async fn get_quests_for_day(&self, day_of_week: i32) -> Result<Vec<Quest>, sqlx::Error> {
         tracing::trace!(day_of_week, "📋 Fetching quests for day");
         let quests = sqlx::query_as::<_, Quest>(
@@ -334,6 +336,7 @@ impl Database {
         &self,
         date: NaiveDate,
     ) -> Result<Vec<QuestCompletion>, sqlx::Error> {
+        tracing::trace!(date = %date, "📋 Fetching completions for date");
         sqlx::query_as::<_, QuestCompletion>(
             "SELECT * FROM quest_completions WHERE completed_date = ?",
         )
@@ -347,6 +350,7 @@ impl Database {
         quest_id: i64,
         today: NaiveDate,
     ) -> Result<bool, sqlx::Error> {
+        tracing::trace!(quest_id, date = %today, "✓ Checking if quest completed today");
         let count: (i64,) = sqlx::query_as(
             "SELECT COUNT(*) FROM quest_completions WHERE quest_id = ? AND completed_date = ?",
         )
@@ -358,11 +362,13 @@ impl Database {
         Ok(count.0 > 0)
     }
 
+    #[instrument(name = "📋 get_quests_completion_status", skip(self, quest_ids))]
     pub async fn get_quests_completion_status(
         &self,
         quest_ids: &[i64],
         date: NaiveDate,
     ) -> Result<std::collections::HashMap<i64, bool>, sqlx::Error> {
+        tracing::trace!(count = quest_ids.len(), date = %date, "📋 Batch completion check");
         if quest_ids.is_empty() {
             return Ok(std::collections::HashMap::new());
         }
@@ -394,6 +400,7 @@ impl Database {
         Ok(result)
     }
 
+    #[instrument(name = "🎯 toggle_quest_completion", skip(self))]
     pub async fn toggle_quest_completion(
         &self,
         quest_id: i64,
@@ -452,6 +459,7 @@ impl Database {
 
     // Settings operations
     pub async fn get_settings(&self) -> Result<Settings, sqlx::Error> {
+        tracing::debug!("⚙️ Fetching settings");
         sqlx::query_as::<_, Settings>("SELECT * FROM settings WHERE id = 1")
             .fetch_one(&self.pool)
             .await
@@ -461,6 +469,7 @@ impl Database {
         &self,
         req: UpdateSettingsRequest,
     ) -> Result<Settings, sqlx::Error> {
+        tracing::debug!(weekly_exp_goal = req.weekly_exp_goal, "⚙️ Updating settings");
         let now = Utc::now();
         sqlx::query_as::<_, Settings>(
             "UPDATE settings SET weekly_exp_goal = ?, updated_at = ? WHERE id = 1 RETURNING *",
@@ -501,11 +510,13 @@ impl Database {
     }
 
     // Statistics and calculations
+    #[instrument(name = "🧮 calculate_weekly_exp", skip(self))]
     pub async fn calculate_weekly_exp(
         &self,
         week_start: NaiveDate,
         week_end: NaiveDate,
     ) -> Result<i32, sqlx::Error> {
+        tracing::trace!(week_start = %week_start, week_end = %week_end, "🧮 Calculating weekly EXP");
         let result: (i32,) = sqlx::query_as(
             "SELECT COALESCE(SUM(q.exp_value), 0) as total_exp
              FROM quest_completions qc
@@ -520,12 +531,14 @@ impl Database {
         Ok(result.0)
     }
 
+    #[instrument(name = "📊 get_week_stats", skip(self))]
     pub async fn get_week_stats(
         &self,
         today: NaiveDate,
         week_start: NaiveDate,
         week_end: NaiveDate,
     ) -> Result<crate::models::QuestStats, sqlx::Error> {
+        tracing::debug!(today = %today, week_start = %week_start, week_end = %week_end, "📊 Getting week stats");
         let day_of_week = today.weekday().num_days_from_sunday() as i32;
 
         // Today's quests and completed EXP
@@ -563,6 +576,7 @@ impl Database {
     }
 
     pub async fn get_total_exp_earned(&self) -> Result<i32, sqlx::Error> {
+        tracing::trace!("💎 Fetching total EXP");
         let result: (i32,) = sqlx::query_as(
             "SELECT COALESCE(SUM(q.exp_value), 0) as total_exp
              FROM quest_completions qc
@@ -575,6 +589,7 @@ impl Database {
     }
 
     pub async fn get_rewards_claimed_count(&self) -> Result<i32, sqlx::Error> {
+        tracing::trace!("🏆 Fetching claimed rewards count");
         let result: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM reward_claims")
             .fetch_one(&self.pool)
             .await?;
@@ -588,6 +603,7 @@ impl Database {
         reward_id: i64,
         week_start: NaiveDate,
     ) -> Result<bool, sqlx::Error> {
+        tracing::debug!(reward_id, week_start = %week_start, "🎁 Claiming reward");
         // Get the reward
         let reward =
             sqlx::query_as::<_, Reward>("SELECT * FROM rewards WHERE id = ? AND is_active = TRUE")
@@ -635,11 +651,13 @@ impl Database {
         Ok(true)
     }
 
+    #[instrument(name = "🎁 get_weekly_reward_status", skip(self))]
     pub async fn get_weekly_reward_status(
         &self,
         week_start: NaiveDate,
         today: NaiveDate,
     ) -> Result<Vec<WeeklyRewardDisplay>, sqlx::Error> {
+        tracing::trace!(week_start = %week_start, today = %today, "🎁 Fetching reward status");
         let week_end = week_start + chrono::Duration::days(6);
         let weekly_exp = self.calculate_weekly_exp(week_start, week_end).await?;
 
@@ -685,6 +703,7 @@ impl Database {
         Ok(result)
     }
 
+    #[instrument(name = "🏆 claim_reward_for_week", skip(self))]
     pub async fn claim_reward_for_week(
         &self,
         reward_id: i64,

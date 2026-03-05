@@ -22,8 +22,9 @@ lint:
 check: lint test verify
     cargo check
 
-run *ARGS='serve':
-    cargo run -- {{ ARGS }}
+# run app in debug mode
+run log_level='debug' subcommand='serve':
+    RUST_LOG={{ log_level }} cargo run -- {{ subcommand }}
 
 # Version from git
 

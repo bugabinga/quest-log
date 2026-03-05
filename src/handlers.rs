@@ -20,6 +20,7 @@ use crate::state::AppState;
 use crate::time;
 use crate::ui;
 use crate::ui::fragments::toggle::QuestDisplay;
+use tracing::instrument;
 
 #[derive(Clone, Debug)]
 pub enum ServerMessage {
@@ -117,18 +118,21 @@ pub struct ToggleQuestRequest {
     pub client_id: Option<String>,
 }
 
+#[instrument(name = "📜 GET /", skip(state, query), fields(date = ?query.date))]
 pub async fn quests(
     State(state): State<AppState>,
     Query(query): Query<QuestsQuery>,
 ) -> Result<impl IntoResponse, AppError> {
-    let date_str = query.date.clone();
-    quests_handler(state, date_str).await
+    tracing::debug!(date = ?query.date, "📜 GET / request received");
+    quests_handler(state, query.date).await
 }
 
+#[instrument(name = "📜 GET /day/:date", skip(state), fields(date = %date_str))]
 pub async fn quests_with_date(
     State(state): State<AppState>,
     Path(date_str): Path<String>,
 ) -> Result<impl IntoResponse, AppError> {
+    tracing::debug!(date_str = %date_str, "GET /day/:date request received");
     quests_handler(state, Some(date_str)).await
 }
 
@@ -225,24 +229,33 @@ async fn quests_handler(
     let stats = db
         .get_week_stats(today, week_start, week_end)
         .await
-        .unwrap_or(QuestStats {
-            exp_today: total_exp,
-            exp_today_max: quests_display.iter().map(|q| q.exp_value).sum(),
-            week_exp: 0,
-            week_exp_max: 0,
-            quests_completed: quests_display.iter().filter(|q| q.completed_today).count() as i32,
-            quests_total: quests_display.len() as i32,
+        .unwrap_or_else(|e| {
+            tracing::warn!(error = %e, "⚠️ Failed to get week stats, using defaults");
+            QuestStats {
+                exp_today: total_exp,
+                exp_today_max: quests_display.iter().map(|q| q.exp_value).sum(),
+                week_exp: 0,
+                week_exp_max: 0,
+                quests_completed: quests_display.iter().filter(|q| q.completed_today).count() as i32,
+                quests_total: quests_display.len() as i32,
+            }
         });
 
     let week_exp = db
         .calculate_weekly_exp(week_start, week_end)
         .await
-        .unwrap_or(0);
+        .unwrap_or_else(|e| {
+            tracing::warn!(error = %e, "⚠️ Failed to calculate weekly EXP");
+            0
+        });
 
     let rewards = db
         .get_weekly_reward_status(week_start, today)
         .await
-        .unwrap_or_default();
+        .unwrap_or_else(|e| {
+            tracing::warn!(error = %e, "⚠️ Failed to get reward status");
+            Default::default()
+        });
 
     let html = ui::quests_page(
         &quests_display,
@@ -265,6 +278,7 @@ async fn quests_handler(
     Ok(Html(html.into_string()).into_response())
 }
 
+#[instrument(name = "✨ toggle_quest", skip(state, request), fields(quest_id = request.quest_id.as_i64()))]
 pub async fn toggle_quest(
     State(state): State<AppState>,
     ReadSignals(request): ReadSignals<ToggleQuestRequest>,
@@ -363,9 +377,13 @@ pub async fn toggle_quest(
     });
 
     let origin = request.client_id.clone();
-    let _ = bcast.send(ServerMessage::Elements(quest_html.clone(), origin.clone()));
-    let _ = bcast.send(ServerMessage::Signals(signals_json.to_string(), origin));
-    tracing::trace!("📢 Broadcast sent to {} client(s)", 1);
+    if let Err(e) = bcast.send(ServerMessage::Elements(quest_html.clone(), origin.clone())) {
+        tracing::error!(error = %e, "💥 Failed to broadcast elements");
+    }
+    if let Err(e) = bcast.send(ServerMessage::Signals(signals_json.to_string(), origin)) {
+        tracing::error!(error = %e, "💥 Failed to broadcast signals");
+    }
+    tracing::trace!("📢 Broadcast sent");
 
     let quest_patch = PatchElements::new(quest_html).use_view_transition(true);
     let signals_patch = PatchSignals::new(signals_json.to_string());
@@ -380,6 +398,7 @@ pub struct NavigatePath {
     pub date: String,
 }
 
+#[instrument(name = "🧭 navigate", skip(state, path, headers))]
 pub async fn navigate(
     State(state): State<AppState>,
     Path(path): Path<NavigatePath>,
@@ -407,6 +426,7 @@ pub async fn navigate(
     let week_end = week_start + chrono::Duration::days(6);
 
     if selected_date < week_start || selected_date > week_end {
+        tracing::debug!(target_date = %selected_date, week_start = %week_start, week_end = %week_end, "🧭 Navigate: date outside week bounds");
         return Err(AppError::NotFound);
     }
 
@@ -531,6 +551,7 @@ pub async fn navigate(
     Ok(Sse::new(stream))
 }
 
+#[instrument(name = "📡 events", skip(state))]
 pub async fn events(
     State(state): State<AppState>,
 ) -> Sse<impl Stream<Item = Result<Event, Infallible>>> {
@@ -579,6 +600,7 @@ pub struct ClaimRewardRequest {
     pub client_id: Option<String>,
 }
 
+#[instrument(name = "🏆 claim_reward", skip(state, request))]
 pub async fn claim_reward(
     State(state): State<AppState>,
     ReadSignals(request): ReadSignals<ClaimRewardRequest>,
@@ -658,7 +680,9 @@ pub async fn claim_reward(
 
 // Test-only slow endpoint used by integration tests to simulate long-running requests.
 // This intentionally sleeps for a few seconds before responding.
+#[instrument(name = "🐢 slow")]
 pub async fn slow() -> &'static str {
+    tracing::debug!("🐢 Slow endpoint called");
     tokio::time::sleep(std::time::Duration::from_secs(5)).await;
     "done"
 }

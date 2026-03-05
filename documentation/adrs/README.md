@@ -4,10 +4,11 @@ This directory contains ADRs documenting significant architectural decisions.
 
 ## Index
 
-| ADR | Title                                           | Status   |
-| --- | ----------------------------------------------- | -------- |
-| 001 | Use SQLX_OFFLINE for Container Release Builds   | Proposed |
-| 002 | Vendor All Web Resources in `static/` Directory | Accepted |
+| ADR | Title                                                | Status   |
+| --- | ---------------------------------------------------- | -------- |
+| 001 | Use SQLX_OFFLINE for Container Release Builds        | Proposed |
+| 002 | Vendor All Web Resources in `static/` Directory      | Accepted |
+| 003 | Use Tracing for Structured Logging and Observability | Accepted |
 
 ## What is an ADR?
 
