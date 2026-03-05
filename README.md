@@ -201,7 +201,7 @@ systemctl --user enable --now podman-auto-update.timer
 - **Language:** Rust
 - **Web Framework:** axum (async HTTP server)
 - **Database:** SQLite with sqlx (compile-time checked queries)
-- **HTML Templating:** askama (compile-time template validation)
+- **HTML Templating:** maud (compile-time template validation)
 - **Frontend Interactivity:** datastar (server-driven reactive UI)
 - **Error Handling:** thiserror with HTTP status code mapping
 

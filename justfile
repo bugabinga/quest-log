@@ -8,7 +8,7 @@ test *ARGS:
     cargo test --lib {{ ARGS }}
 
 verify *ARGS:
-    cargo test --test "*integration" {{ ARGS }}
+    cargo test {{ ARGS }}
 
 fmt *ARGS='':
     cargo fmt {{ ARGS }}
@@ -84,3 +84,12 @@ watch:
 clean:
     cargo clean
     rm ./quests.db
+
+# Bundle datastar from jsdelivr CDN
+[arg('version')]
+bundle-datastar version='1.0.0-RC.8':
+    deno bundle \
+        --minify \
+        https://cdn.jsdelivr.net/gh/starfederation/datastar@{{ version }}/bundles/datastar.js \
+        --sourcemap=external \
+        -o static/js/datastar.js

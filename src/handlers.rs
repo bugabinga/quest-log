@@ -1,4 +1,3 @@
-use askama::Template;
 use axum::body::Body;
 use axum::extract::{Path, Query, State};
 use axum::http::{HeaderMap, Response, StatusCode};
@@ -16,14 +15,18 @@ use std::convert::Infallible;
 use tokio_stream::StreamExt;
 use tokio_stream::wrappers::BroadcastStream;
 
-use crate::models::{ClaimState, Quest, QuestStats, ToggleResult};
+use crate::models::{QuestStats, ToggleResult};
 use crate::state::AppState;
 use crate::time;
+use crate::ui;
+use crate::ui::fragments::toggle::QuestDisplay;
 
 #[derive(Clone, Debug)]
 pub enum ServerMessage {
     Elements(String, Option<String>),
     Signals(String, Option<String>),
+    Shutdown(String),
+    ShutdownComplete,
 }
 
 #[derive(Debug, Copy, Clone)]
@@ -31,7 +34,6 @@ pub enum AppError {
     Database,
     NotFound,
     ValidationError,
-    TemplateRender,
 }
 
 impl AppError {
@@ -40,70 +42,38 @@ impl AppError {
             Self::Database => StatusCode::INTERNAL_SERVER_ERROR,
             Self::NotFound => StatusCode::NOT_FOUND,
             Self::ValidationError => StatusCode::BAD_REQUEST,
-            Self::TemplateRender => StatusCode::INTERNAL_SERVER_ERROR,
         }
     }
 
     fn title(&self) -> &'static str {
         match self {
-            Self::Database => "Well, This is Awkward",
+            Self::Database => "Oops!",
             Self::NotFound => "Nothing Here",
             Self::ValidationError => "Can't Do That",
-            Self::TemplateRender => "Template Trouble",
         }
     }
 
     fn heading(&self) -> &'static str {
         match self {
-            Self::Database => "Something broke. Congratulations.",
+            Self::Database => "Something went wrong",
             Self::NotFound => "Gone.",
             Self::ValidationError => "Wrong Day!",
-            Self::TemplateRender => "Something went wrong rendering the page.",
         }
     }
 
     fn message(&self) -> &'static str {
         match self {
-            Self::Database => "You didn't do this, but you probably didn't need it to work anyway.",
+            Self::Database => "Something went wrong on our end. Please try again later!",
             Self::NotFound => "Like your motivation. Or your quests.",
             Self::ValidationError => "You can only complete quests on their assigned day.",
-            Self::TemplateRender => "The page failed to generate. Try again?",
         }
     }
 }
 
 impl IntoResponse for AppError {
     fn into_response(self) -> Response<Body> {
-        let template = ErrorTemplate::from(self);
-        match template.render() {
-            Ok(html) => (self.status_code(), Html(html)).into_response(),
-            Err(e) => {
-                tracing::error!(error = %e, "💥 Failed to render error template");
-                (
-                    self.status_code(),
-                    Html("<html><body><h1>Error</h1></body></html>".to_string()),
-                )
-                    .into_response()
-            }
-        }
-    }
-}
-
-#[derive(Template)]
-#[template(path = "error.html")]
-struct ErrorTemplate {
-    title: &'static str,
-    heading: &'static str,
-    message: &'static str,
-}
-
-impl From<AppError> for ErrorTemplate {
-    fn from(err: AppError) -> Self {
-        Self {
-            title: err.title(),
-            heading: err.heading(),
-            message: err.message(),
-        }
+        let html = ui::error_page(self.title(), self.heading(), self.message());
+        (self.status_code(), Html(html.into_string())).into_response()
     }
 }
 
@@ -147,102 +117,34 @@ pub struct ToggleQuestRequest {
     pub client_id: Option<String>,
 }
 
-#[derive(Template)]
-#[template(path = "fragments/toggle.html")]
-struct QuestToggleTemplate {
-    pub quest: QuestDisplay,
-    pub was_just_completed: bool,
-    pub was_just_uncompleted: bool,
-}
-
-#[derive(Template)]
-#[template(path = "fragments/day_header.html")]
-struct DayHeaderTemplate {
-    pub day_name: String,
-    pub selected_date: String,
-}
-
-#[derive(Template)]
-#[template(path = "fragments/today_button.html")]
-struct TodayButtonTemplate {
-    pub is_today: bool,
-}
-
-#[derive(Template)]
-#[template(path = "fragments/nav_buttons.html")]
-struct NavButtonLeftTemplate {
-    pub class: String,
-    pub can_navigate: bool,
-    pub target_date: String,
-}
-
-#[derive(Template)]
-#[template(path = "fragments/nav_button_right.html")]
-struct NavButtonRightTemplate {
-    pub class: String,
-    pub can_navigate: bool,
-    pub target_date: String,
-}
-
-#[derive(Template)]
-#[template(path = "fragments/quest_list.html")]
-struct QuestListTemplate {
-    pub quests: Vec<QuestDisplay>,
-    pub is_today: bool,
-}
-
-struct QuestDisplay {
-    pub id: i64,
-    pub title: String,
-    pub description: String,
-    pub exp_value: i32,
-    pub completed_today: bool,
-}
-
-impl QuestDisplay {
-    fn from_quest(quest: Quest, completed_today: bool) -> Self {
-        Self {
-            id: quest.id,
-            title: quest.title,
-            description: quest.description.unwrap_or_default(),
-            exp_value: quest.exp_value,
-            completed_today,
-        }
-    }
-}
-
-#[derive(Template)]
-#[template(path = "quests.html")]
-struct QuestsTemplate {
-    pub quests: Vec<QuestDisplay>,
-    pub rewards: Vec<crate::models::WeeklyRewardDisplay>,
-    pub week_exp: i32,
-    pub error_message: String,
-    pub selected_date: String,
-    pub day_name: String,
-    pub is_today: bool,
-    pub class_left: String,
-    pub class_right: String,
-    pub can_navigate_left: bool,
-    pub can_navigate_right: bool,
-    pub prev_date: String,
-    pub next_date: String,
-    pub weekday_num: u8,
-    pub stats: QuestStats,
-}
-
 pub async fn quests(
     State(state): State<AppState>,
     Query(query): Query<QuestsQuery>,
 ) -> Result<impl IntoResponse, AppError> {
+    let date_str = query.date.clone();
+    quests_handler(state, date_str).await
+}
+
+pub async fn quests_with_date(
+    State(state): State<AppState>,
+    Path(date_str): Path<String>,
+) -> Result<impl IntoResponse, AppError> {
+    quests_handler(state, Some(date_str)).await
+}
+
+async fn quests_handler(
+    state: AppState,
+    date_str: Option<String>,
+) -> Result<impl IntoResponse, AppError> {
     let db = &state.db;
     let today = time::today();
-    let selected_date = match &query.date {
+
+    let selected_date = match &date_str {
         Some(date_str) => match time::parse_date(date_str) {
             Some(date) => date,
             None => {
                 tracing::warn!(date_str = %date_str, "⚠️  Invalid date format - rejecting");
-                return Ok(Html("Invalid date format. Use YYYY-MM-DD".to_string()).into_response());
+                return Err(AppError::ValidationError);
             }
         },
         None => today,
@@ -254,7 +156,7 @@ pub async fn quests(
     let (week_start, week_end) = time::get_week_bounds(today);
     if selected_date < week_start || selected_date > week_end {
         tracing::warn!(date = %selected_date, week_start = %week_start, week_end = %week_end, "⚠️  Date outside current week - rejecting");
-        return Ok(Html("Invalid date - must be within current week".to_string()).into_response());
+        return Err(AppError::ValidationError);
     }
 
     let day_of_week = selected_date.weekday().num_days_from_sunday() as i32;
@@ -290,7 +192,7 @@ pub async fn quests(
         .into_iter()
         .map(|quest| {
             let completed_today = *completion_status.get(&quest.id).unwrap_or(&false);
-            QuestDisplay::from_quest(quest, completed_today)
+            QuestDisplay::from_quest(quest, completed_today, selected_date)
         })
         .collect();
 
@@ -342,31 +244,25 @@ pub async fn quests(
         .await
         .unwrap_or_default();
 
-    let template = QuestsTemplate {
-        quests: quests_display,
-        rewards,
+    let html = ui::quests_page(
+        &quests_display,
+        &rewards,
         week_exp,
-        error_message,
-        selected_date: selected_date_formatted,
-        day_name: day_name.to_string(),
+        &error_message,
+        &selected_date_formatted,
+        day_name,
         is_today,
-        class_left,
-        class_right,
+        &class_left,
+        &class_right,
         can_navigate_left,
         can_navigate_right,
-        prev_date,
-        next_date,
+        &prev_date,
+        &next_date,
         weekday_num,
-        stats,
-    };
+        &stats,
+    );
 
-    match template.render() {
-        Ok(html) => Ok(Html(html).into_response()),
-        Err(e) => {
-            tracing::error!(error = %e, "💥 Failed to render quests template");
-            Err(AppError::TemplateRender)
-        }
-    }
+    Ok(Html(html.into_string()).into_response())
 }
 
 pub async fn toggle_quest(
@@ -420,10 +316,10 @@ pub async fn toggle_quest(
             false
         });
 
-    let was_just_completed = toggle_result == ToggleResult::NewlyCompleted;
-    let was_just_uncompleted = toggle_result == ToggleResult::NewlyUncompleted;
+    let _was_just_completed = toggle_result == ToggleResult::NewlyCompleted;
+    let _was_just_uncompleted = toggle_result == ToggleResult::NewlyUncompleted;
 
-    let quest_display = QuestDisplay::from_quest(quest, completed_today);
+    let quest_display = QuestDisplay::from_quest(quest, completed_today, today);
 
     let day_of_week = today.weekday().num_days_from_sunday() as i32;
     let all_quests = db.get_quests_for_day(day_of_week).await.unwrap_or_default();
@@ -455,16 +351,7 @@ pub async fn toggle_quest(
         }
     }
 
-    let quest_template = QuestToggleTemplate {
-        quest: quest_display,
-        was_just_completed,
-        was_just_uncompleted,
-    };
-
-    let quest_html = quest_template.render().map_err(|e| {
-        tracing::error!(error = %e, "💥 Failed to render toggle template");
-        AppError::TemplateRender
-    })?;
+    let quest_html = ui::fragments::toggle::toggle(&quest_display).into_string();
 
     let signals_json = serde_json::json!({
         "expToday": total_exp,
@@ -540,7 +427,11 @@ pub async fn navigate(
                 tracing::warn!(error = %e, quest_id = quest.id, "⚠️  Failed to check completion status");
                 false
             });
-        quests_display.push(QuestDisplay::from_quest(quest, completed_today));
+        quests_display.push(QuestDisplay::from_quest(
+            quest,
+            completed_today,
+            selected_date,
+        ));
     }
 
     let total_exp: i32 = quests_display
@@ -591,46 +482,17 @@ pub async fn navigate(
         .and_then(|v| v.to_str().ok())
         .unwrap_or("none");
 
-    let day_header = DayHeaderTemplate {
-        day_name,
-        selected_date: selected_date_formatted,
-    };
-    let today_btn = TodayButtonTemplate { is_today };
-    let nav_left = NavButtonLeftTemplate {
-        class: class_left,
-        can_navigate: can_navigate_left,
-        target_date: prev_date,
-    };
-    let nav_right = NavButtonRightTemplate {
-        class: class_right,
-        can_navigate: can_navigate_right,
-        target_date: next_date,
-    };
-    let quest_list = QuestListTemplate {
-        quests: quests_display,
-        is_today,
-    };
-
-    let day_header_html = day_header.render().map_err(|e| {
-        tracing::error!(error = %e, "💥 Failed to render day_header template");
-        AppError::TemplateRender
-    })?;
-    let today_btn_html = today_btn.render().map_err(|e| {
-        tracing::error!(error = %e, "💥 Failed to render today_btn template");
-        AppError::TemplateRender
-    })?;
-    let nav_left_html = nav_left.render().map_err(|e| {
-        tracing::error!(error = %e, "💥 Failed to render nav_left template");
-        AppError::TemplateRender
-    })?;
-    let nav_right_html = nav_right.render().map_err(|e| {
-        tracing::error!(error = %e, "💥 Failed to render nav_right template");
-        AppError::TemplateRender
-    })?;
-    let quest_list_html = quest_list.render().map_err(|e| {
-        tracing::error!(error = %e, "💥 Failed to render quest_list template");
-        AppError::TemplateRender
-    })?;
+    let day_header_html =
+        ui::fragments::day_header::day_header(&day_name, &selected_date_formatted).into_string();
+    let today_btn_html = ui::fragments::today_button::today_button(is_today).into_string();
+    let nav_left_html =
+        ui::fragments::nav_buttons::nav_buttons(&class_left, can_navigate_left, &prev_date)
+            .into_string();
+    let nav_right_html =
+        ui::fragments::nav_buttons::nav_buttons(&class_right, can_navigate_right, &next_date)
+            .into_string();
+    let quest_list_html =
+        ui::fragments::quest_list::quest_list(&quests_display, is_today).into_string();
 
     let date_iso = time::format_date_iso(selected_date);
     let url_path = if is_today {
@@ -674,7 +536,8 @@ pub async fn events(
 ) -> Sse<impl Stream<Item = Result<Event, Infallible>>> {
     tracing::debug!("📡 SSE connection opened - client subscribed to updates");
     let rx = state.bcast.subscribe();
-    let bcast_stream = BroadcastStream::new(rx).filter_map(|res| match res {
+
+    let stream = BroadcastStream::new(rx).filter_map(|res| match res {
         Ok(ServerMessage::Elements(html, origin)) => {
             let payload = serde_json::json!({
                 "data": html,
@@ -695,23 +558,18 @@ pub async fn events(
                 .data(payload.to_string());
             Some(Ok(ev))
         }
+        Ok(ServerMessage::Shutdown(msg)) => {
+            let ev = Event::default().event("server-death").data(msg);
+            Some(Ok(ev))
+        }
+        Ok(ServerMessage::ShutdownComplete) => {
+            let ev = Event::default().event("shutdown-complete").data("");
+            Some(Ok(ev))
+        }
         Err(_) => None,
     });
 
-    let keepalive =
-        stream::once(async { Ok::<_, Infallible>(Event::default().data(": connected")) }).chain(
-            stream::repeat_with(|| Ok(Event::default().data(": keepalive")))
-                .throttle(std::time::Duration::from_secs(15)),
-        );
-
-    Sse::new(bcast_stream.chain(keepalive))
-}
-
-#[derive(Template)]
-#[template(path = "fragments/weekly_rewards.html")]
-struct WeeklyRewardsTemplate {
-    pub rewards: Vec<crate::models::WeeklyRewardDisplay>,
-    pub week_exp: i32,
+    Sse::new(stream)
 }
 
 #[derive(Deserialize)]
@@ -771,15 +629,8 @@ pub async fn claim_reward(
         .await
         .unwrap_or(0);
 
-    let rewards_template = WeeklyRewardsTemplate {
-        rewards: rewards.clone(),
-        week_exp,
-    };
-
-    let rewards_html = rewards_template.render().map_err(|e| {
-        tracing::error!(error = %e, "💥 Failed to render rewards template");
-        AppError::TemplateRender
-    })?;
+    let rewards_html =
+        ui::fragments::weekly_rewards::weekly_rewards(week_exp, &rewards).into_string();
 
     let signals_json = serde_json::json!({
         "rewardClaimed": reward_id,

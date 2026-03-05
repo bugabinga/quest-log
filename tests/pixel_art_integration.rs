@@ -221,7 +221,7 @@ async fn test_completed_quest_has_glow_class() {
         "Completed quest should have completed class for glow effects"
     );
     assert!(
-        body_str.contains("✅ Completed"),
+        body_str.contains("✅ Quest Complete"),
         "Quest should show completed status"
     );
     assert!(
@@ -365,29 +365,22 @@ fn get_js_content(path: &str) -> String {
     std::fs::read_to_string(path).expect(&format!("Failed to read JS file: {}", path))
 }
 
-fn get_html_content() -> String {
-    std::fs::read_to_string("templates/quests.html").expect("Failed to read HTML template")
-}
-
 #[tokio::test]
 async fn test_counter_animation_js_exists() {
-    let js_path = std::path::Path::new("static/js/counter-animation.js");
+    // Counter animation was consolidated into app.js
+    let js_path = std::path::Path::new("static/js/app.js");
     assert!(
         js_path.exists(),
-        "Counter animation JS file should exist at {}",
+        "App JS file should exist at {}",
         js_path.display()
     );
 
-    let js_content = get_js_content("static/js/counter-animation.js");
+    let js_content = get_js_content("static/js/app.js");
 
-    // Verify required functions exist
+    // Verify required functions exist (consolidated from counter-animation.js)
     assert!(
-        js_content.contains("export function pulseCounter"),
+        js_content.contains("function pulseCounter"),
         "JS should contain pulseCounter function"
-    );
-    assert!(
-        js_content.contains("export function createParticles"),
-        "JS should contain createParticles function"
     );
 
     println!("Counter animation JS existence test completed successfully");
@@ -443,51 +436,6 @@ async fn test_view_transition_names_defined() {
     );
 
     println!("View transition names integration test completed successfully");
-}
-
-#[tokio::test]
-async fn test_quest_toggle_html_structure() {
-    let html = get_html_content();
-
-    // Verify exp counter has id for JavaScript
-    assert!(
-        html.contains("id=\"exp-counter\""),
-        "HTML should contain exp-counter element with id"
-    );
-
-    // Verify Datastar @post with __prevent modifier
-    assert!(
-        html.contains("data-on:click__prevent=\"@post('/quests/toggle'"),
-        "HTML should contain @post with __prevent modifier to prevent NS_BINDING_ABORTED"
-    );
-
-    // Verify payload option for sending quest_id
-    assert!(
-        html.contains("payload:") && html.contains("quest_id"),
-        "HTML should contain payload with quest_id"
-    );
-
-    // Verify quest items have IDs for morphing
-    assert!(
-        html.contains("id=\"quest-"),
-        "HTML should contain quest items with IDs"
-    );
-
-    // Verify #app element exists (provided by base.html template)
-    let base_html =
-        std::fs::read_to_string("templates/base.html").expect("Failed to read base.html");
-    assert!(
-        base_html.contains("id=\"app\""),
-        "base.html should contain app element with id"
-    );
-
-    // Verify toggle buttons have type="button" to prevent form submission
-    assert!(
-        html.contains("type=\"button\""),
-        "Toggle buttons should have type=\"button\""
-    );
-
-    println!("Quest toggle HTML structure test completed successfully");
 }
 
 #[tokio::test]

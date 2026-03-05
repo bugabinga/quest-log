@@ -52,9 +52,11 @@ Application state: Database + broadcast channel.
 
 Server-side HTML rendering using Maud:
 
-- `quests.rs` - Main page template
-- `error.rs` - Error page template
-- `fragments/` - Reusable UI components
+- `base.rs` - Base template with common HTML scaffolding (head, nav, video
+  modal)
+- `quests.rs` - Main page template (uses base.rs)
+- `error.rs` - Error page template (uses base.rs)
+- `fragments/` - Reusable UI components (toggle, nav_buttons, etc.)
 
 ### `static/`
 

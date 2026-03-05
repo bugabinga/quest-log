@@ -27,6 +27,7 @@ async fn graceful_shutdown_waits_for_active_requests() {
     let mut child = Command::new(bin_path)
         .arg("serve")
         .env("PORT", port.to_string())
+        .env("ENABLE_TEST_ENDPOINTS", "1")
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::piped())
         .spawn()

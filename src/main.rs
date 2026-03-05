@@ -3,10 +3,10 @@ mod database;
 mod handlers;
 mod models;
 mod state;
-#[cfg(target_os = "linux")]
 mod systemd;
 mod time;
 mod tui;
+mod ui;
 
 use crate::database::Database;
 use crate::handlers::ServerMessage;
@@ -45,9 +45,7 @@ fn setup_logging() {
         .with_thread_ids(false)
         .with_file(true)
         .with_line_number(true)
-        .with_ansi(true)
-        .without_time()
-        .compact();
+        .with_ansi(true);
 
     #[cfg(not(debug_assertions))]
     let fmt_layer = fmt::layer()
@@ -61,9 +59,6 @@ fn setup_logging() {
         .with(filter)
         .with(fmt_layer)
         .init();
-
-    #[cfg(debug_assertions)]
-    eprintln!("⏰ Timestamps disabled in debug mode for cleaner output (灬•́_•̀灬)");
 }
 
 async fn health() -> &'static str {
@@ -106,20 +101,23 @@ async fn main() {
 
     let (bcast_tx, _rx) = broadcast::channel::<ServerMessage>(128);
 
-    let app_state = AppState {
-        db,
-        bcast: bcast_tx,
-    };
+    // Clone bcast_tx so we can send shutdown message to SSE clients
+    let bcast_tx_for_shutdown = bcast_tx.clone();
+
+    let app_state = AppState::new(db, bcast_tx);
 
     tracing::debug!("🏗️  Building router...");
     let mut router = Router::new()
         .route("/", get(handlers::quests))
-        .route("/day/{date}", get(handlers::quests))
+        .route("/day/{date}", get(handlers::quests_with_date))
         .route("/navigate/{date}", get(handlers::navigate))
         .route("/quests/toggle", post(handlers::toggle_quest))
         .route("/rewards/claim", post(handlers::claim_reward))
         .route("/events", get(handlers::events))
-        .route("/health", get(health));
+        .route("/health", get(health))
+        .fallback(|_req: axum::extract::State<AppState>| async {
+            Err::<axum::response::Html<String>, handlers::AppError>(handlers::AppError::NotFound)
+        });
 
     // Test-only endpoints are enabled via ENABLE_TEST_ENDPOINTS=1 at runtime.
     // This avoids exposing test routes in normal production runs.
@@ -273,18 +271,36 @@ async fn main() {
     tracing::info!(
         "⏳ Triggering server graceful shutdown (allowing in-flight requests to finish)..."
     );
-    // best-effort send; ignore if receiver already dropped
-    let _ = shutdown_tx.send(());
 
-    // wait for the server task to finish with a generous timeout for CI
-    match tokio::time::timeout(Duration::from_secs(30), server_handle).await {
+    // Phase 1: Notify SSE clients that server will restart
+    let _ = bcast_tx_for_shutdown.send(handlers::ServerMessage::Shutdown(
+        "Server is restarting. Please wait a moment...".to_string(),
+    ));
+    tracing::info!("📢 Sent Shutdown message to clients");
+
+    // Give clients time to receive the shutdown message
+    tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+
+    // Phase 2: Tell clients to close connections, we're about to die
+    let _ = bcast_tx_for_shutdown.send(handlers::ServerMessage::ShutdownComplete);
+    tracing::info!("📢 Sent ShutdownComplete message to clients");
+
+    // Give clients time to close their SSE connections
+    tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+
+    // Now shutdown - no active SSE connections should remain
+    let _ = shutdown_tx.send(());
+    tracing::info!("🛑 Sent shutdown signal to server");
+
+    // Wait for the server task to finish
+    match tokio::time::timeout(Duration::from_secs(5), server_handle).await {
         Ok(join_res) => {
             if let Err(e) = join_res {
                 tracing::error!(error = %e, "💥 Server task panicked during shutdown");
             }
         }
         Err(_) => {
-            tracing::error!("💥 Server did not shut down within 30s, forcing exit");
+            tracing::warn!("💥 Server did not shut down within 5s, forcing exit");
         }
     }
 }

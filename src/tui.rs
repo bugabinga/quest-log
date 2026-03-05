@@ -834,22 +834,18 @@ async fn handle_list_input(app: &mut AppState, key: crossterm::event::KeyEvent) 
             };
         }
         KeyCode::Left => {
-            if app.selected_tab == Tab::Quests {
-                if app.selected_day > 0 {
-                    app.selected_day -= 1;
-                } else {
-                    app.selected_day = 6;
-                }
+            if app.selected_tab == Tab::Quests && app.selected_day > 0 {
+                app.selected_day -= 1;
+            } else if app.selected_tab == Tab::Quests {
+                app.selected_day = 6;
                 app.selected_quest = 0;
             }
         }
         KeyCode::Right => {
-            if app.selected_tab == Tab::Quests {
-                if app.selected_day < 6 {
-                    app.selected_day += 1;
-                } else {
-                    app.selected_day = 0;
-                }
+            if app.selected_tab == Tab::Quests && app.selected_day < 6 {
+                app.selected_day += 1;
+            } else if app.selected_tab == Tab::Quests {
+                app.selected_day = 0;
                 app.selected_quest = 0;
             }
         }
@@ -936,10 +932,8 @@ async fn handle_create_input(
                     app.input_day = digit as i32;
                 }
             }
-            InputMode::Goal => {
-                if c.is_numeric() {
-                    app.input_goal.push(c);
-                }
+            InputMode::Goal if c.is_numeric() => {
+                app.input_goal.push(c);
             }
             _ => {}
         },

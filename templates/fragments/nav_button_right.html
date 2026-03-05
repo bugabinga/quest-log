@@ -1,1 +1,0 @@
-<button class="{{ class }}" id="nav-right" aria-label="Next Day"{% if can_navigate %} data-on:click="@get('/navigate/{{ target_date }}', { headers: { 'X-Navigate-Dir': 'next' } })"{% endif %}></button>

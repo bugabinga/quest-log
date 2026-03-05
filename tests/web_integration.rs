@@ -106,17 +106,17 @@ async fn test_invalid_date_returns_error() {
         .await
         .unwrap();
 
-    // Should return OK (200) but with error message in body
-    assert_eq!(response.status(), StatusCode::OK);
+    // Should return BAD_REQUEST (400) with styled error page
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
     let body = axum::body::to_bytes(response.into_body(), usize::MAX)
         .await
         .unwrap();
     let body_str = String::from_utf8(body.to_vec()).unwrap();
 
-    // Should contain error message about invalid date format
+    // Should contain styled error page content
     assert!(
-        body_str.contains("Invalid date format"),
-        "Expected error message about invalid date format, got: {}",
+        body_str.contains("Wrong Day!"),
+        "Expected styled error page, got: {}",
         body_str
     );
 
@@ -1880,6 +1880,9 @@ async fn test_sse_graceful_shutdown_notifies_clients() {
     match shutdown_msg {
         ServerMessage::Shutdown(msg) => {
             assert!(msg.contains("shutting down"));
+        }
+        ServerMessage::ShutdownComplete => {
+            // Handle ShutdownComplete variant
         }
         _ => panic!("Expected Shutdown message"),
     }
