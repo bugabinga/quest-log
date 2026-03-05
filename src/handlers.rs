@@ -357,6 +357,14 @@ pub async fn toggle_quest(
         .await
         .unwrap_or(0);
 
+    let rewards = db
+        .get_weekly_reward_status(week_start, today)
+        .await
+        .unwrap_or_default();
+
+    let rewards_html =
+        ui::fragments::weekly_rewards::weekly_rewards(week_exp, &rewards).into_string();
+
     let mut week_exp_max = 0i32;
     for dow in 0..7 {
         if let Ok(quests) = db.get_quests_for_day(dow).await {
@@ -379,6 +387,12 @@ pub async fn toggle_quest(
     if let Err(e) = bcast.send(ServerMessage::Elements(quest_html.clone(), origin.clone())) {
         tracing::error!(error = %e, "💥 Failed to broadcast elements");
     }
+    if let Err(e) = bcast.send(ServerMessage::Elements(
+        rewards_html.clone(),
+        origin.clone(),
+    )) {
+        tracing::error!(error = %e, "💥 Failed to broadcast weekly rewards");
+    }
     if let Err(e) = bcast.send(ServerMessage::Signals(signals_json.to_string(), origin)) {
         tracing::error!(error = %e, "💥 Failed to broadcast signals");
     }
@@ -386,8 +400,13 @@ pub async fn toggle_quest(
 
     let quest_patch = PatchElements::new(quest_html).use_view_transition(true);
     let signals_patch = PatchSignals::new(signals_json.to_string());
+    let rewards_patch = PatchElements::new(rewards_html).use_view_transition(true);
 
-    let events: Vec<Event> = vec![quest_patch.into(), signals_patch.into()];
+    let events: Vec<Event> = vec![
+        quest_patch.into(),
+        signals_patch.into(),
+        rewards_patch.into(),
+    ];
     let stream = stream::iter(events.into_iter().map(Ok));
     Ok(Sse::new(stream))
 }

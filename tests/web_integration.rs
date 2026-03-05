@@ -1673,11 +1673,12 @@ async fn test_toggle_broadcasts_to_events_endpoint() {
     );
 
     // Now wait for the broadcast messages
-    let mut elements_received = false;
-    let mut signals_received = false;
+    let mut quest_received = false;
+    let mut rewards_received = false;
+    let mut _signals_received = false;
 
-    // Try to receive multiple messages (we sent 2)
-    for _ in 0..2 {
+    // Try to receive multiple messages (we now send 3: quest, rewards, signals)
+    for _ in 0..4 {
         let result =
             tokio::time::timeout(tokio::time::Duration::from_millis(500), receiver.recv()).await;
 
@@ -1685,16 +1686,17 @@ async fn test_toggle_broadcasts_to_events_endpoint() {
             Ok(Ok(msg)) => match msg {
                 ServerMessage::Elements(html, _) => {
                     eprintln!("Received elements: {}", &html[..html.len().min(100)]);
-                    assert!(
-                        html.contains("quest-item"),
-                        "Elements should contain quest-item"
-                    );
-                    elements_received = true;
+                    if html.contains("quest-item") {
+                        quest_received = true;
+                    }
+                    if html.contains("weekly-rewards") {
+                        rewards_received = true;
+                    }
                 }
                 ServerMessage::Signals(json, _) => {
                     eprintln!("Received signals: {}", json);
                     assert!(json.contains("expToday"), "Signals should contain expToday");
-                    signals_received = true;
+                    _signals_received = true;
                 }
             },
             Ok(Err(e)) => panic!("Broadcast error: {}", e),
@@ -1703,10 +1705,10 @@ async fn test_toggle_broadcasts_to_events_endpoint() {
     }
 
     assert!(
-        elements_received || signals_received,
-        "Should receive at least one broadcast message (elements={}, signals={})",
-        elements_received,
-        signals_received
+        quest_received && rewards_received,
+        "Should receive both quest and weekly rewards elements (quest={}, rewards={})",
+        quest_received,
+        rewards_received
     );
 
     println!("Toggle broadcast test completed successfully");
@@ -1819,4 +1821,202 @@ async fn test_navigate_broadcasts_to_events_endpoint() {
     );
 
     println!("Navigate does not broadcast test completed successfully");
+}
+
+// Regression test for bug: weekly rewards don't update when a quest is toggled
+// Bug Summary: When toggling a quest (completing/uncompleting), the weekly rewards UI
+// section doesn't update, but the stats panel does. The state is correct on page reload.
+//
+// This test verifies that toggling a quest broadcasts the weekly-rewards element
+// in addition to the quest element and signals.
+//
+// Current behavior: Test FAILS (no weekly rewards in SSE response)
+// After fix: Test PASSES
+#[tokio::test]
+async fn test_toggle_quest_updates_weekly_rewards() {
+    let pool = SqlitePool::connect("sqlite::memory:")
+        .await
+        .expect("Failed to create in-memory database");
+    let db: Database = Database::with_pool(pool);
+    db.migrate().await.expect("Failed to run migrations");
+
+    // Get today's day of week
+    let today = Utc::now().date_naive();
+    let day_of_week = today.weekday().num_days_from_sunday() as i32;
+
+    // Create a quest with 25 EXP for today
+    let quest_req = CreateQuestRequest {
+        title: "Test Weekly Rewards Quest".to_string(),
+        description: Some("Testing weekly rewards update".to_string()),
+        exp_value: Some(25), // 25 EXP, enough to unlock reward requiring 20 EXP
+        day_of_week,
+    };
+    let quest = db
+        .create_quest(quest_req)
+        .await
+        .expect("Failed to create test quest");
+
+    // Create a weekly reward requiring 20 EXP
+    let reward_req = CreateRewardRequest {
+        title: "Test Weekly Reward".to_string(),
+        description: Some("Reward for testing".to_string()),
+        required_exp: 20, // Requires 20 EXP to unlock
+    };
+    let _reward = db
+        .create_reward(reward_req)
+        .await
+        .expect("Failed to create test reward");
+
+    let (bcast_tx, _) = broadcast::channel::<ServerMessage>(128);
+    let app_state = AppState::new(db, bcast_tx);
+    let app = Router::new()
+        .route("/", get(handlers::quests))
+        .route("/quests/toggle", post(handlers::toggle_quest))
+        .route("/events", get(handlers::events))
+        .with_state(app_state.clone());
+
+    // Subscribe to the broadcast channel BEFORE making the request
+    let mut receiver = app_state.bcast.subscribe();
+
+    // Make the toggle request in a spawned task
+    let json_data = format!(r#"{{"quest_id":{}}}"#, quest.id);
+    let app_clone = app.clone();
+    let handle = tokio::spawn(async move {
+        app_clone
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/quests/toggle")
+                    .header("content-type", "application/json")
+                    .body(Body::from(json_data))
+                    .unwrap(),
+            )
+            .await
+    });
+
+    // Wait for the response
+    let response = handle.await.expect("Task should not panic").unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+
+    // Check the SSE response body for weekly-rewards element
+    let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let body_str = String::from_utf8(body.to_vec()).unwrap();
+
+    // The response SHOULD contain weekly-rewards element for Datastar morphing
+    // This assertion FAILS with current code - demonstrating the bug
+    assert!(
+        body_str.contains("weekly-rewards") || body_str.contains("id=\"weekly-rewards\""),
+        "Response should contain weekly-rewards element for UI update. \
+         Got response: {}",
+        body_str
+    );
+
+    // Also verify that the signals include weekExp (this works correctly)
+    assert!(
+        body_str.contains("weekExp"),
+        "Response should contain weekExp signal"
+    );
+
+    // Check broadcast messages for weekly-rewards element
+    let mut weekly_rewards_broadcast = false;
+    for _ in 0..3 {
+        let result =
+            tokio::time::timeout(tokio::time::Duration::from_millis(500), receiver.recv()).await;
+
+        match result {
+            Ok(Ok(msg)) => match msg {
+                ServerMessage::Elements(html, _) => {
+                    if html.contains("weekly-rewards") || html.contains("id=\"weekly-rewards\"") {
+                        weekly_rewards_broadcast = true;
+                    }
+                }
+                ServerMessage::Signals(_, _) => {}
+            },
+            Ok(Err(e)) => panic!("Broadcast error: {}", e),
+            Err(_) => break, // Timeout - no more messages
+        }
+    }
+
+    // This should also FAIL with current code
+    assert!(
+        weekly_rewards_broadcast,
+        "Broadcast should contain weekly-rewards element for real-time updates"
+    );
+
+    println!("Toggle updates weekly rewards test completed successfully");
+}
+
+// Regression test: weekly-rewards details element should preserve open state across DOM patching
+// This test verifies that the details element has a signal-bound open attribute that survives Datastar morphing
+#[tokio::test]
+async fn test_weekly_rewards_details_preserves_open_state() {
+    let pool = SqlitePool::connect("sqlite::memory:")
+        .await
+        .expect("Failed to create in-memory database");
+    let db: Database = Database::with_pool(pool);
+    db.migrate().await.expect("Failed to run migrations");
+
+    // Create test app
+    let (bcast_tx, _) = broadcast::channel::<ServerMessage>(128);
+    let app_state = AppState::new(db.clone(), bcast_tx);
+    let app = Router::new()
+        .route("/", get(handlers::quests))
+        .route("/quests/toggle", post(handlers::toggle_quest))
+        .route("/events", get(handlers::events))
+        .with_state(app_state.clone());
+
+    // Create test quest to have something on the page
+    let today = Utc::now().date_naive();
+    let day_of_week = today.weekday().num_days_from_sunday() as i32;
+
+    let quest_req = CreateQuestRequest {
+        title: "Test Quest".to_string(),
+        description: Some("Test description".to_string()),
+        exp_value: Some(25),
+        day_of_week,
+    };
+    let _quest = db
+        .create_quest(quest_req)
+        .await
+        .expect("Failed to create test quest");
+
+    // Fetch the quests page HTML
+    let response = app
+        .oneshot(Request::builder().uri("/").body(Body::empty()).unwrap())
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let html = String::from_utf8(body.to_vec()).unwrap();
+
+    // Check 1: The HTML should have data-signals containing $weeklyRewardsOpen signal
+    // This is needed so Datastar can track the open/closed state
+    assert!(
+        html.contains("$weeklyRewardsOpen"),
+        "HTML should contain $weeklyRewardsOpen signal in data-signals. \
+         The signal is needed to preserve the details element's open state across DOM patches."
+    );
+
+    // Check 2: The weekly-rewards details element should have data-attr:open binding
+    // This binds the 'open' attribute to the $weeklyRewardsOpen signal
+    // Without this, the details element will collapse when its content is patched
+    assert!(
+        html.contains("data-attr:open"),
+        "HTML should contain data-attr:open binding on the details element. \
+         This binds the 'open' attribute to $weeklyRewardsOpen signal, \
+         preventing the details element from collapsing during DOM morphing."
+    );
+
+    // Verify the details element exists with proper structure
+    assert!(
+        html.contains("<details") && html.contains("id=\"weekly-rewards\""),
+        "HTML should contain weekly-rewards details element"
+    );
+
+    println!("Weekly rewards details state preservation test completed successfully");
 }

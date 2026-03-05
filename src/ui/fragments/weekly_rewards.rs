@@ -3,8 +3,8 @@ use maud::{PreEscaped, html};
 
 pub fn weekly_rewards(week_exp: i32, rewards: &[WeeklyRewardDisplay]) -> maud::Markup {
     html! {
-        details class="weekly-rewards" id="weekly-rewards" {
-            summary class="rewards-summary" {
+        details class="weekly-rewards" id="weekly-rewards" data-attr:open="$weeklyRewardsOpen ? 'true' : ''" {
+            summary class="rewards-summary" data-on:click__prevent="$weeklyRewardsOpen = !$weeklyRewardsOpen" {
                 span class="rewards-icon" { "🏆" }
                 span class="rewards-title" { "Weekly Rewards" }
                 span class="rewards-exp" { (week_exp) " EXP" }

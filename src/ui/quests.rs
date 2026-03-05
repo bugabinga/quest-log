@@ -23,7 +23,7 @@ pub fn quests_page(
     stats: &QuestStats,
 ) -> maud::Markup {
     let signals = format!(
-        "{{expToday: {}, expTodayMax: {}, weekExp: {}, weekExpMax: {}, questsCompleted: {}, questsTotal: {}}}",
+        "{{expToday: {}, expTodayMax: {}, weekExp: {}, weekExpMax: {}, questsCompleted: {}, questsTotal: {}, $weeklyRewardsOpen: false}}",
         stats.exp_today,
         stats.exp_today_max,
         stats.week_exp,
