@@ -1,11 +1,21 @@
 #   Refer for explanation to following link:
 #   https://lefthook.dev/configuration/
+colors: true
+verbose: true
+
 pre-push:
+  parallel: true
   jobs:
     - run: just fmt
-    - run: just check
+    - run: just lint
+
 pre-commit:
+  parallel: true
   jobs:
     - run: just fmt
     - run: just lint
     - run: just test
+
+commit-msg:
+  jobs:
+    - run: just validate-commit-msg {1}

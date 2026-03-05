@@ -19,7 +19,7 @@ lint:
     cargo clippy
     deno lint static/js/
 
-check: lint test verify
+check: lint verify
     cargo check
 
 # run app in debug mode
@@ -94,3 +94,40 @@ bundle-datastar version='1.0.0-RC.8':
         https://cdn.jsdelivr.net/gh/starfederation/datastar@{{ version }}/bundles/datastar.js \
         --sourcemap=external \
         -o static/js/datastar.js
+
+# Validate commit message follows conventional commits format
+# Usage: just validate-commit-msg <commit-msg-file>
+[arg('COMMIT_MSG_FILE')]
+validate-commit-msg COMMIT_MSG_FILE:
+    #!/usr/bin/env bash
+    # Skip for merge commits
+    if [ -n "$(git rev-parse -q --verify MERGE_HEAD)" ]; then
+        exit 0
+    fi
+    
+    MSG=$(head -n 1 "{{ COMMIT_MSG_FILE }}")
+    PATTERN="^(feat|fix|docs|style|refactor|test|chore|perf|revert)(\(.+\))?!?: .+"
+    
+    if ! echo "$MSG" | grep -qE "$PATTERN"; then
+        echo "Invalid commit message format."
+        echo ""
+        echo "Expected: <type>(<scope>)<!>: <subject>"
+        echo "  - Type: feat, fix, docs, style, refactor, test, chore, perf, revert"
+        echo "  - Add ! before : for breaking changes"
+        echo ""
+        echo "Examples:"
+        echo "  feat(auth): add login button"
+        echo "  fix(ui): resolve padding issue"
+        echo "  feat(api)!: remove v1 endpoint"
+        echo ""
+        echo "Your commit:"
+        echo "$MSG"
+        exit 1
+    fi
+    
+    # Subject line length check (72 chars)
+    SUBJECT=$(echo "$MSG" | sed 's/^[^:]*: //')
+    if [ ${#SUBJECT} -gt 72 ]; then
+        echo "Subject line exceeds 72 characters (current: ${#SUBJECT})"
+        exit 1
+    fi

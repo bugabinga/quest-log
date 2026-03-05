@@ -9,10 +9,10 @@ use datastar::axum::ReadSignals;
 use datastar::execute_script::ExecuteScript;
 use datastar::patch_elements::PatchElements;
 use datastar::patch_signals::PatchSignals;
+use futures::StreamExt;
 use futures::stream::{self, Stream};
 use serde::Deserialize;
 use std::convert::Infallible;
-use tokio_stream::StreamExt;
 use tokio_stream::wrappers::BroadcastStream;
 
 use crate::models::{QuestStats, ToggleResult};
@@ -26,8 +26,6 @@ use tracing::instrument;
 pub enum ServerMessage {
     Elements(String, Option<String>),
     Signals(String, Option<String>),
-    Shutdown(String),
-    ShutdownComplete,
 }
 
 #[derive(Debug, Copy, Clone)]
@@ -559,37 +557,34 @@ pub async fn events(
     tracing::debug!("📡 SSE connection opened - client subscribed to updates");
     let rx = state.bcast.subscribe();
 
-    let stream = BroadcastStream::new(rx).filter_map(|res| match res {
-        Ok(ServerMessage::Elements(html, origin)) => {
-            let payload = serde_json::json!({
-                "data": html,
-                "origin": origin
-            });
-            let ev = Event::default()
-                .event("datastar-patch-elements")
-                .data(payload.to_string());
-            Some(Ok(ev))
+    let stream = async_stream::stream! {
+        let mut rx = BroadcastStream::new(rx);
+        while let Some(res) = rx.next().await {
+            match res {
+                Ok(ServerMessage::Elements(html, origin)) => {
+                    let payload = serde_json::json!({
+                        "data": html,
+                        "origin": origin
+                    });
+                    let ev = Event::default()
+                        .event("datastar-patch-elements")
+                        .data(payload.to_string());
+                    yield Ok(ev);
+                }
+                Ok(ServerMessage::Signals(json, origin)) => {
+                    let payload = serde_json::json!({
+                        "data": json,
+                        "origin": origin
+                    });
+                    let ev = Event::default()
+                        .event("datastar-patch-signals")
+                        .data(payload.to_string());
+                    yield Ok(ev);
+                }
+                Err(_) => {}
+            }
         }
-        Ok(ServerMessage::Signals(json, origin)) => {
-            let payload = serde_json::json!({
-                "data": json,
-                "origin": origin
-            });
-            let ev = Event::default()
-                .event("datastar-patch-signals")
-                .data(payload.to_string());
-            Some(Ok(ev))
-        }
-        Ok(ServerMessage::Shutdown(msg)) => {
-            let ev = Event::default().event("server-death").data(msg);
-            Some(Ok(ev))
-        }
-        Ok(ServerMessage::ShutdownComplete) => {
-            let ev = Event::default().event("shutdown-complete").data("");
-            Some(Ok(ev))
-        }
-        Err(_) => None,
-    });
+    };
 
     Sse::new(stream)
 }

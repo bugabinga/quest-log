@@ -2,7 +2,6 @@
 //!
 //! Tests the TUI application state through the public library interface.
 
-use chrono::Utc;
 use quest_log::tui::{AppState, InputMode, Tab, View};
 
 /// Test that initial state has correct defaults

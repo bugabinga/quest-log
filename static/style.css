@@ -2395,7 +2395,6 @@ h1 {
 
 .rewards-summary::before {
   content: "▼";
-  position: absolute;
   right: var(--space-md);
   font-size: 0.6rem;
   color: var(--color-text-secondary);

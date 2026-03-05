@@ -1696,12 +1696,6 @@ async fn test_toggle_broadcasts_to_events_endpoint() {
                     assert!(json.contains("expToday"), "Signals should contain expToday");
                     signals_received = true;
                 }
-                ServerMessage::Shutdown(_) => {
-                    // Shutdown messages are not expected in this test
-                }
-                ServerMessage::ShutdownComplete => {
-                    // Shutdown complete messages are not expected in this test
-                }
             },
             Ok(Err(e)) => panic!("Broadcast error: {}", e),
             Err(_) => break, // Timeout - no more messages
@@ -1825,69 +1819,4 @@ async fn test_navigate_broadcasts_to_events_endpoint() {
     );
 
     println!("Navigate does not broadcast test completed successfully");
-}
-
-#[tokio::test]
-async fn test_sse_graceful_shutdown_notifies_clients() {
-    use quest_log::state::AppState;
-
-    let pool = SqlitePool::connect("sqlite::memory:")
-        .await
-        .expect("Failed to create in-memory database");
-    let db: Database = Database::with_pool(pool);
-    db.migrate().await.expect("Failed to run migrations");
-
-    let (bcast_tx, _) = broadcast::channel::<ServerMessage>(128);
-    let app_state = AppState::new(db, bcast_tx);
-
-    let app = Router::new()
-        .route("/events", get(handlers::events))
-        .with_state(app_state.clone());
-
-    // Subscribe to bcast BEFORE making the request to catch the shutdown event
-    let mut rx = app_state.bcast.subscribe();
-
-    // Make a request to /events in a spawned task
-    let app_clone = app.clone();
-    let events_handle = tokio::spawn(async move {
-        app_clone
-            .oneshot(
-                Request::builder()
-                    .uri("/events")
-                    .header("accept", "text/event-stream")
-                    .body(Body::empty())
-                    .unwrap(),
-            )
-            .await
-            .unwrap()
-    });
-
-    // Give the SSE connection time to establish
-    tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
-
-    // Trigger shutdown by sending through bcast channel
-    let _ = app_state.bcast.send(ServerMessage::Shutdown(
-        "Server is shutting down".to_string(),
-    ));
-
-    // Wait for the shutdown message to be received on the broadcast
-    let shutdown_msg = tokio::time::timeout(tokio::time::Duration::from_secs(2), rx.recv())
-        .await
-        .expect("Should receive shutdown message")
-        .expect("Should not error");
-
-    // Verify it's a Shutdown message
-    match shutdown_msg {
-        ServerMessage::Shutdown(msg) => {
-            assert!(msg.contains("shutting down"));
-        }
-        ServerMessage::ShutdownComplete => {
-            // Handle ShutdownComplete variant
-        }
-        _ => panic!("Expected Shutdown message"),
-    }
-
-    // The SSE handler should have sent server-death event
-    // We verified the message was sent via broadcast; the test is successful
-    println!("SSE graceful shutdown test completed successfully - shutdown message was broadcast");
 }

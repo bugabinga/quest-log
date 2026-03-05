@@ -1,45 +1,38 @@
 use libc;
 use std::os::unix::process::ExitStatusExt;
 use std::process::Command;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
-// This test is Unix-only because it sends real signals to the spawned
-// process (SIGTERM). Guard compilation on unix so Windows runners skip it.
+fn get_bin_path() -> std::path::PathBuf {
+    let exe = std::env::current_exe().expect("failed to get current exe");
+    exe.parent()
+        .and_then(|p| p.parent())
+        .expect("failed to get grandparent")
+        .join("quest-log")
+}
+
 #[cfg(unix)]
 #[tokio::test]
-async fn graceful_shutdown_waits_for_active_requests() {
-    // ensure the binary exists (build if necessary)
-    let bin_path = "target/debug/quest-log";
-    if !std::path::Path::new(bin_path).exists() {
-        let build = Command::new("cargo")
-            .arg("build")
-            .output()
-            .expect("cargo build failed");
-        assert!(build.status.success(), "cargo build failed");
-    }
+async fn instant_shutdown_completes_within_300ms() {
+    let bin_path = get_bin_path();
 
-    // pick a free port
     let std_listener = std::net::TcpListener::bind("127.0.0.1:0").expect("bind");
     let port = std_listener.local_addr().unwrap().port();
     drop(std_listener);
 
-    // spawn server process with selected port
-    let mut child = Command::new(bin_path)
+    let mut child = Command::new(&bin_path)
         .arg("serve")
         .env("PORT", port.to_string())
-        .env("ENABLE_TEST_ENDPOINTS", "1")
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::piped())
         .spawn()
         .expect("failed to spawn server");
 
-    // wait for health endpoint to be ready
     let client = reqwest::Client::builder()
         .timeout(Duration::from_secs(2))
         .build()
         .unwrap();
     let addr = format!("127.0.0.1:{}", port);
-    // wait up to ~10s for readiness (server may be slower on CI)
     let mut ready = false;
     for _ in 0..100 {
         if let Ok(resp) = client.get(format!("http://{}/health", addr)).send().await {
@@ -52,60 +45,52 @@ async fn graceful_shutdown_waits_for_active_requests() {
     }
     assert!(ready, "server did not become ready in time");
 
-    // start a slow request in background
-    let client2 = reqwest::Client::new();
-    let slow_handle = tokio::spawn(async move {
+    let client2 = reqwest::Client::builder()
+        .timeout(Duration::from_secs(30))
+        .build()
+        .unwrap();
+    let sse_handle = tokio::spawn(async move {
         let resp = client2
-            .get(format!("http://{}/test/slow", addr))
+            .get(format!("http://{}/events", addr))
             .send()
             .await
-            .expect("slow request failed");
-        resp.text().await.expect("read body")
+            .expect("SSE request failed");
+        let _ = resp.bytes().await;
     });
 
-    // give the request a moment to reach server; increase slightly for CI
-    tokio::time::sleep(Duration::from_millis(2000)).await;
+    tokio::time::sleep(Duration::from_millis(500)).await;
 
-    // send SIGTERM to the server process using libc
     let pid = child.id() as libc::pid_t;
+    let start = Instant::now();
     unsafe {
-        libc::kill(pid, libc::SIGTERM);
+        libc::kill(pid, libc::SIGINT);
     }
 
-    // the slow request should complete successfully despite shutdown
-    let slow_res = tokio::time::timeout(Duration::from_secs(60), slow_handle)
-        .await
-        .expect("slow request timed out")
-        .expect("slow task panicked");
-    assert_eq!(slow_res, "done");
-
-    // wait for the process to exit (with a margin)
-    for _ in 0..35 {
+    let max_wait = Duration::from_millis(300);
+    loop {
         match child.try_wait() {
             Ok(Some(status)) => {
+                let elapsed = start.elapsed();
+                assert!(
+                    elapsed < max_wait,
+                    "Shutdown took {}ms (expected <300ms)",
+                    elapsed.as_millis()
+                );
                 assert!(status.success() || status.signal().is_some());
+                let _ = sse_handle.await;
                 return;
             }
             Ok(None) => {
-                tokio::time::sleep(Duration::from_millis(100)).await;
+                if start.elapsed() >= max_wait {
+                    let _ = child.kill();
+                    panic!(
+                        "Server did not exit within 300ms (took {:?})",
+                        start.elapsed()
+                    );
+                }
+                tokio::time::sleep(Duration::from_millis(10)).await;
             }
             Err(e) => panic!("error waiting for child: {}", e),
         }
-    }
-    // if still running, try to kill it and include stdout/stderr to aid debugging
-    let _ = child.kill();
-    match child.wait_with_output() {
-        Ok(output) => {
-            let out = String::from_utf8_lossy(&output.stdout);
-            let err = String::from_utf8_lossy(&output.stderr);
-            panic!(
-                "server did not exit in time. stdout:\n{}\n--- stderr:\n{}",
-                out, err
-            );
-        }
-        Err(e) => panic!(
-            "server did not exit in time and reading output failed: {}",
-            e
-        ),
     }
 }

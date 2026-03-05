@@ -1,7 +1,11 @@
 [package]
 name = "quest-log"
-version = "0.1.0"
+version = "0.0.0"
 edition = "2024"
+description = "Game-like TODO app for kids"
+readme = "README.md"
+license = "MIT"
+repository = "https://github.com/bugabinga/quest-log"
 
 [lib]
 doctest = false
@@ -38,6 +42,7 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 tracing-error = "0.2"
 clap = { version = "4", features = ["derive"] }
 futures = "0.3"
+async-stream = "0.3"
 ratatui = "0.30"
 crossterm = "0.29"
 tower = "0.5"
@@ -64,6 +69,8 @@ split-debuginfo = "unpacked"
 [profile.release]
 codegen-units = 1
 lto = "thin"
+panic = 'abort'
+strip = true
 
 [target.'cfg(target_os = "linux")'.dependencies]
 sd-notify = "0.4"

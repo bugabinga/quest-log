@@ -20,7 +20,6 @@ use axum::{
 use static_serve::embed_assets;
 use std::net::SocketAddr;
 use tokio::sync::broadcast;
-use tokio::time::Duration;
 use tracing_error::ErrorLayer;
 use tracing_subscriber::{EnvFilter, fmt, layer::SubscriberExt, util::SubscriberInitExt};
 
@@ -102,9 +101,6 @@ async fn main() {
     tracing::info!("✅ Database ready! (灬♥ω♥灬)");
 
     let (bcast_tx, _rx) = broadcast::channel::<ServerMessage>(128);
-
-    // Clone bcast_tx so we can send shutdown message to SSE clients
-    let bcast_tx_for_shutdown = bcast_tx.clone();
 
     let app_state = AppState::new(db, bcast_tx);
 
@@ -209,6 +205,12 @@ async fn main() {
     let make_service = app.into_make_service();
     let server = axum::serve(listener, make_service);
 
+    tokio::spawn(async move {
+        if let Err(e) = server.await {
+            tracing::error!(error = %e, "💥 Server error - HTTP service failed");
+        }
+    });
+
     tracing::info!(url = %format!("http://{}", addr), "🎉 Server listening! (◕‿◕)");
     // On Linux, send READY and start watchdog if enabled.
     #[cfg(target_os = "linux")]
@@ -238,71 +240,26 @@ async fn main() {
     }
     tracing::info!("💡 Open your browser and start questing!");
 
-    // a oneshot bridge we will trigger when a shutdown signal arrives
-    let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel::<()>();
-    let graceful = server.with_graceful_shutdown(async {
-        let _ = shutdown_rx.await;
-    });
-
-    // run the server in background so we can listen for signals concurrently
-    let server_handle = tokio::spawn(async move {
-        if let Err(e) = graceful.await {
-            tracing::error!(error = %e, "💥 Server error - HTTP service failed");
-        }
-    });
-
-    // wait for either ctrl-c or unix SIGTERM
+    // Wait for shutdown signal (ctrl-c or SIGTERM)
     tokio::select! {
         _ = tokio::signal::ctrl_c() => {
-            tracing::info!("🛑 SIGINT received, initiating graceful shutdown...");
+            tracing::info!("🛑 SIGINT received, shutting down...");
         }
         _ = async {
-            #[cfg(unix)]{
+            #[cfg(unix)]
+            {
                 use tokio::signal::unix::{signal, SignalKind};
-                let mut sigterm = signal(SignalKind::terminate()).expect("Failed to install SIGTERM handler");
+                let mut sigterm = signal(SignalKind::terminate()).expect("Failed to install SIGTERM");
                 sigterm.recv().await
             }
-            #[cfg(not(unix))]{
+            #[cfg(not(unix))]
+            {
                 futures::future::pending::<()>().await
             }
         } => {
-            tracing::info!("🛑 SIGTERM received, initiating graceful shutdown...");
+            tracing::info!("🛑 SIGTERM received, shutting down...");
         }
     }
 
-    tracing::info!(
-        "⏳ Triggering server graceful shutdown (allowing in-flight requests to finish)..."
-    );
-
-    // Phase 1: Notify SSE clients that server will restart
-    let _ = bcast_tx_for_shutdown.send(handlers::ServerMessage::Shutdown(
-        "Server is restarting. Please wait a moment...".to_string(),
-    ));
-    tracing::info!("📢 Sent Shutdown message to clients");
-
-    // Give clients time to receive the shutdown message
-    tokio::time::sleep(std::time::Duration::from_millis(500)).await;
-
-    // Phase 2: Tell clients to close connections, we're about to die
-    let _ = bcast_tx_for_shutdown.send(handlers::ServerMessage::ShutdownComplete);
-    tracing::info!("📢 Sent ShutdownComplete message to clients");
-
-    // Give clients time to close their SSE connections
-    tokio::time::sleep(std::time::Duration::from_millis(500)).await;
-
-    // Now shutdown - no active SSE connections should remain
-    let _ = shutdown_tx.send(());
-    tracing::info!("🛑 Sent shutdown signal to server");
-
-    // Wait for the server task to finish
-    match tokio::time::timeout(Duration::from_secs(5), server_handle).await {
-        Ok(join_res) => {
-            if let Err(e) = join_res {
-                tracing::error!(error = %e, "💥 Server task panicked during shutdown");
-            }
-        }
-        Err(_) => {
-            tracing::warn!("💥 Server did not shut down within 5s, forcing exit");
-        }
-    }
+    std::process::exit(0);
 }
