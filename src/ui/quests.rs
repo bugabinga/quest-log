@@ -191,5 +191,6 @@ pub fn quests_page(
         signals: Some(signals),
         computed: Some(computed),
         show_nav: true,
+        active_route: Some("/".to_string()),
     })
 }

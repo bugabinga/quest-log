@@ -1,5 +1,17 @@
 use maud::{DOCTYPE, PreEscaped, html};
 
+fn nav_link_class(active_route: Option<&str>, route: &str) -> &'static str {
+    let is_active = match active_route {
+        Some(r) => r == route,
+        None => route == "/",
+    };
+    if is_active {
+        "nav-link nav-link--active"
+    } else {
+        "nav-link"
+    }
+}
+
 pub struct PageData {
     pub title: String,
     pub body_content: maud::Markup,
@@ -7,6 +19,7 @@ pub struct PageData {
     pub signals: Option<String>,
     pub computed: Option<String>,
     pub show_nav: bool,
+    pub active_route: Option<String>,
 }
 
 pub fn base_page(data: PageData) -> maud::Markup {
@@ -37,19 +50,19 @@ pub fn base_page(data: PageData) -> maud::Markup {
 
                     header class="game-header" {
                         nav class="game-header-nav" {
-                            a href="/" class="nav-link nav-link--active" {
+                            a href="/" class=(nav_link_class(data.active_route.as_deref(), "/")) {
                                 span class="nav-icon nav-icon--sword" {}
                                 span { "Quests" }
                             }
-                            a href="/bounty" class="nav-link" {
+                            a href="/bounty" class=(nav_link_class(data.active_route.as_deref(), "/bounty")) {
                                 span class="nav-icon nav-icon--chest" {}
                                 span { "Bounty" }
                             }
-                            a href="/highscore" class="nav-link" {
+                            a href="/highscore" class=(nav_link_class(data.active_route.as_deref(), "/highscore")) {
                                 span class="nav-icon nav-icon--trophy" {}
                                 span { "Highscore" }
                             }
-                            a href="/editor" class="nav-link" {
+                            a href="/editor" class=(nav_link_class(data.active_route.as_deref(), "/editor")) {
                                 span class="nav-icon nav-icon--scroll" {}
                                 span { "Editor" }
                             }

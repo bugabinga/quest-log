@@ -37,5 +37,6 @@ pub fn bounty_page(
         signals: Some(signals),
         computed: Some(computed),
         show_nav: true,
+        active_route: Some("/bounty".to_string()),
     })
 }
