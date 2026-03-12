@@ -13,6 +13,8 @@ use sqlx::SqlitePool;
 use std::time::{Duration, Instant};
 use tokio::sync::broadcast;
 
+mod common;
+use common::setup_test_app_state;
 use tower::util::ServiceExt;
 
 #[tokio::test]
@@ -28,10 +30,7 @@ async fn test_large_dataset_performance() {
     let app = Router::new()
         .route("/", get(handlers::quests))
         .route("/quests/toggle", post(handlers::toggle_quest))
-        .with_state(AppState {
-            db: db.clone(),
-            bcast: broadcast::channel::<handlers::ServerMessage>(128).0,
-        });
+        .with_state(setup_test_app_state(db.clone()));
 
     println!("Creating large dataset for performance testing...");
 
@@ -138,10 +137,7 @@ async fn test_concurrent_load_simulation() {
     let app = Router::new()
         .route("/", get(handlers::quests))
         .route("/quests/toggle", post(handlers::toggle_quest))
-        .with_state(AppState {
-            db: db.clone(),
-            bcast: broadcast::channel::<handlers::ServerMessage>(128).0,
-        });
+        .with_state(setup_test_app_state(db.clone()));
 
     // Create some test quests
     let today = Utc::now().date_naive();
@@ -260,10 +256,7 @@ async fn test_memory_usage_stability() {
     let app = Router::new()
         .route("/", get(handlers::quests))
         .route("/quests/toggle", post(handlers::toggle_quest))
-        .with_state(AppState {
-            db: db.clone(),
-            bcast: broadcast::channel::<handlers::ServerMessage>(128).0,
-        });
+        .with_state(setup_test_app_state(db.clone()));
 
     println!("Testing memory usage stability over extended period...");
 
@@ -368,10 +361,7 @@ async fn test_cold_start_performance() {
     let app = Router::new()
         .route("/", get(handlers::quests))
         .route("/quests/toggle", post(handlers::toggle_quest))
-        .with_state(AppState {
-            db,
-            bcast: broadcast::channel::<handlers::ServerMessage>(128).0,
-        });
+        .with_state(setup_test_app_state(db));
     let app_creation_time = app_creation.elapsed();
 
     println!("App creation time: {:?}", app_creation_time);

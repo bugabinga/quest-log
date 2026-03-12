@@ -2,10 +2,16 @@
 
 use chrono::{NaiveDate, Utc};
 use quest_log::{
+    auth::LoginRateLimiter,
     database::Database,
+    handlers::ServerMessage,
     models::{CreateQuestRequest, CreateRewardRequest, Quest, Reward},
+    state::AppState,
 };
 use sqlx::SqlitePool;
+use std::sync::Arc;
+use std::time::Instant;
+use tokio::sync::RwLock;
 
 /// Setup a test database with migrations applied
 pub async fn setup_test_db() -> Database {
@@ -17,6 +23,11 @@ pub async fn setup_test_db() -> Database {
         .await
         .expect("Failed to run migrations");
     Database::with_pool(pool)
+}
+
+/// Setup a test AppState with a test database
+pub fn setup_test_app_state(db: Database) -> AppState {
+    AppState::new(db, tokio::sync::broadcast::channel::<ServerMessage>(128).0)
 }
 
 /// Create a test quest with default values

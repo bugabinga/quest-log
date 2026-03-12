@@ -13,6 +13,8 @@ use std::time::Duration;
 use tokio::sync::broadcast;
 use tokio::time::timeout;
 use tower::util::ServiceExt;
+mod common;
+use common::setup_test_app_state;
 
 #[tokio::test]
 async fn test_timeout_handling() {
@@ -27,10 +29,7 @@ async fn test_timeout_handling() {
     let app = Router::new()
         .route("/", get(handlers::quests))
         .route("/quests/toggle", post(handlers::toggle_quest))
-        .with_state(AppState {
-            db,
-            bcast: broadcast::channel::<handlers::ServerMessage>(128).0,
-        });
+        .with_state(setup_test_app_state(db));
 
     // Test with a very short timeout to simulate slow operations
     let request = Request::builder().uri("/").body(Body::empty()).unwrap();
@@ -66,10 +65,7 @@ async fn test_malformed_http_requests() {
     let app = Router::new()
         .route("/", get(handlers::quests))
         .route("/quests/toggle", post(handlers::toggle_quest))
-        .with_state(AppState {
-            db,
-            bcast: broadcast::channel::<handlers::ServerMessage>(128).0,
-        });
+        .with_state(setup_test_app_state(db));
 
     // Test various malformed requests
     // Test invalid HTTP method
@@ -147,10 +143,7 @@ async fn test_resource_exhaustion_protection() {
     let app = Router::new()
         .route("/", get(handlers::quests))
         .route("/quests/toggle", post(handlers::toggle_quest))
-        .with_state(AppState {
-            db,
-            bcast: broadcast::channel::<handlers::ServerMessage>(128).0,
-        });
+        .with_state(setup_test_app_state(db));
 
     // Test with very large request body (simulating attack)
     let large_body = Body::from(vec![b'x'; 10 * 1024 * 1024]); // 10MB
@@ -197,10 +190,7 @@ async fn test_concurrent_error_conditions() {
     let app = Router::new()
         .route("/", get(handlers::quests))
         .route("/quests/toggle", post(handlers::toggle_quest))
-        .with_state(AppState {
-            db,
-            bcast: broadcast::channel::<handlers::ServerMessage>(128).0,
-        });
+        .with_state(setup_test_app_state(db));
 
     // Simulate multiple concurrent requests with error conditions
     let mut handles = vec![];
@@ -272,10 +262,7 @@ async fn test_database_error_returns_500_with_playful_page() {
 
     let app = Router::new()
         .route("/", get(handlers::quests))
-        .with_state(AppState {
-            db: db.clone(),
-            bcast: broadcast::channel::<handlers::ServerMessage>(128).0,
-        });
+        .with_state(setup_test_app_state(db.clone()));
 
     db.pool().close().await;
 
@@ -319,10 +306,7 @@ async fn test_empty_quests_returns_playful_message() {
 
     let app = Router::new()
         .route("/", get(handlers::quests))
-        .with_state(AppState {
-            db,
-            bcast: broadcast::channel::<handlers::ServerMessage>(128).0,
-        });
+        .with_state(setup_test_app_state(db));
 
     let request = Request::builder().uri("/").body(Body::empty()).unwrap();
     let response = app.oneshot(request).await.unwrap();
@@ -362,10 +346,7 @@ async fn test_error_page_inherits_base_html_structure() {
 
     let app = Router::new()
         .route("/", get(handlers::quests))
-        .with_state(AppState {
-            db: db.clone(),
-            bcast: broadcast::channel::<handlers::ServerMessage>(128).0,
-        });
+        .with_state(setup_test_app_state(db.clone()));
 
     db.pool().close().await;
 
@@ -406,10 +387,7 @@ async fn test_no_database_details_leaked_in_errors() {
 
     let app = Router::new()
         .route("/", get(handlers::quests))
-        .with_state(AppState {
-            db: db.clone(),
-            bcast: broadcast::channel::<handlers::ServerMessage>(128).0,
-        });
+        .with_state(setup_test_app_state(db.clone()));
 
     db.pool().close().await;
 

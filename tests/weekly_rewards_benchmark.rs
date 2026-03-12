@@ -12,6 +12,9 @@
 //!
 //! Run with: cargo test --test weekly_rewards_benchmark -- --nocapture --test-threads=1
 
+mod common;
+use common::setup_test_app_state;
+
 use axum::{
     Router,
     body::Body,
@@ -77,10 +80,7 @@ async fn bench_quest_page_load_time() {
     let app = Router::new()
         .route("/", get(handlers::quests))
         .route("/quests/toggle", post(handlers::toggle_quest))
-        .with_state(AppState {
-            db: db.clone(),
-            bcast: broadcast::channel::<handlers::ServerMessage>(128).0,
-        });
+        .with_state(setup_test_app_state(db.clone()));
 
     // Warmup
     for _ in 0..WARMUP_ITERATIONS {
@@ -137,10 +137,7 @@ async fn bench_bounty_page_load_time() {
 
     let app = Router::new()
         .route("/bounty", get(handlers::bounty))
-        .with_state(AppState {
-            db: db.clone(),
-            bcast: broadcast::channel::<handlers::ServerMessage>(128).0,
-        });
+        .with_state(setup_test_app_state(db.clone()));
 
     // Warmup
     for _ in 0..WARMUP_ITERATIONS {
@@ -207,10 +204,7 @@ async fn bench_quest_page_size() {
 
     let app = Router::new()
         .route("/", get(handlers::quests))
-        .with_state(AppState {
-            db: db.clone(),
-            bcast: broadcast::channel::<handlers::ServerMessage>(128).0,
-        });
+        .with_state(setup_test_app_state(db.clone()));
 
     let response = app
         .clone()
@@ -248,10 +242,7 @@ async fn bench_bounty_page_size() {
 
     let app = Router::new()
         .route("/bounty", get(handlers::bounty))
-        .with_state(AppState {
-            db: db.clone(),
-            bcast: broadcast::channel::<handlers::ServerMessage>(128).0,
-        });
+        .with_state(setup_test_app_state(db.clone()));
 
     let response = app
         .clone()
@@ -304,10 +295,7 @@ async fn bench_toggle_quest_sse_response() {
 
     let app = Router::new()
         .route("/quests/toggle", post(handlers::toggle_quest))
-        .with_state(AppState {
-            db: db.clone(),
-            bcast: broadcast::channel::<handlers::ServerMessage>(128).0,
-        });
+        .with_state(setup_test_app_state(db.clone()));
 
     // Warmup
     for _ in 0..WARMUP_ITERATIONS {
@@ -395,10 +383,7 @@ async fn bench_quest_vs_bounty_comparison() {
     let app = Router::new()
         .route("/", get(handlers::quests))
         .route("/bounty", get(handlers::bounty))
-        .with_state(AppState {
-            db: db.clone(),
-            bcast: broadcast::channel::<handlers::ServerMessage>(128).0,
-        });
+        .with_state(setup_test_app_state(db.clone()));
 
     // Warmup both pages
     for _ in 0..WARMUP_ITERATIONS {

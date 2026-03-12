@@ -9,6 +9,8 @@ use quest_log::{database::Database, handlers, state::AppState};
 use sqlx::SqlitePool;
 use tokio::sync::broadcast;
 use tower::util::ServiceExt;
+mod common;
+use common::setup_test_app_state;
 
 fn get_css_content() -> String {
     std::fs::read_to_string("static/style.css").expect("Failed to read CSS file")
@@ -125,10 +127,7 @@ async fn test_quest_page_contains_glow_elements() {
             "/quests/toggle",
             axum::routing::post(handlers::toggle_quest),
         )
-        .with_state(AppState {
-            db,
-            bcast: broadcast::channel::<handlers::ServerMessage>(128).0,
-        });
+        .with_state(setup_test_app_state(db.clone()));
 
     let response = app
         .clone()
@@ -191,10 +190,7 @@ async fn test_completed_quest_has_glow_class() {
             "/quests/toggle",
             axum::routing::post(handlers::toggle_quest),
         )
-        .with_state(AppState {
-            db,
-            bcast: broadcast::channel::<handlers::ServerMessage>(128).0,
-        });
+        .with_state(setup_test_app_state(db.clone()));
 
     let json_data = format!(r#"{{"quest_id":{}}}"#, quest.id);
     let response = app
@@ -246,10 +242,7 @@ async fn test_quest_page_references_static_files() {
 
     let app = Router::new()
         .route("/", get(handlers::quests))
-        .with_state(AppState {
-            db,
-            bcast: broadcast::channel::<handlers::ServerMessage>(128).0,
-        });
+        .with_state(setup_test_app_state(db.clone()));
 
     let response = app
         .clone()

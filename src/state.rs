@@ -45,12 +45,21 @@ impl AppState {
 
     /// Validate a session token
     pub async fn validate_session(&self, token: &str) -> bool {
-        let sessions = self.editor_sessions.read().await;
-        if let Some(expiry) = sessions.get(token)
-            && *expiry > Instant::now()
-        {
-            return true;
-        }
-        false
+        let mut sessions = self.editor_sessions.write().await;
+        let now = Instant::now();
+
+        // Lazy cleanup: remove expired sessions
+        sessions.retain(|_, expiry| *expiry > now);
+
+        sessions
+            .get(token)
+            .map(|expiry| *expiry > now)
+            .unwrap_or(false)
+    }
+
+    /// Invalidate a session token (logout)
+    pub async fn invalidate_session(&self, token: &str) {
+        let mut sessions = self.editor_sessions.write().await;
+        sessions.remove(token);
     }
 }

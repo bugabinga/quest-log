@@ -207,12 +207,12 @@ fn editor_quests_panel(quests: &[Quest]) -> Markup {
                                 div class="action-buttons" {
                                     button
                                         class="editor-btn editor-btn--small"
-                                        data-on:click=[Some(PreEscaped(format!("@get('/editor/quests/{}/edit')", quest.id)))] {
+                                        data-on:click="alert('Edit feature coming soon!')" {
                                         "Edit"
                                     }
                                     button
                                         class="editor-btn editor-btn--danger"
-                                        data-on:click=[Some(PreEscaped(format!("@delete('/editor/quests/{})'", quest.id)))] {
+                                        data-on:click=[Some(PreEscaped(format!("@delete('/editor/quests/{}')", quest.id)))] {
                                         "Delete"
                                     }
                                 }
@@ -335,12 +335,12 @@ fn editor_rewards_panel(rewards: &[Reward]) -> Markup {
                                 div class="action-buttons" {
                                     button
                                         class="editor-btn editor-btn--small"
-                                        data-on:click=[Some(PreEscaped(format!("@get('/editor/rewards/{}/edit')", reward.id)))] {
+                                        data-on:click="alert('Edit feature coming soon!')" {
                                         "Edit"
                                     }
                                     button
                                         class="editor-btn editor-btn--danger"
-                                        data-on:click=[Some(PreEscaped(format!("@delete('/editor/rewards/{})'", reward.id)))] {
+                                        data-on:click=[Some(PreEscaped(format!("@delete('/editor/rewards/{}')", reward.id)))] {
                                         "Delete"
                                     }
                                 }

@@ -38,6 +38,32 @@ fn get_client_ip(headers: &HeaderMap) -> String {
         .to_string()
 }
 
+/// Extract and validate session token from cookie header
+async fn extract_and_validate_session(
+    headers: &HeaderMap,
+    state: &AppState,
+) -> Result<String, EditorError> {
+    let cookie = headers
+        .get("cookie")
+        .and_then(|c| c.to_str().ok())
+        .ok_or(EditorError::Unauthorized)?;
+
+    // Parse cookie to find editor_session
+    let token = cookie
+        .split(';')
+        .find_map(|c| {
+            let c = c.trim();
+            c.strip_prefix("editor_session=")
+        })
+        .ok_or(EditorError::Unauthorized)?;
+
+    if !state.validate_session(token).await {
+        return Err(EditorError::Unauthorized);
+    }
+
+    Ok(token.to_string())
+}
+
 /// Editor page - shows auth modal if not authenticated, otherwise shows editor
 pub async fn editor_page_handler(
     State(state): State<AppState>,
@@ -178,7 +204,8 @@ pub async fn login_handler(
 
     let signals = serde_json::json!({
         "isAuthenticated": true,
-        "loginError": null
+        "loginError": null,
+        "sessionToken": token
     });
 
     let combined_html = format!(
@@ -196,14 +223,21 @@ pub async fn login_handler(
 
 /// Logout handler
 pub async fn logout_handler(
-    State(_state): State<AppState>,
+    State(state): State<AppState>,
     headers: HeaderMap,
 ) -> Result<Sse<impl Stream<Item = Result<Event, std::convert::Infallible>>>, EditorError> {
     let client_ip = get_client_ip(&headers);
     debug!(ip = %client_ip, "Logout requested");
 
+    // Try to invalidate the session if token is present
+    if let Ok(token) = extract_and_validate_session(&headers, &state).await {
+        state.invalidate_session(&token).await;
+        info!(ip = %client_ip, "Session invalidated");
+    }
+
     let signals = serde_json::json!({
-        "isAuthenticated": false
+        "isAuthenticated": false,
+        "sessionToken": null
     });
 
     let settings = Settings {
@@ -238,8 +272,12 @@ pub async fn get_quests_handler(
 /// Create a new quest
 pub async fn create_quest_handler(
     State(state): State<AppState>,
+    headers: HeaderMap,
     mut multipart: Multipart,
 ) -> Result<Sse<impl Stream<Item = Result<Event, std::convert::Infallible>>>, EditorError> {
+    // Validate session
+    extract_and_validate_session(&headers, &state).await?;
+
     let mut title = String::new();
     let mut description: Option<String> = None;
     let mut exp_value: Option<i32> = Some(10);
@@ -344,9 +382,13 @@ pub async fn create_quest_handler(
 /// Update a quest
 pub async fn update_quest_handler(
     State(state): State<AppState>,
+    headers: HeaderMap,
     Path(id): Path<i64>,
     Form(request): Form<UpdateQuestRequest>,
 ) -> Result<Sse<impl Stream<Item = Result<Event, std::convert::Infallible>>>, EditorError> {
+    // Validate session
+    extract_and_validate_session(&headers, &state).await?;
+
     let quest = state.db.update_quest(id, request).await.map_err(|e| {
         error!(error = %e, quest_id = id, "Failed to update quest");
         EditorError::Database
@@ -374,8 +416,12 @@ pub async fn update_quest_handler(
 /// Delete a quest
 pub async fn delete_quest_handler(
     State(state): State<AppState>,
+    headers: HeaderMap,
     Path(id): Path<i64>,
 ) -> Result<Sse<impl Stream<Item = Result<Event, std::convert::Infallible>>>, EditorError> {
+    // Validate session
+    extract_and_validate_session(&headers, &state).await?;
+
     let deleted = state.db.delete_quest(id).await.map_err(|e| {
         error!(error = %e, quest_id = id, "Failed to delete quest");
         EditorError::Database
@@ -424,8 +470,12 @@ pub async fn get_rewards_handler(
 /// Create a new reward
 pub async fn create_reward_handler(
     State(state): State<AppState>,
+    headers: HeaderMap,
     mut multipart: Multipart,
 ) -> Result<Sse<impl Stream<Item = Result<Event, std::convert::Infallible>>>, EditorError> {
+    // Validate session
+    extract_and_validate_session(&headers, &state).await?;
+
     let mut title = String::new();
     let mut description: Option<String> = None;
     let mut required_exp: i32 = 50;
@@ -519,9 +569,13 @@ pub async fn create_reward_handler(
 /// Update a reward
 pub async fn update_reward_handler(
     State(state): State<AppState>,
+    headers: HeaderMap,
     Path(id): Path<i64>,
     Form(request): Form<UpdateRewardRequest>,
 ) -> Result<Sse<impl Stream<Item = Result<Event, std::convert::Infallible>>>, EditorError> {
+    // Validate session
+    extract_and_validate_session(&headers, &state).await?;
+
     let reward = state.db.update_reward(id, request).await.map_err(|e| {
         error!(error = %e, reward_id = id, "Failed to update reward");
         EditorError::Database
@@ -549,8 +603,12 @@ pub async fn update_reward_handler(
 /// Delete a reward
 pub async fn delete_reward_handler(
     State(state): State<AppState>,
+    headers: HeaderMap,
     Path(id): Path<i64>,
 ) -> Result<Sse<impl Stream<Item = Result<Event, std::convert::Infallible>>>, EditorError> {
+    // Validate session
+    extract_and_validate_session(&headers, &state).await?;
+
     let deleted = state.db.delete_reward(id).await.map_err(|e| {
         error!(error = %e, reward_id = id, "Failed to delete reward");
         EditorError::Database
@@ -599,8 +657,12 @@ pub async fn get_settings_handler(
 /// Update settings
 pub async fn update_settings_handler(
     State(state): State<AppState>,
+    headers: HeaderMap,
     Form(request): Form<UpdateSettingsRequest>,
 ) -> Result<Sse<impl Stream<Item = Result<Event, std::convert::Infallible>>>, EditorError> {
+    // Validate session
+    extract_and_validate_session(&headers, &state).await?;
+
     let settings = state.db.update_settings(request).await.map_err(|e| {
         error!(error = %e, "Failed to update settings");
         EditorError::Database
@@ -715,6 +777,7 @@ pub enum EditorError {
     NotFound,
     Database,
     Validation,
+    Unauthorized,
 }
 
 impl IntoResponse for EditorError {
@@ -723,12 +786,14 @@ impl IntoResponse for EditorError {
             EditorError::NotFound => "Not found",
             EditorError::Database => "Database error",
             EditorError::Validation => "Invalid request",
+            EditorError::Unauthorized => "Unauthorized",
         };
 
         let status = match self {
             EditorError::NotFound => StatusCode::NOT_FOUND,
             EditorError::Database => StatusCode::INTERNAL_SERVER_ERROR,
             EditorError::Validation => StatusCode::BAD_REQUEST,
+            EditorError::Unauthorized => StatusCode::UNAUTHORIZED,
         };
 
         (status, Html(message)).into_response()
