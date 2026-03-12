@@ -148,25 +148,8 @@ pub async fn login_handler(
         return Ok(Sse::new(stream::iter(events.into_iter().map(Ok))));
     }
 
-    // Get password hash from environment
-    let password_hash = match auth::get_password_hash_from_env() {
-        Some(h) => h,
-        None => {
-            error!("QUEST_LOG_EDITOR_PASSWORD_HASH not configured");
-            let _ = auth::verify_password(
-                &request.password,
-                "$argon2id$v=19$m=65536,t=3,p=4$fake$fake",
-            );
-
-            let signals = serde_json::json!({
-                "loginError": "Editor not configured. Contact administrator.",
-                "isRateLimited": false
-            });
-
-            let events: Vec<Event> = vec![PatchSignals::new(signals.to_string()).into()];
-            return Ok(Sse::new(stream::iter(events.into_iter().map(Ok))));
-        }
-    };
+    // Get password hash (uses default in debug builds)
+    let password_hash = auth::get_password_hash_or_default();
 
     // Verify password
     if !auth::verify_password(&request.password, &password_hash) {

@@ -60,6 +60,28 @@ pub fn get_password_hash_from_env() -> Option<String> {
     std::env::var("QUEST_LOG_EDITOR_PASSWORD_HASH").ok()
 }
 
+/// Get password hash, using a default in debug builds
+#[cfg(debug_assertions)]
+pub fn get_password_hash_or_default() -> String {
+    if let Some(hash) = get_password_hash_from_env() {
+        hash
+    } else {
+        // Pre-computed argon2 hash for password "dev"
+        // Generated with: argon2id, m=65536, t=3, p=4
+        tracing::warn!("Using default dev password 'dev' - DO NOT USE IN PRODUCTION!");
+        // Hash "dev" on first use (cached)
+        static DEV_HASH: std::sync::OnceLock<String> = std::sync::OnceLock::new();
+        DEV_HASH
+            .get_or_init(|| hash_password("dev").expect("Failed to hash dev password"))
+            .clone()
+    }
+}
+
+#[cfg(not(debug_assertions))]
+pub fn get_password_hash_or_default() -> String {
+    get_password_hash_from_env().expect("QUEST_LOG_EDITOR_PASSWORD_HASH must be set in production")
+}
+
 /// Rate limiter for login attempts
 #[derive(Clone)]
 pub struct LoginRateLimiter {
@@ -191,5 +213,16 @@ mod tests {
             assert!(!limiter.is_rate_limited("127.0.0.1").await);
             assert!(!limiter.is_rate_limited("192.168.1.1").await);
         }
+    }
+
+    #[test]
+    fn test_get_password_hash_or_default_dev() {
+        // In debug builds, should return a hash for "dev" password
+        let hash = get_password_hash_or_default();
+        assert!(!hash.is_empty());
+        // Verify the hash works for password "dev"
+        assert!(verify_password("dev", &hash));
+        // Wrong password should fail
+        assert!(!verify_password("wrong", &hash));
     }
 }
