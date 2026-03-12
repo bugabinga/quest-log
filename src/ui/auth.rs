@@ -39,7 +39,7 @@ pub fn auth_modal(error_message: Option<&str>, is_rate_limited: bool) -> Markup 
                         button
                             type="submit"
                             class="auth-submit"
-                            data-on:click__prevent="@post('/editor/login')"
+                            data-on:click__prevent="@post('/editor/login', {contentType: 'form'})"
                             data-indicator="#login-loading" {
                             span { "Enter the Guild" }
                             span id="login-loading" style="display: none" { "Authenticating..." }
