@@ -1674,11 +1674,10 @@ async fn test_toggle_broadcasts_to_events_endpoint() {
 
     // Now wait for the broadcast messages
     let mut quest_received = false;
-    let mut rewards_received = false;
     let mut _signals_received = false;
 
-    // Try to receive multiple messages (we now send 3: quest, rewards, signals)
-    for _ in 0..4 {
+    // Try to receive multiple messages (we now send 2: quest, signals - no rewards on Quest page)
+    for _ in 0..3 {
         let result =
             tokio::time::timeout(tokio::time::Duration::from_millis(500), receiver.recv()).await;
 
@@ -1689,9 +1688,7 @@ async fn test_toggle_broadcasts_to_events_endpoint() {
                     if html.contains("quest-item") {
                         quest_received = true;
                     }
-                    if html.contains("weekly-rewards") {
-                        rewards_received = true;
-                    }
+                    // Note: weekly rewards are no longer broadcast from Quest page (moved to Bounty page)
                 }
                 ServerMessage::Signals(json, _) => {
                     eprintln!("Received signals: {}", json);
@@ -1705,10 +1702,9 @@ async fn test_toggle_broadcasts_to_events_endpoint() {
     }
 
     assert!(
-        quest_received && rewards_received,
-        "Should receive both quest and weekly rewards elements (quest={}, rewards={})",
         quest_received,
-        rewards_received
+        "Should receive quest elements (quest={})",
+        quest_received
     );
 
     println!("Toggle broadcast test completed successfully");
@@ -1831,9 +1827,9 @@ async fn test_navigate_broadcasts_to_events_endpoint() {
 // in addition to the quest element and signals.
 //
 // Current behavior: Test FAILS (no weekly rewards in SSE response)
-// After fix: Test PASSES
+// After fix: Test verifies weekly rewards are NOT sent for Quest page toggle (they're on Bounty page now)
 #[tokio::test]
-async fn test_toggle_quest_updates_weekly_rewards() {
+async fn test_toggle_quest_does_not_include_weekly_rewards() {
     let pool = SqlitePool::connect("sqlite::memory:")
         .await
         .expect("Failed to create in-memory database");
@@ -1876,7 +1872,7 @@ async fn test_toggle_quest_updates_weekly_rewards() {
         .with_state(app_state.clone());
 
     // Subscribe to the broadcast channel BEFORE making the request
-    let mut receiver = app_state.bcast.subscribe();
+    let _receiver = app_state.bcast.subscribe();
 
     // Make the toggle request in a spawned task
     let json_data = format!(r#"{{"quest_id":{}}}"#, quest.id);
@@ -1898,60 +1894,34 @@ async fn test_toggle_quest_updates_weekly_rewards() {
     let response = handle.await.expect("Task should not panic").unwrap();
     assert_eq!(response.status(), StatusCode::OK);
 
-    // Check the SSE response body for weekly-rewards element
+    // Check the SSE response body
     let body = axum::body::to_bytes(response.into_body(), usize::MAX)
         .await
         .unwrap();
     let body_str = String::from_utf8(body.to_vec()).unwrap();
 
-    // The response SHOULD contain weekly-rewards element for Datastar morphing
-    // This assertion FAILS with current code - demonstrating the bug
+    // The response should NOT contain weekly-rewards element for Quest page
+    // Weekly rewards are now only on the Bounty page
     assert!(
-        body_str.contains("weekly-rewards") || body_str.contains("id=\"weekly-rewards\""),
-        "Response should contain weekly-rewards element for UI update. \
-         Got response: {}",
+        !body_str.contains("weekly-rewards") && !body_str.contains("id=\"weekly-rewards\""),
+        "Response should NOT contain weekly-rewards element for Quest page. \
+         Weekly rewards are now only on the Bounty page. Got response: {}",
         body_str
     );
 
-    // Also verify that the signals include weekExp (this works correctly)
+    // But it SHOULD contain the quest element
     assert!(
-        body_str.contains("weekExp"),
-        "Response should contain weekExp signal"
+        body_str.contains("quest-item") || body_str.contains("datastar-patch-elements"),
+        "Response should contain quest element for UI update. Got response: {}",
+        body_str
     );
 
-    // Check broadcast messages for weekly-rewards element
-    let mut weekly_rewards_broadcast = false;
-    for _ in 0..3 {
-        let result =
-            tokio::time::timeout(tokio::time::Duration::from_millis(500), receiver.recv()).await;
-
-        match result {
-            Ok(Ok(msg)) => match msg {
-                ServerMessage::Elements(html, _) => {
-                    if html.contains("weekly-rewards") || html.contains("id=\"weekly-rewards\"") {
-                        weekly_rewards_broadcast = true;
-                    }
-                }
-                ServerMessage::Signals(_, _) => {}
-            },
-            Ok(Err(e)) => panic!("Broadcast error: {}", e),
-            Err(_) => break, // Timeout - no more messages
-        }
-    }
-
-    // This should also FAIL with current code
-    assert!(
-        weekly_rewards_broadcast,
-        "Broadcast should contain weekly-rewards element for real-time updates"
-    );
-
-    println!("Toggle updates weekly rewards test completed successfully");
+    println!("Toggle does not include weekly rewards test passed - they are on Bounty page now");
 }
 
-// Regression test: weekly-rewards details element should preserve open state across DOM patching
-// This test verifies that the details element has a signal-bound open attribute that survives Datastar morphing
+// Regression test: Verify weekly rewards are NOT on Quest page (they were moved to Bounty page)
 #[tokio::test]
-async fn test_weekly_rewards_details_preserves_open_state() {
+async fn test_weekly_rewards_not_on_quest_page() {
     let pool = SqlitePool::connect("sqlite::memory:")
         .await
         .expect("Failed to create in-memory database");
@@ -1994,31 +1964,21 @@ async fn test_weekly_rewards_details_preserves_open_state() {
         .unwrap();
     let html = String::from_utf8(body.to_vec()).unwrap();
 
-    // Check 1: The HTML should have data-signals containing $weeklyRewardsOpen signal
-    // This is needed so Datastar can track the open/closed state
+    // Verify weekly rewards are NOT on the Quest page (they were moved to Bounty page)
     assert!(
-        html.contains("$weeklyRewardsOpen"),
-        "HTML should contain $weeklyRewardsOpen signal in data-signals. \
-         The signal is needed to preserve the details element's open state across DOM patches."
+        !html.contains("weekly-rewards") && !html.contains("id=\"weekly-rewards\""),
+        "Quest page should NOT contain weekly-rewards element. \
+         Weekly rewards were moved to the Bounty page."
     );
 
-    // Check 2: The weekly-rewards details element should have data-attr:open binding
-    // This binds the 'open' attribute to the $weeklyRewardsOpen signal
-    // Without this, the details element will collapse when its content is patched
+    // Verify $weeklyRewardsOpen signal is NOT on Quest page
     assert!(
-        html.contains("data-attr:open"),
-        "HTML should contain data-attr:open binding on the details element. \
-         This binds the 'open' attribute to $weeklyRewardsOpen signal, \
-         preventing the details element from collapsing during DOM morphing."
+        !html.contains("$weeklyRewardsOpen"),
+        "Quest page should NOT contain $weeklyRewardsOpen signal. \
+         Weekly rewards were moved to the Bounty page."
     );
 
-    // Verify the details element exists with proper structure
-    assert!(
-        html.contains("<details") && html.contains("id=\"weekly-rewards\""),
-        "HTML should contain weekly-rewards details element"
-    );
-
-    println!("Weekly rewards details state preservation test completed successfully");
+    println!("Verified weekly rewards are not on Quest page - they are on Bounty page now");
 }
 
 // Test for day change auto-detection feature

@@ -1,14 +1,11 @@
-use crate::models::{QuestStats, WeeklyRewardDisplay};
+use crate::models::QuestStats;
 use crate::ui::base::{PageData, base_page};
 use crate::ui::fragments::toggle::QuestDisplay;
-use crate::ui::fragments::weekly_rewards::weekly_rewards;
 use maud::{PreEscaped, html};
 
 #[allow(clippy::too_many_arguments)]
 pub fn quests_page(
     quests: &[QuestDisplay],
-    rewards: &[WeeklyRewardDisplay],
-    week_exp: i32,
     error_message: &str,
     selected_date: &str,
     day_name: &str,
@@ -23,7 +20,7 @@ pub fn quests_page(
     stats: &QuestStats,
 ) -> maud::Markup {
     let signals = format!(
-        "{{expToday: {}, expTodayMax: {}, weekExp: {}, weekExpMax: {}, questsCompleted: {}, questsTotal: {}, weeklyRewardsOpen: false, currentDay: {}, isToday: {}}}",
+        "{{expToday: {}, expTodayMax: {}, weekExp: {}, weekExpMax: {}, questsCompleted: {}, questsTotal: {}, currentDay: {}, isToday: {}}}",
         stats.exp_today,
         stats.exp_today_max,
         stats.week_exp,
@@ -124,9 +121,7 @@ pub fn quests_page(
             }
         }
 
-                        (weekly_rewards(week_exp, rewards, false))
-
-                        @if !error_message.is_empty() {
+        @if !error_message.is_empty() {
             div class="error-message" { (error_message) }
         }
 

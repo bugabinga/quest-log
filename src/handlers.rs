@@ -15,7 +15,7 @@ use serde::Deserialize;
 use std::convert::Infallible;
 use tokio_stream::wrappers::BroadcastStream;
 
-use crate::models::{ClaimState, QuestStats, ToggleResult};
+use crate::models::{ClaimState, QuestStats};
 use crate::state::AppState;
 use crate::time;
 use crate::ui;
@@ -240,26 +240,8 @@ async fn quests_handler(
             }
         });
 
-    let week_exp = db
-        .calculate_weekly_exp(week_start, week_end)
-        .await
-        .unwrap_or_else(|e| {
-            tracing::warn!(error = %e, "⚠️ Failed to calculate weekly EXP");
-            0
-        });
-
-    let rewards = db
-        .get_weekly_reward_status(week_start, today)
-        .await
-        .unwrap_or_else(|e| {
-            tracing::warn!(error = %e, "⚠️ Failed to get reward status");
-            Default::default()
-        });
-
     let html = ui::quests_page(
         &quests_display,
-        &rewards,
-        week_exp,
         &error_message,
         &selected_date_formatted,
         day_name,
@@ -313,8 +295,7 @@ pub async fn toggle_quest(
     }
 
     tracing::debug!(quest_id, title = %quest.title, "Toggling quest completion");
-    let toggle_result = db
-        .toggle_quest_completion(quest_id, today)
+    db.toggle_quest_completion(quest_id, today)
         .await
         .map_err(|e| {
             tracing::error!(error = %e, quest_id, "💥 Database error toggling quest");
@@ -328,9 +309,6 @@ pub async fn toggle_quest(
             tracing::warn!(error = %e, quest_id, "⚠️  Failed to check completion status, defaulting to false");
             false
         });
-
-    let _was_just_completed = toggle_result == ToggleResult::NewlyCompleted;
-    let _was_just_uncompleted = toggle_result == ToggleResult::NewlyUncompleted;
 
     let quest_display = QuestDisplay::from_quest(quest, completed_today, today);
 
@@ -357,18 +335,6 @@ pub async fn toggle_quest(
         .await
         .unwrap_or(0);
 
-    let rewards = db
-        .get_weekly_reward_status(week_start, today)
-        .await
-        .unwrap_or_default();
-
-    let all_rewards_claimed =
-        !rewards.is_empty() && rewards.iter().all(|r| r.state == ClaimState::Claimed);
-
-    let rewards_html =
-        ui::fragments::weekly_rewards::weekly_rewards(week_exp, &rewards, all_rewards_claimed)
-            .into_string();
-
     let mut week_exp_max = 0i32;
     for dow in 0..7 {
         if let Ok(quests) = db.get_quests_for_day(dow).await {
@@ -393,12 +359,6 @@ pub async fn toggle_quest(
     if let Err(e) = bcast.send(ServerMessage::Elements(quest_html.clone(), origin.clone())) {
         tracing::error!(error = %e, "💥 Failed to broadcast elements");
     }
-    if let Err(e) = bcast.send(ServerMessage::Elements(
-        rewards_html.clone(),
-        origin.clone(),
-    )) {
-        tracing::error!(error = %e, "💥 Failed to broadcast weekly rewards");
-    }
     if let Err(e) = bcast.send(ServerMessage::Signals(signals_json.to_string(), origin)) {
         tracing::error!(error = %e, "💥 Failed to broadcast signals");
     }
@@ -406,13 +366,8 @@ pub async fn toggle_quest(
 
     let quest_patch = PatchElements::new(quest_html).use_view_transition(true);
     let signals_patch = PatchSignals::new(signals_json.to_string());
-    let rewards_patch = PatchElements::new(rewards_html).use_view_transition(true);
 
-    let events: Vec<Event> = vec![
-        quest_patch.into(),
-        signals_patch.into(),
-        rewards_patch.into(),
-    ];
+    let events: Vec<Event> = vec![quest_patch.into(), signals_patch.into()];
     let stream = stream::iter(events.into_iter().map(Ok));
     Ok(Sse::new(stream))
 }
