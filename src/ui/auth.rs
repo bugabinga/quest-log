@@ -33,7 +33,7 @@ pub fn auth_modal(error_message: Option<&str>, is_rate_limited: bool) -> Markup 
                                 placeholder="Enter your master key..."
                                 required
                                 autocomplete="current-password"
-                                data-bind:value="_password";
+                                data-bind="_password";
                         }
 
                         button
