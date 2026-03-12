@@ -96,6 +96,8 @@ impl LoginRateLimiter {
     }
 
     /// Check if the IP has exceeded the rate limit
+    /// Note: This only checks and cleans old attempts - it does NOT add an attempt.
+    /// The handler must call `record_failed_attempt()` on failed login.
     pub async fn is_rate_limited(&self, ip: &str) -> bool {
         let mut attempts = self.attempts.write().await;
         let now = Instant::now();
@@ -111,10 +113,10 @@ impl LoginRateLimiter {
                 warn!(ip = %ip, attempts = count, "Rate limit exceeded for IP");
                 return true;
             }
-
-            ip_attempts.push(now);
+            // Don't add attempt here - handler calls record_failed_attempt() on failure
         } else {
-            attempts.insert(ip.to_string(), vec![now]);
+            // No existing attempts, ip is not rate limited
+            attempts.insert(ip.to_string(), vec![]);
         }
 
         false
@@ -195,9 +197,10 @@ mod tests {
     async fn test_rate_limiter_blocks_excess() {
         let limiter = LoginRateLimiter::new();
 
-        // First 5 attempts should be allowed
+        // First 5 failed attempts should be allowed
         for _ in 0..5 {
             assert!(!limiter.is_rate_limited("127.0.0.1").await);
+            limiter.record_failed_attempt("127.0.0.1").await;
         }
 
         // 6th attempt should be blocked

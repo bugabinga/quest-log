@@ -3428,6 +3428,9 @@ h1 {
   inset: 0;
   background: oklch(0 0 0 / 0.8);
   backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .auth-container {

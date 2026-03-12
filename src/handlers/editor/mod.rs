@@ -6,7 +6,7 @@ use axum::{
     body::Body,
     extract::Multipart,
     extract::{Form, Path, State},
-    http::{HeaderMap, Response, StatusCode},
+    http::{HeaderMap, Response, StatusCode, header::SET_COOKIE},
     response::sse::{Event, Sse},
     response::{Html, IntoResponse},
 };
@@ -24,6 +24,13 @@ use crate::models::{
 use crate::state::AppState;
 use crate::ui;
 use tracing::{debug, error, info, warn};
+
+/// Session cookie configuration - Secure flag only in release builds
+#[cfg(debug_assertions)]
+const SESSION_COOKIE_OPTS: &str = "Path=/; HttpOnly; SameSite=Strict; Max-Age=86400";
+
+#[cfg(not(debug_assertions))]
+const SESSION_COOKIE_OPTS: &str = "Path=/; HttpOnly; SameSite=Strict; Secure; Max-Age=86400";
 
 /// Get the client IP from headers
 fn get_client_ip(headers: &HeaderMap) -> String {
@@ -72,11 +79,25 @@ pub async fn editor_page_handler(
     let client_ip = get_client_ip(&headers);
     debug!(ip = %client_ip, "Editor page requested");
 
-    // For simplicity, check for session token in a custom header
+    // Check for session token in header or cookie
     let session_token = headers
         .get("x-editor-session")
         .and_then(|v| v.to_str().ok())
-        .map(|s| s.to_string());
+        .map(|s| s.to_string())
+        .or_else(|| {
+            headers
+                .get("cookie")
+                .and_then(|c| c.to_str().ok())
+                .and_then(|cookie| {
+                    cookie
+                        .split(';')
+                        .find_map(|c| {
+                            let c = c.trim();
+                            c.strip_prefix("editor_session=")
+                        })
+                        .map(|s| s.to_string())
+                })
+        });
 
     let is_authenticated = if let Some(ref token) = session_token {
         state.validate_session(token).await
@@ -131,7 +152,13 @@ pub async fn login_handler(
     State(state): State<AppState>,
     headers: HeaderMap,
     Form(request): Form<LoginRequest>,
-) -> Result<Sse<impl Stream<Item = Result<Event, std::convert::Infallible>>>, EditorError> {
+) -> Result<
+    (
+        HeaderMap,
+        Sse<impl Stream<Item = Result<Event, std::convert::Infallible>>>,
+    ),
+    EditorError,
+> {
     let client_ip = get_client_ip(&headers);
     debug!(ip = %client_ip, "Login attempt");
 
@@ -145,7 +172,11 @@ pub async fn login_handler(
         });
 
         let events: Vec<Event> = vec![PatchSignals::new(signals.to_string()).into()];
-        return Ok(Sse::new(stream::iter(events.into_iter().map(Ok))));
+        let response_headers = HeaderMap::new();
+        return Ok((
+            response_headers,
+            Sse::new(stream::iter(events.into_iter().map(Ok))),
+        ));
     }
 
     // Get password hash (uses default in debug builds)
@@ -165,7 +196,11 @@ pub async fn login_handler(
         });
 
         let events: Vec<Event> = vec![PatchSignals::new(signals.to_string()).into()];
-        return Ok(Sse::new(stream::iter(events.into_iter().map(Ok))));
+        let response_headers = HeaderMap::new();
+        return Ok((
+            response_headers,
+            Sse::new(stream::iter(events.into_iter().map(Ok))),
+        ));
     }
 
     // Login successful - clear rate limit and create session
@@ -187,8 +222,7 @@ pub async fn login_handler(
 
     let signals = serde_json::json!({
         "isAuthenticated": true,
-        "loginError": null,
-        "sessionToken": token
+        "loginError": null
     });
 
     let combined_html = format!(
@@ -201,7 +235,15 @@ pub async fn login_handler(
         PatchSignals::new(signals.to_string()).into(),
     ];
 
-    Ok(Sse::new(stream::iter(events.into_iter().map(Ok))))
+    // Set cookie header for session persistence
+    let mut response_headers = HeaderMap::new();
+    let cookie = format!("editor_session={}; {}", token, SESSION_COOKIE_OPTS);
+    response_headers.insert(SET_COOKIE, cookie.parse().unwrap());
+
+    Ok((
+        response_headers,
+        Sse::new(stream::iter(events.into_iter().map(Ok))),
+    ))
 }
 
 /// Logout handler
@@ -219,8 +261,7 @@ pub async fn logout_handler(
     }
 
     let signals = serde_json::json!({
-        "isAuthenticated": false,
-        "sessionToken": null
+        "isAuthenticated": false
     });
 
     let settings = Settings {

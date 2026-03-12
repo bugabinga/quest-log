@@ -5,7 +5,7 @@ use maud::{Markup, html};
 /// Generate the auth modal HTML with the login form
 pub fn auth_modal(error_message: Option<&str>, is_rate_limited: bool) -> Markup {
     html! {
-        div id="auth-modal" class="auth-modal" data-signals="{_showError: false}" {
+        div id="auth-modal" class="auth-modal" data-signals="{loginError: null}" {
             div class="auth-backdrop" {
                 div class="auth-container" {
                     div class="auth-header" {
@@ -14,13 +14,17 @@ pub fn auth_modal(error_message: Option<&str>, is_rate_limited: bool) -> Markup 
                     }
 
                     @if is_rate_limited {
-                        div class="auth-error" {
+                        div class="auth-error" data-show="isRateLimited" {
                             p { "⚠️ Too many login attempts. Please wait a minute before trying again." }
                         }
                     } @else if let Some(error) = error_message {
                         div class="auth-error" {
                             p { (error) }
                         }
+                    }
+
+                    div class="auth-error" data-show="loginError && !isRateLimited" {
+                        p data-text="loginError" {}
                     }
 
                     form id="login-form" class="auth-form" data-signals="{_password: ''}" {
@@ -31,15 +35,14 @@ pub fn auth_modal(error_message: Option<&str>, is_rate_limited: bool) -> Markup 
                                 id="password"
                                 name="password"
                                 placeholder="Enter your master key..."
-                                required
-                                autocomplete="current-password"
-                                data-bind="_password";
+                                data-bind="_password"
+                                autocomplete="current-password";
                         }
 
                         button
                             type="submit"
                             class="auth-submit"
-                            data-on:click__prevent="@post('/editor/login', {contentType: 'form'})"
+                            data-on:click__prevent="_password && _password.trim() !== '' ? @post('/editor/login') : (loginError = 'Please enter a password')"
                             data-indicator="#login-loading" {
                             span { "Enter the Guild" }
                             span id="login-loading" style="display: none" { "Authenticating..." }
