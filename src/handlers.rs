@@ -1,3 +1,7 @@
+//! HTTP handlers for the Quest Log application
+
+pub mod editor;
+
 use axum::body::Body;
 use axum::extract::{Path, Query, State};
 use axum::http::{HeaderMap, Response, StatusCode};

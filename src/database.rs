@@ -6,7 +6,8 @@ use tracing::instrument;
 
 use crate::models::{
     ClaimState, CreateQuestRequest, CreateRewardRequest, Quest, QuestCompletion, Reward, Settings,
-    ToggleResult, UpdateQuestRequest, UpdateSettingsRequest, WeeklyChampion, WeeklyRewardDisplay,
+    ToggleResult, UpdateQuestRequest, UpdateRewardRequest, UpdateSettingsRequest, WeeklyChampion,
+    WeeklyRewardDisplay,
 };
 use crate::time;
 
@@ -510,6 +511,306 @@ impl Database {
 
         tracing::info!(reward_id = reward.id, title = %reward.title, "✨ Reward created!");
         Ok(reward)
+    }
+
+    /// Get all quests (including inactive) for the editor
+    pub async fn get_all_quests(&self) -> Result<Vec<Quest>, sqlx::Error> {
+        tracing::debug!("📋 Fetching all quests for editor");
+        sqlx::query_as::<_, Quest>("SELECT * FROM quests ORDER BY day_of_week, created_at")
+            .fetch_all(&self.pool)
+            .await
+    }
+
+    /// Get all rewards (including inactive) for the editor
+    pub async fn get_all_rewards(&self) -> Result<Vec<Reward>, sqlx::Error> {
+        tracing::debug!("🎁 Fetching all rewards for editor");
+        sqlx::query_as::<_, Reward>("SELECT * FROM rewards ORDER BY required_exp, created_at")
+            .fetch_all(&self.pool)
+            .await
+    }
+
+    /// Get a reward by ID
+    pub async fn get_reward_by_id(&self, id: i64) -> Result<Option<Reward>, sqlx::Error> {
+        tracing::trace!(reward_id = id, "🔍 Looking up reward by ID");
+        sqlx::query_as::<_, Reward>("SELECT * FROM rewards WHERE id = ?")
+            .bind(id)
+            .fetch_optional(&self.pool)
+            .await
+    }
+
+    /// Update a reward
+    pub async fn update_reward(
+        &self,
+        id: i64,
+        req: UpdateRewardRequest,
+    ) -> Result<Option<Reward>, sqlx::Error> {
+        tracing::debug!(reward_id = id, "🔄 Updating reward");
+        let now = Utc::now();
+
+        if let Some(title) = &req.title {
+            sqlx::query("UPDATE rewards SET title = ?, updated_at = ? WHERE id = ?")
+                .bind(title)
+                .bind(now)
+                .bind(id)
+                .execute(&self.pool)
+                .await?;
+        }
+
+        if let Some(description) = &req.description {
+            sqlx::query("UPDATE rewards SET description = ?, updated_at = ? WHERE id = ?")
+                .bind(description)
+                .bind(now)
+                .bind(id)
+                .execute(&self.pool)
+                .await?;
+        }
+
+        if let Some(required_exp) = req.required_exp {
+            sqlx::query("UPDATE rewards SET required_exp = ?, updated_at = ? WHERE id = ?")
+                .bind(required_exp)
+                .bind(now)
+                .bind(id)
+                .execute(&self.pool)
+                .await?;
+        }
+
+        if let Some(is_active) = req.is_active {
+            sqlx::query("UPDATE rewards SET is_active = ?, updated_at = ? WHERE id = ?")
+                .bind(is_active)
+                .bind(now)
+                .bind(id)
+                .execute(&self.pool)
+                .await?;
+        }
+
+        let result = self.get_reward_by_id(id).await?;
+        if result.is_some() {
+            tracing::info!(reward_id = id, "✅ Reward updated successfully!");
+        }
+        Ok(result)
+    }
+
+    /// Delete a reward
+    pub async fn delete_reward(&self, id: i64) -> Result<bool, sqlx::Error> {
+        tracing::debug!(reward_id = id, "🗑️  Deleting reward");
+        let result = sqlx::query("DELETE FROM rewards WHERE id = ?")
+            .bind(id)
+            .execute(&self.pool)
+            .await?;
+
+        let deleted = result.rows_affected() > 0;
+        if deleted {
+            tracing::info!(reward_id = id, "💨 Reward deleted!");
+        }
+        Ok(deleted)
+    }
+
+    /// Create a quest with optional image
+    pub async fn create_quest_with_image(
+        &self,
+        title: String,
+        description: Option<String>,
+        exp_value: Option<i32>,
+        day_of_week: i32,
+        image_data: Option<Vec<u8>>,
+        image_content_type: Option<String>,
+    ) -> Result<Quest, sqlx::Error> {
+        tracing::debug!(title = %title, day = day_of_week, "📝 Creating quest with image");
+        let now = Utc::now();
+        let quest = sqlx::query_as::<_, Quest>(
+            "INSERT INTO quests (title, description, exp_value, day_of_week, image_data, image_content_type, created_at, updated_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?) RETURNING *",
+        )
+        .bind(&title)
+        .bind(&description)
+        .bind(exp_value.unwrap_or(10))
+        .bind(day_of_week)
+        .bind(&image_data)
+        .bind(&image_content_type)
+        .bind(now)
+        .bind(now)
+        .fetch_one(&self.pool)
+        .await?;
+
+        tracing::info!(quest_id = quest.id, title = %quest.title, "✨ Quest created with image!");
+        Ok(quest)
+    }
+
+    /// Update a quest with optional image
+    #[allow(clippy::too_many_arguments)]
+    pub async fn update_quest_with_image(
+        &self,
+        id: i64,
+        title: Option<String>,
+        description: Option<String>,
+        exp_value: Option<i32>,
+        day_of_week: Option<i32>,
+        is_active: Option<bool>,
+        image_data: Option<Option<Vec<u8>>>,
+        image_content_type: Option<Option<String>>,
+    ) -> Result<Option<Quest>, sqlx::Error> {
+        tracing::debug!(quest_id = id, "🔄 Updating quest with image");
+        let now = Utc::now();
+
+        if let Some(title) = &title {
+            sqlx::query("UPDATE quests SET title = ?, updated_at = ? WHERE id = ?")
+                .bind(title)
+                .bind(now)
+                .bind(id)
+                .execute(&self.pool)
+                .await?;
+        }
+
+        if let Some(description) = &description {
+            sqlx::query("UPDATE quests SET description = ?, updated_at = ? WHERE id = ?")
+                .bind(description)
+                .bind(now)
+                .bind(id)
+                .execute(&self.pool)
+                .await?;
+        }
+
+        if let Some(exp_value) = exp_value {
+            sqlx::query("UPDATE quests SET exp_value = ?, updated_at = ? WHERE id = ?")
+                .bind(exp_value)
+                .bind(now)
+                .bind(id)
+                .execute(&self.pool)
+                .await?;
+        }
+
+        if let Some(day_of_week) = day_of_week {
+            sqlx::query("UPDATE quests SET day_of_week = ?, updated_at = ? WHERE id = ?")
+                .bind(day_of_week)
+                .bind(now)
+                .bind(id)
+                .execute(&self.pool)
+                .await?;
+        }
+
+        if let Some(is_active) = is_active {
+            sqlx::query("UPDATE quests SET is_active = ?, updated_at = ? WHERE id = ?")
+                .bind(is_active)
+                .bind(now)
+                .bind(id)
+                .execute(&self.pool)
+                .await?;
+        }
+
+        // Handle image update - None means don't change, Some(None) means remove image
+        if let Some(image_data) = image_data {
+            sqlx::query("UPDATE quests SET image_data = ?, image_content_type = ?, updated_at = ? WHERE id = ?")
+                .bind(&image_data)
+                .bind(image_content_type.unwrap_or(None))
+                .bind(now)
+                .bind(id)
+                .execute(&self.pool)
+                .await?;
+        }
+
+        let result = self.get_quest_by_id(id).await?;
+        if result.is_some() {
+            tracing::info!(quest_id = id, "✅ Quest updated with image!");
+        }
+        Ok(result)
+    }
+
+    /// Create a reward with optional image
+    pub async fn create_reward_with_image(
+        &self,
+        title: String,
+        description: Option<String>,
+        required_exp: i32,
+        image_data: Option<Vec<u8>>,
+        image_content_type: Option<String>,
+    ) -> Result<Reward, sqlx::Error> {
+        tracing::debug!(title = %title, exp = required_exp, "🎁 Creating reward with image");
+        let now = Utc::now();
+        let reward = sqlx::query_as::<_, Reward>(
+            "INSERT INTO rewards (title, description, required_exp, image_data, image_content_type, created_at, updated_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?) RETURNING *",
+        )
+        .bind(&title)
+        .bind(&description)
+        .bind(required_exp)
+        .bind(&image_data)
+        .bind(&image_content_type)
+        .bind(now)
+        .bind(now)
+        .fetch_one(&self.pool)
+        .await?;
+
+        tracing::info!(reward_id = reward.id, title = %reward.title, "✨ Reward created with image!");
+        Ok(reward)
+    }
+
+    /// Update a reward with optional image
+    #[allow(clippy::too_many_arguments)]
+    pub async fn update_reward_with_image(
+        &self,
+        id: i64,
+        title: Option<String>,
+        description: Option<String>,
+        required_exp: Option<i32>,
+        is_active: Option<bool>,
+        image_data: Option<Option<Vec<u8>>>,
+        image_content_type: Option<Option<String>>,
+    ) -> Result<Option<Reward>, sqlx::Error> {
+        tracing::debug!(reward_id = id, "🔄 Updating reward with image");
+        let now = Utc::now();
+
+        if let Some(title) = &title {
+            sqlx::query("UPDATE rewards SET title = ?, updated_at = ? WHERE id = ?")
+                .bind(title)
+                .bind(now)
+                .bind(id)
+                .execute(&self.pool)
+                .await?;
+        }
+
+        if let Some(description) = &description {
+            sqlx::query("UPDATE rewards SET description = ?, updated_at = ? WHERE id = ?")
+                .bind(description)
+                .bind(now)
+                .bind(id)
+                .execute(&self.pool)
+                .await?;
+        }
+
+        if let Some(required_exp) = required_exp {
+            sqlx::query("UPDATE rewards SET required_exp = ?, updated_at = ? WHERE id = ?")
+                .bind(required_exp)
+                .bind(now)
+                .bind(id)
+                .execute(&self.pool)
+                .await?;
+        }
+
+        if let Some(is_active) = is_active {
+            sqlx::query("UPDATE rewards SET is_active = ?, updated_at = ? WHERE id = ?")
+                .bind(is_active)
+                .bind(now)
+                .bind(id)
+                .execute(&self.pool)
+                .await?;
+        }
+
+        // Handle image update - None means don't change, Some(None) means remove image
+        if let Some(image_data) = image_data {
+            sqlx::query("UPDATE rewards SET image_data = ?, image_content_type = ?, updated_at = ? WHERE id = ?")
+                .bind(&image_data)
+                .bind(image_content_type.unwrap_or(None))
+                .bind(now)
+                .bind(id)
+                .execute(&self.pool)
+                .await?;
+        }
+
+        let result = self.get_reward_by_id(id).await?;
+        if result.is_some() {
+            tracing::info!(reward_id = id, "✅ Reward updated with image!");
+        }
+        Ok(result)
     }
 
     // Statistics and calculations

@@ -1,5 +1,7 @@
+pub mod auth;
 pub mod base;
 pub mod bounty;
+pub mod editor;
 pub mod error;
 pub mod fragments;
 pub mod quests;

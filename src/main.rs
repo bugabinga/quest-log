@@ -1,3 +1,4 @@
+mod auth;
 mod cli;
 mod database;
 mod handlers;
@@ -13,7 +14,7 @@ use crate::handlers::ServerMessage;
 use crate::state::AppState;
 use axum::{
     Router,
-    routing::{get, post},
+    routing::{delete, get, post, put},
 };
 // static assets are embedded via `static-serve` in normal builds. The
 // embed macro must be imported so the macro is in scope when used below.
@@ -114,6 +115,47 @@ async fn main() {
         .route("/rewards/claim", post(handlers::claim_reward))
         .route("/events", get(handlers::events))
         .route("/health", get(health))
+        // Editor routes
+        .route("/editor", get(handlers::editor::editor_page_handler))
+        .route("/editor/login", post(handlers::editor::login_handler))
+        .route("/editor/logout", post(handlers::editor::logout_handler))
+        .route("/editor/quests", get(handlers::editor::get_quests_handler))
+        .route(
+            "/editor/quests",
+            post(handlers::editor::create_quest_handler),
+        )
+        .route(
+            "/editor/quests/{id}",
+            put(handlers::editor::update_quest_handler),
+        )
+        .route(
+            "/editor/quests/{id}",
+            delete(handlers::editor::delete_quest_handler),
+        )
+        .route(
+            "/editor/rewards",
+            get(handlers::editor::get_rewards_handler),
+        )
+        .route(
+            "/editor/rewards",
+            post(handlers::editor::create_reward_handler),
+        )
+        .route(
+            "/editor/rewards/{id}",
+            put(handlers::editor::update_reward_handler),
+        )
+        .route(
+            "/editor/rewards/{id}",
+            delete(handlers::editor::delete_reward_handler),
+        )
+        .route(
+            "/editor/settings",
+            get(handlers::editor::get_settings_handler),
+        )
+        .route(
+            "/editor/settings",
+            put(handlers::editor::update_settings_handler),
+        )
         .fallback(|_req: axum::extract::State<AppState>| async {
             Err::<axum::response::Html<String>, handlers::AppError>(handlers::AppError::NotFound)
         });
