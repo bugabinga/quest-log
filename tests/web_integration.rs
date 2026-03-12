@@ -1674,7 +1674,6 @@ async fn test_toggle_broadcasts_to_events_endpoint() {
 
     // Now wait for the broadcast messages
     let mut quest_received = false;
-    let mut _signals_received = false;
 
     // Try to receive multiple messages (we now send 2: quest, signals - no rewards on Quest page)
     for _ in 0..3 {
@@ -1693,7 +1692,6 @@ async fn test_toggle_broadcasts_to_events_endpoint() {
                 ServerMessage::Signals(json, _) => {
                     eprintln!("Received signals: {}", json);
                     assert!(json.contains("expToday"), "Signals should contain expToday");
-                    _signals_received = true;
                 }
             },
             Ok(Err(e)) => panic!("Broadcast error: {}", e),
