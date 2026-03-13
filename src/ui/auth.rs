@@ -5,7 +5,7 @@ use maud::{Markup, html};
 /// Generate the auth modal HTML with the login form
 pub fn auth_modal(error_message: Option<&str>, is_rate_limited: bool) -> Markup {
     html! {
-        div id="auth-modal" class="auth-modal" data-signals="{loginError: null, isRateLimited: false}" {
+        div id="auth-modal" class="auth-modal" data-signals="{loginError: null, isRateLimited: false, _password: ''}" {
             div class="auth-backdrop" {
                 div class="auth-container" {
                     div class="auth-header" {
@@ -27,7 +27,7 @@ pub fn auth_modal(error_message: Option<&str>, is_rate_limited: bool) -> Markup 
                         p data-text="loginError" {}
                     }
 
-                    form id="login-form" class="auth-form" method="post" data-signals="{_password: ''}" data-on:submit__prevent="_password && _password.trim() !== '' ? @post('/editor/login') : (loginError = 'Please enter a password')" {
+                    form id="login-form" class="auth-form" method="post" data-on:submit__prevent="_password && _password.trim() !== '' ? @post('/editor/login') : (loginError = 'Please enter a password')" {
                         div class="form-group" {
                             label for="password" { "Master Key" }
                             input
@@ -70,7 +70,9 @@ mod tests {
 
         // Check for exact data-signals initialization on the modal container
         assert!(
-            html.contains(r#"data-signals="{loginError: null, isRateLimited: false}""#),
+            html.contains(
+                r#"data-signals="{loginError: null, isRateLimited: false, _password: ''}""#
+            ),
             "Expected exact data-signals initialization, got: {}",
             html
         );
