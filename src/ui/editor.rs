@@ -1,6 +1,8 @@
 //! Editor page UI for the Quest Log
 
 use crate::models::{Quest, Reward, Settings};
+use crate::ui::auth::auth_modal;
+use crate::ui::base::{PageData, base_page};
 use maud::{Markup, PreEscaped, html};
 
 /// Day names for the editor dropdown
@@ -22,76 +24,74 @@ pub fn editor_page(
     rewards: &[Reward],
     settings: &Settings,
 ) -> Markup {
-    html! {
-        (PreEscaped(r#"<!DOCTYPE html>"#))
-        html lang="en" {
-            head {
-                meta charset="UTF-8";
-                meta name="viewport" content="width=device-width, initial-scale=1.0";
-                title { "Quest Log Editor 🗝️" }
-                link rel="stylesheet" href="/style.css";
-                script type="module" src="/js/datastar.js" {}
-                script type="module" src="/js/editor.js" {}
+    let signals = format!("{{_activeTab: '{}'}}", active_tab);
+
+    let body_content = html! {
+        div class="editor-wrapper" {
+            div class="editor-header" {
+                h1 { "🗝️ Quest Log Editor" }
+                (logout_button())
             }
-            body {
-                div id="app" {
-                    div class="editor-wrapper" {
-                        div class="editor-header" {
-                            h1 { "🗝️ Quest Log Editor" }
-                            (logout_button())
+
+            @if is_authenticated {
+                div class="editor-container" {
+                    div class="editor-tabs" {
+                        button
+                            class=(if active_tab == "quests" { "editor-tab editor-tab--active" } else { "editor-tab" })
+                            data-on:click="_activeTab = 'quests'; @get('/editor/tab/quests')"
+                            data-class="{'editor-tab--active': _activeTab === 'quests'}" {
+                            "📜 Quests"
                         }
-
-                        @if is_authenticated {
-                            div class="editor-container" {
-                                div class="editor-tabs" {
-                                    button
-                                        class=(if active_tab == "quests" { "editor-tab editor-tab--active" } else { "editor-tab" })
-                                        data-on:click="_activeTab = 'quests'; @get('/editor/tab/quests')"
-                                        data-class="{'editor-tab--active': _activeTab === 'quests'}" {
-                                        "📜 Quests"
-                                    }
-                                    button
-                                        class=(if active_tab == "rewards" { "editor-tab editor-tab--active" } else { "editor-tab" })
-                                        data-on:click="_activeTab = 'rewards'; @get('/editor/tab/rewards')"
-                                        data-class="{'editor-tab--active': _activeTab === 'rewards'}" {
-                                        "🎁 Rewards"
-                                    }
-                                    button
-                                        class=(if active_tab == "settings" { "editor-tab editor-tab--active" } else { "editor-tab" })
-                                        data-on:click="_activeTab = 'settings'; @get('/editor/tab/settings')"
-                                        data-class="{'editor-tab--active': _activeTab === 'settings'}" {
-                                        "⚙️ Settings"
-                                    }
-                                }
-
-                                div class="editor-content" data-signals="{_activeTab: 'quests'}" {
-                                    // Quests Tab
-                                    div class=(if active_tab == "quests" { "editor-panel" } else { "editor-panel hidden" }) data-show="_activeTab === 'quests'" {
-                                        (editor_quests_panel(quests))
-                                    }
-
-                                    // Rewards Tab
-                                    div class=(if active_tab == "rewards" { "editor-panel" } else { "editor-panel hidden" }) data-show="_activeTab === 'rewards'" {
-                                        (editor_rewards_panel(rewards))
-                                    }
-
-                                    // Settings Tab
-                                    div class=(if active_tab == "settings" { "editor-panel" } else { "editor-panel hidden" }) data-show="_activeTab === 'settings'" {
-                                        (editor_settings_panel(settings))
-                                    }
-                                }
-                            }
-                        } @else {
-                            (auth_modal(None, false))
+                        button
+                            class=(if active_tab == "rewards" { "editor-tab editor-tab--active" } else { "editor-tab" })
+                            data-on:click="_activeTab = 'rewards'; @get('/editor/tab/rewards')"
+                            data-class="{'editor-tab--active': _activeTab === 'rewards'}" {
+                            "🎁 Rewards"
+                        }
+                        button
+                            class=(if active_tab == "settings" { "editor-tab editor-tab--active" } else { "editor-tab" })
+                            data-on:click="_activeTab = 'settings'; @get('/editor/tab/settings')"
+                            data-class="{'editor-tab--active': _activeTab === 'settings'}" {
+                            "⚙️ Settings"
                         }
                     }
 
-                    // Toast container for notifications
-                    div id="toast-container" class="toast-container" {}
+                    div class="editor-content" data-signals=(PreEscaped(&signals)) {
+                        // Quests Tab
+                        div class=(if active_tab == "quests" { "editor-panel" } else { "editor-panel hidden" }) data-show="_activeTab === 'quests'" {
+                            (editor_quests_panel(quests))
+                        }
+
+                        // Rewards Tab
+                        div class=(if active_tab == "rewards" { "editor-panel" } else { "editor-panel hidden" }) data-show="_activeTab === 'rewards'" {
+                            (editor_rewards_panel(rewards))
+                        }
+
+                        // Settings Tab
+                        div class=(if active_tab == "settings" { "editor-panel" } else { "editor-panel hidden" }) data-show="_activeTab === 'settings'" {
+                            (editor_settings_panel(settings))
+                        }
+                    }
                 }
+            } @else {
+                (auth_modal())
             }
         }
-    }
+
+        // Toast container for notifications
+        div id="toast-container" class="toast-container" {}
+    };
+
+    base_page(PageData {
+        title: "Quest Log Editor 🗝️".to_string(),
+        body_content,
+        weekday: None,
+        signals: Some(signals),
+        computed: None,
+        show_nav: true,
+        active_route: Some("/editor".to_string()),
+        extra_scripts: None,
+    })
 }
 
 /// Quests panel for the editor
@@ -410,9 +410,4 @@ fn logout_button() -> Markup {
             span id="logout-loading" style="display: none" { "Leaving..." }
         }
     }
-}
-
-/// Auth modal (reuse from auth module)
-fn auth_modal(error_message: Option<&str>, is_rate_limited: bool) -> Markup {
-    crate::ui::auth::auth_modal(error_message, is_rate_limited)
 }
