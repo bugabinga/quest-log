@@ -8,13 +8,13 @@ use axum::{
     routing::{get, post},
 };
 use chrono::{Datelike, Utc};
-use quest_log::{database::Database, handlers, models::*, state::AppState};
+use quest_log::database::Database;
+use quest_log::handlers::{quests, toggle_quest};
+use quest_log::models::CreateQuestRequest;
+use quest_log::state::AppState;
 use sqlx::SqlitePool;
 use std::time::{Duration, Instant};
 use tokio::sync::broadcast;
-
-mod common;
-use common::setup_test_app_state;
 use tower::util::ServiceExt;
 
 #[tokio::test]
@@ -28,9 +28,12 @@ async fn test_large_dataset_performance() {
 
     // Create test app
     let app = Router::new()
-        .route("/", get(handlers::quests))
-        .route("/quests/toggle", post(handlers::toggle_quest))
-        .with_state(setup_test_app_state(db.clone()));
+        .route("/", get(quests))
+        .route("/quests/toggle", post(toggle_quest))
+        .with_state({
+            let (bcast_tx, _) = broadcast::channel(128);
+            AppState::new(db.clone(), bcast_tx)
+        });
 
     println!("Creating large dataset for performance testing...");
 
@@ -135,9 +138,12 @@ async fn test_concurrent_load_simulation() {
 
     // Create test app
     let app = Router::new()
-        .route("/", get(handlers::quests))
-        .route("/quests/toggle", post(handlers::toggle_quest))
-        .with_state(setup_test_app_state(db.clone()));
+        .route("/", get(quests))
+        .route("/quests/toggle", post(toggle_quest))
+        .with_state({
+            let (bcast_tx, _) = broadcast::channel(128);
+            AppState::new(db.clone(), bcast_tx)
+        });
 
     // Create some test quests
     let today = Utc::now().date_naive();
@@ -254,9 +260,12 @@ async fn test_memory_usage_stability() {
 
     // Create test app
     let app = Router::new()
-        .route("/", get(handlers::quests))
-        .route("/quests/toggle", post(handlers::toggle_quest))
-        .with_state(setup_test_app_state(db.clone()));
+        .route("/", get(quests))
+        .route("/quests/toggle", post(toggle_quest))
+        .with_state({
+            let (bcast_tx, _) = broadcast::channel(128);
+            AppState::new(db.clone(), bcast_tx)
+        });
 
     println!("Testing memory usage stability over extended period...");
 
@@ -359,9 +368,12 @@ async fn test_cold_start_performance() {
     // Create app after migration
     let app_creation = Instant::now();
     let app = Router::new()
-        .route("/", get(handlers::quests))
-        .route("/quests/toggle", post(handlers::toggle_quest))
-        .with_state(setup_test_app_state(db));
+        .route("/", get(quests))
+        .route("/quests/toggle", post(toggle_quest))
+        .with_state({
+            let (bcast_tx, _) = broadcast::channel(128);
+            AppState::new(db, bcast_tx)
+        });
     let app_creation_time = app_creation.elapsed();
 
     println!("App creation time: {:?}", app_creation_time);

@@ -7,14 +7,14 @@ use axum::{
     http::{Request, StatusCode},
     routing::{get, post},
 };
-use quest_log::{database::Database, handlers, state::AppState};
+use quest_log::database::Database;
+use quest_log::handlers::{quests, toggle_quest};
+use quest_log::state::AppState;
 use sqlx::SqlitePool;
 use std::time::Duration;
 use tokio::sync::broadcast;
 use tokio::time::timeout;
 use tower::util::ServiceExt;
-mod common;
-use common::setup_test_app_state;
 
 #[tokio::test]
 async fn test_timeout_handling() {
@@ -27,9 +27,12 @@ async fn test_timeout_handling() {
 
     // Create test app
     let app = Router::new()
-        .route("/", get(handlers::quests))
-        .route("/quests/toggle", post(handlers::toggle_quest))
-        .with_state(setup_test_app_state(db));
+        .route("/", get(quests))
+        .route("/quests/toggle", post(toggle_quest))
+        .with_state({
+            let (bcast_tx, _) = broadcast::channel(128);
+            AppState::new(db, bcast_tx)
+        });
 
     // Test with a very short timeout to simulate slow operations
     let request = Request::builder().uri("/").body(Body::empty()).unwrap();
@@ -63,9 +66,12 @@ async fn test_malformed_http_requests() {
 
     // Create test app
     let app = Router::new()
-        .route("/", get(handlers::quests))
-        .route("/quests/toggle", post(handlers::toggle_quest))
-        .with_state(setup_test_app_state(db));
+        .route("/", get(quests))
+        .route("/quests/toggle", post(toggle_quest))
+        .with_state({
+            let (bcast_tx, _) = broadcast::channel(128);
+            AppState::new(db, bcast_tx)
+        });
 
     // Test various malformed requests
     // Test invalid HTTP method
@@ -141,9 +147,12 @@ async fn test_resource_exhaustion_protection() {
 
     // Create test app
     let app = Router::new()
-        .route("/", get(handlers::quests))
-        .route("/quests/toggle", post(handlers::toggle_quest))
-        .with_state(setup_test_app_state(db));
+        .route("/", get(quests))
+        .route("/quests/toggle", post(toggle_quest))
+        .with_state({
+            let (bcast_tx, _) = broadcast::channel(128);
+            AppState::new(db, bcast_tx)
+        });
 
     // Test with very large request body (simulating attack)
     let large_body = Body::from(vec![b'x'; 10 * 1024 * 1024]); // 10MB
@@ -188,9 +197,12 @@ async fn test_concurrent_error_conditions() {
 
     // Create test app
     let app = Router::new()
-        .route("/", get(handlers::quests))
-        .route("/quests/toggle", post(handlers::toggle_quest))
-        .with_state(setup_test_app_state(db));
+        .route("/", get(quests))
+        .route("/quests/toggle", post(toggle_quest))
+        .with_state({
+            let (bcast_tx, _) = broadcast::channel(128);
+            AppState::new(db, bcast_tx)
+        });
 
     // Simulate multiple concurrent requests with error conditions
     let mut handles = vec![];
@@ -260,9 +272,10 @@ async fn test_database_error_returns_500_with_playful_page() {
     let db: Database = Database::with_pool(pool);
     db.migrate().await.expect("Failed to run migrations");
 
-    let app = Router::new()
-        .route("/", get(handlers::quests))
-        .with_state(setup_test_app_state(db.clone()));
+    let app = Router::new().route("/", get(quests)).with_state({
+        let (bcast_tx, _) = broadcast::channel(128);
+        AppState::new(db.clone(), bcast_tx)
+    });
 
     db.pool().close().await;
 
@@ -304,9 +317,10 @@ async fn test_empty_quests_returns_playful_message() {
     let db: Database = Database::with_pool(pool);
     db.migrate().await.expect("Failed to run migrations");
 
-    let app = Router::new()
-        .route("/", get(handlers::quests))
-        .with_state(setup_test_app_state(db));
+    let app = Router::new().route("/", get(quests)).with_state({
+        let (bcast_tx, _) = broadcast::channel(128);
+        AppState::new(db, bcast_tx)
+    });
 
     let request = Request::builder().uri("/").body(Body::empty()).unwrap();
     let response = app.oneshot(request).await.unwrap();
@@ -344,9 +358,10 @@ async fn test_error_page_inherits_base_html_structure() {
     let db: Database = Database::with_pool(pool);
     db.migrate().await.expect("Failed to run migrations");
 
-    let app = Router::new()
-        .route("/", get(handlers::quests))
-        .with_state(setup_test_app_state(db.clone()));
+    let app = Router::new().route("/", get(quests)).with_state({
+        let (bcast_tx, _) = broadcast::channel(128);
+        AppState::new(db.clone(), bcast_tx)
+    });
 
     db.pool().close().await;
 
@@ -385,9 +400,10 @@ async fn test_no_database_details_leaked_in_errors() {
     let db: Database = Database::with_pool(pool);
     db.migrate().await.expect("Failed to run migrations");
 
-    let app = Router::new()
-        .route("/", get(handlers::quests))
-        .with_state(setup_test_app_state(db.clone()));
+    let app = Router::new().route("/", get(quests)).with_state({
+        let (bcast_tx, _) = broadcast::channel(128);
+        AppState::new(db.clone(), bcast_tx)
+    });
 
     db.pool().close().await;
 

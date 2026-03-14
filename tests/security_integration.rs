@@ -8,12 +8,13 @@ use axum::{
     routing::{get, post},
 };
 use chrono::{Datelike, Utc};
-use quest_log::{database::Database, handlers, models::*, state::AppState};
+use quest_log::database::Database;
+use quest_log::handlers::{quests, toggle_quest};
+use quest_log::models::CreateQuestRequest;
+use quest_log::state::AppState;
 use sqlx::SqlitePool;
 use tokio::sync::broadcast;
 use tower::util::ServiceExt;
-mod common;
-use common::setup_test_app_state;
 
 #[tokio::test]
 async fn test_sql_injection_in_web_interface() {
@@ -26,9 +27,12 @@ async fn test_sql_injection_in_web_interface() {
 
     // Create test app
     let app = Router::new()
-        .route("/", get(handlers::quests))
-        .route("/quests/toggle", post(handlers::toggle_quest))
-        .with_state(setup_test_app_state(db.clone()));
+        .route("/", get(quests))
+        .route("/quests/toggle", post(toggle_quest))
+        .with_state({
+            let (bcast_tx, _) = broadcast::channel(128);
+            AppState::new(db.clone(), bcast_tx)
+        });
 
     // Test SQL injection attempts in form data
     let sql_injection_attempts = vec![
@@ -139,9 +143,12 @@ async fn test_path_traversal_prevention() {
 
     // Create test app
     let app = Router::new()
-        .route("/", get(handlers::quests))
-        .route("/quests/toggle", post(handlers::toggle_quest))
-        .with_state(setup_test_app_state(db));
+        .route("/", get(quests))
+        .route("/quests/toggle", post(toggle_quest))
+        .with_state({
+            let (bcast_tx, _) = broadcast::channel(128);
+            AppState::new(db, bcast_tx)
+        });
 
     // Test path traversal attempts (though our routes are simple, test the principle)
     let path_traversal_attempts = vec![
@@ -184,9 +191,12 @@ async fn test_http_header_injection() {
 
     // Create test app
     let app = Router::new()
-        .route("/", get(handlers::quests))
-        .route("/quests/toggle", post(handlers::toggle_quest))
-        .with_state(setup_test_app_state(db));
+        .route("/", get(quests))
+        .route("/quests/toggle", post(toggle_quest))
+        .with_state({
+            let (bcast_tx, _) = broadcast::channel(128);
+            AppState::new(db, bcast_tx)
+        });
 
     // Test header injection attempts
     let header_injection_attempts = vec![
@@ -253,9 +263,12 @@ async fn test_dos_prevention_basic() {
 
     // Create test app
     let app = Router::new()
-        .route("/", get(handlers::quests))
-        .route("/quests/toggle", post(handlers::toggle_quest))
-        .with_state(setup_test_app_state(db));
+        .route("/", get(quests))
+        .route("/quests/toggle", post(toggle_quest))
+        .with_state({
+            let (bcast_tx, _) = broadcast::channel(128);
+            AppState::new(db, bcast_tx)
+        });
 
     // Test rapid-fire requests (basic DoS simulation)
     let mut handles = vec![];
@@ -317,9 +330,12 @@ async fn test_data_exposure_prevention() {
 
     // Create test app
     let app = Router::new()
-        .route("/", get(handlers::quests))
-        .route("/quests/toggle", post(handlers::toggle_quest))
-        .with_state(setup_test_app_state(db.clone()));
+        .route("/", get(quests))
+        .route("/quests/toggle", post(toggle_quest))
+        .with_state({
+            let (bcast_tx, _) = broadcast::channel(128);
+            AppState::new(db.clone(), bcast_tx)
+        });
 
     // Create some test data
     let _today = Utc::now().date_naive();

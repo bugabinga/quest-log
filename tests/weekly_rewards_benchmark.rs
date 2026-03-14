@@ -12,9 +12,6 @@
 //!
 //! Run with: cargo test --test weekly_rewards_benchmark -- --nocapture --test-threads=1
 
-mod common;
-use common::setup_test_app_state;
-
 use axum::{
     Router,
     body::Body,
@@ -22,7 +19,10 @@ use axum::{
     routing::{get, post},
 };
 use chrono::{Datelike, Utc};
-use quest_log::{database::Database, handlers, models::*, state::AppState};
+use quest_log::database::Database;
+use quest_log::handlers::{bounty, quests, toggle_quest};
+use quest_log::models::{CreateQuestRequest, CreateRewardRequest};
+use quest_log::state::AppState;
 use sqlx::SqlitePool;
 use std::time::{Duration, Instant};
 use tokio::sync::broadcast;
@@ -40,9 +40,6 @@ async fn setup_test_db() -> Database {
     db.migrate().await.expect("Failed to run migrations");
 
     // Create quests for all 7 days
-    let today = Utc::now().date_naive();
-    let day_of_week = today.weekday().num_days_from_sunday() as i32;
-
     for day in 0..7 {
         for i in 0..20 {
             let quest_req = CreateQuestRequest {
@@ -78,9 +75,12 @@ async fn bench_quest_page_load_time() {
     let db = setup_test_db().await;
 
     let app = Router::new()
-        .route("/", get(handlers::quests))
-        .route("/quests/toggle", post(handlers::toggle_quest))
-        .with_state(setup_test_app_state(db.clone()));
+        .route("/", get(quests))
+        .route("/quests/toggle", post(toggle_quest))
+        .with_state({
+            let (bcast_tx, _) = broadcast::channel(128);
+            AppState::new(db.clone(), bcast_tx)
+        });
 
     // Warmup
     for _ in 0..WARMUP_ITERATIONS {
@@ -135,9 +135,10 @@ async fn bench_quest_page_load_time() {
 async fn bench_bounty_page_load_time() {
     let db = setup_test_db().await;
 
-    let app = Router::new()
-        .route("/bounty", get(handlers::bounty))
-        .with_state(setup_test_app_state(db.clone()));
+    let app = Router::new().route("/bounty", get(bounty)).with_state({
+        let (bcast_tx, _) = broadcast::channel(128);
+        AppState::new(db.clone(), bcast_tx)
+    });
 
     // Warmup
     for _ in 0..WARMUP_ITERATIONS {
@@ -202,9 +203,10 @@ async fn bench_bounty_page_load_time() {
 async fn bench_quest_page_size() {
     let db = setup_test_db().await;
 
-    let app = Router::new()
-        .route("/", get(handlers::quests))
-        .with_state(setup_test_app_state(db.clone()));
+    let app = Router::new().route("/", get(quests)).with_state({
+        let (bcast_tx, _) = broadcast::channel(128);
+        AppState::new(db.clone(), bcast_tx)
+    });
 
     let response = app
         .clone()
@@ -240,9 +242,10 @@ async fn bench_quest_page_size() {
 async fn bench_bounty_page_size() {
     let db = setup_test_db().await;
 
-    let app = Router::new()
-        .route("/bounty", get(handlers::bounty))
-        .with_state(setup_test_app_state(db.clone()));
+    let app = Router::new().route("/bounty", get(bounty)).with_state({
+        let (bcast_tx, _) = broadcast::channel(128);
+        AppState::new(db.clone(), bcast_tx)
+    });
 
     let response = app
         .clone()
@@ -294,8 +297,11 @@ async fn bench_toggle_quest_sse_response() {
         .expect("Failed to create quest");
 
     let app = Router::new()
-        .route("/quests/toggle", post(handlers::toggle_quest))
-        .with_state(setup_test_app_state(db.clone()));
+        .route("/quests/toggle", post(toggle_quest))
+        .with_state({
+            let (bcast_tx, _) = broadcast::channel(128);
+            AppState::new(db.clone(), bcast_tx)
+        });
 
     // Warmup
     for _ in 0..WARMUP_ITERATIONS {
@@ -381,9 +387,12 @@ async fn bench_quest_vs_bounty_comparison() {
     let db = setup_test_db().await;
 
     let app = Router::new()
-        .route("/", get(handlers::quests))
-        .route("/bounty", get(handlers::bounty))
-        .with_state(setup_test_app_state(db.clone()));
+        .route("/", get(quests))
+        .route("/bounty", get(bounty))
+        .with_state({
+            let (bcast_tx, _) = broadcast::channel(128);
+            AppState::new(db.clone(), bcast_tx)
+        });
 
     // Warmup both pages
     for _ in 0..WARMUP_ITERATIONS {

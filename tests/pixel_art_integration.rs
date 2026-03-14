@@ -5,12 +5,13 @@ use axum::{
     routing::get,
 };
 use chrono::Datelike;
-use quest_log::{database::Database, handlers, state::AppState};
+use quest_log::database::Database;
+use quest_log::handlers::{quests, toggle_quest};
+use quest_log::models::CreateQuestRequest;
+use quest_log::state::AppState;
 use sqlx::SqlitePool;
 use tokio::sync::broadcast;
 use tower::util::ServiceExt;
-mod common;
-use common::setup_test_app_state;
 
 fn get_css_content() -> String {
     std::fs::read_to_string("static/style.css").expect("Failed to read CSS file")
@@ -111,7 +112,7 @@ async fn test_quest_page_contains_glow_elements() {
     let today = chrono::Utc::now().date_naive();
     let day_of_week = today.weekday().num_days_from_sunday() as i32;
 
-    let quest_req = quest_log::models::CreateQuestRequest {
+    let quest_req = CreateQuestRequest {
         title: "Glow Test Quest".to_string(),
         description: Some("Testing glow effects".to_string()),
         exp_value: Some(25),
@@ -122,12 +123,12 @@ async fn test_quest_page_contains_glow_elements() {
         .expect("Failed to create test quest");
 
     let app = Router::new()
-        .route("/", get(handlers::quests))
-        .route(
-            "/quests/toggle",
-            axum::routing::post(handlers::toggle_quest),
-        )
-        .with_state(setup_test_app_state(db.clone()));
+        .route("/", get(quests))
+        .route("/quests/toggle", axum::routing::post(toggle_quest))
+        .with_state({
+            let (bcast_tx, _) = broadcast::channel(128);
+            AppState::new(db.clone(), bcast_tx)
+        });
 
     let response = app
         .clone()
@@ -173,7 +174,7 @@ async fn test_completed_quest_has_glow_class() {
     let today = chrono::Utc::now().date_naive();
     let day_of_week = today.weekday().num_days_from_sunday() as i32;
 
-    let quest_req = quest_log::models::CreateQuestRequest {
+    let quest_req = CreateQuestRequest {
         title: "Complete Me".to_string(),
         description: None,
         exp_value: Some(15),
@@ -185,12 +186,12 @@ async fn test_completed_quest_has_glow_class() {
         .expect("Failed to create test quest");
 
     let app = Router::new()
-        .route("/", get(handlers::quests))
-        .route(
-            "/quests/toggle",
-            axum::routing::post(handlers::toggle_quest),
-        )
-        .with_state(setup_test_app_state(db.clone()));
+        .route("/", get(quests))
+        .route("/quests/toggle", axum::routing::post(toggle_quest))
+        .with_state({
+            let (bcast_tx, _) = broadcast::channel(128);
+            AppState::new(db.clone(), bcast_tx)
+        });
 
     let json_data = format!(r#"{{"quest_id":{}}}"#, quest.id);
     let response = app
@@ -240,9 +241,10 @@ async fn test_quest_page_references_static_files() {
     let db: Database = Database::with_pool(pool);
     db.migrate().await.expect("Failed to run migrations");
 
-    let app = Router::new()
-        .route("/", get(handlers::quests))
-        .with_state(setup_test_app_state(db.clone()));
+    let app = Router::new().route("/", get(quests)).with_state({
+        let (bcast_tx, _) = broadcast::channel(128);
+        AppState::new(db.clone(), bcast_tx)
+    });
 
     let response = app
         .clone()
