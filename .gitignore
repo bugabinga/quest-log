@@ -1,5 +1,9 @@
 /target
 /x/target
-/x/Cargo.lock
 quests.db
-deno.lock
+.trash/
+.env
+.output/
+node_modules/
+rust-analyzer.json
+.zed
