@@ -1,4 +1,11 @@
 {
+  "$schema": "https://raw.githubusercontent.com/denoland/deno/refs/heads/main/cli/schemas/config-file.v1.json",
+  "license": "MIT",
+  "nodeModulesDir": "none",
+  "imports": {},
+  "compilerOptions": {
+    "strict": true
+  },
   "lint": {
     "exclude": ["static/js/datastar.js"]
   },

@@ -1,2 +1,4 @@
 [tools]
 act = "latest"
+deno = "latest"
+lefthook = "latest"
