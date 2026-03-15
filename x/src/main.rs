@@ -1,5 +1,6 @@
 use anyhow::{Context, Result, bail};
 use clap::{Parser, Subcommand};
+use reqwest::Client;
 use std::process::{Command, Stdio};
 
 const VERSION: &str = env!("APP_VERSION");
@@ -53,6 +54,11 @@ enum Commands {
     },
     /// Process assets (favicons, icons)
     Assets,
+    /// Run browser/E2E tests
+    Browser {
+        #[arg(default_value = "false")]
+        headed: bool,
+    },
 }
 
 #[derive(Subcommand)]
@@ -117,6 +123,7 @@ fn main() -> Result<()> {
         Commands::Bundle { command } => bundle(command),
         Commands::Commit { command } => commit(command),
         Commands::Assets => assets(),
+        Commands::Browser { headed } => browser(headed),
     }
 }
 
@@ -147,13 +154,13 @@ fn run_cmd(program: &str, args: &[&str]) -> Result<()> {
 }
 
 fn test(args: &[String]) -> Result<()> {
-    let mut cmd_args = vec!["test", "--lib"];
+    let mut cmd_args = vec!["test", "--lib", "--features", "test-utils"];
     cmd_args.extend(args.iter().map(|s| s.as_str()));
     run_cargo(&cmd_args)
 }
 
 fn verify(args: &[String]) -> Result<()> {
-    let mut cmd_args = vec!["test"];
+    let mut cmd_args = vec!["test", "--features", "test-utils"];
     cmd_args.extend(args.iter().map(|s| s.as_str()));
     run_cargo(&cmd_args)
 }
@@ -183,7 +190,7 @@ fn lint() -> Result<()> {
 fn check() -> Result<()> {
     lint()?;
     verify(&[])?;
-    run_cargo(&["check"])
+    run_cargo(&["check", "--features", "test-utils"])
 }
 
 fn run(log_level: &str, subcommand: &str) -> Result<()> {
@@ -304,21 +311,35 @@ fn bundle(command: BundleCommands) -> Result<()> {
 }
 
 fn bundle_datastar(version: &str) -> Result<()> {
-    ensure_deno()?;
-    run_cmd(
-        "deno",
-        &[
-            "bundle",
-            "--minify",
-            &format!(
-                "https://cdn.jsdelivr.net/gh/starfederation/datastar@{}/bundles/datastar.js",
-                version
-            ),
-            "--sourcemap=external",
-            "-o",
-            "static/js/datastar.js",
-        ],
-    )
+    std::fs::create_dir_all("static/js")?;
+
+    let runtime = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()?;
+
+    runtime.block_on(async {
+        let client = Client::new();
+
+        let js_url = format!(
+            "https://cdn.jsdelivr.net/gh/starfederation/datastar@{}/bundles/datastar.js",
+            version
+        );
+        let map_url = format!(
+            "https://cdn.jsdelivr.net/gh/starfederation/datastar@{}/bundles/datastar.js.map",
+            version
+        );
+
+        let (js_result, map_result) =
+            tokio::join!(client.get(&js_url).send(), client.get(&map_url).send());
+
+        let js_content = js_result?.bytes().await?;
+        std::fs::write("static/js/datastar.js", &js_content)?;
+
+        let map_content = map_result?.bytes().await?;
+        std::fs::write("static/js/datastar.js.map", &map_content)?;
+
+        Ok::<(), anyhow::Error>(())
+    })
 }
 
 fn assets() -> Result<()> {
@@ -437,6 +458,25 @@ fn check_clean() -> Result<()> {
 
     if !output.stdout.is_empty() {
         bail!("Working directory is dirty. Commit or stash changes before release.");
+    }
+    Ok(())
+}
+
+fn browser(headed: bool) -> Result<()> {
+    let mut args = vec!["task", "test:e2e"];
+
+    if headed {
+        args.push("--");
+        args.push("--headed");
+    }
+
+    let status = Command::new("deno")
+        .args(&args)
+        .status()
+        .context("Failed to run playwright tests")?;
+
+    if !status.success() {
+        bail!("Playwright tests failed");
     }
     Ok(())
 }

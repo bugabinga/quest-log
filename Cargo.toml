@@ -9,26 +9,32 @@ edition = "2024"
 name = "quest-log"
 version.workspace = true
 edition.workspace = true
+description = "A gamified quest log and task tracker"
+license = "MIT"
+repository = "https://github.com/olij/quest-log"
+readme = "README.md"
+keywords = ["quest", "gamification", "task", "todo", "rpg"]
+categories = ["gamification", "productivity", "web-applications"]
 
 [lib]
 doctest = false
 
 [dependencies]
-axum = { version = "0.8", features = ["multipart"] }
-datastar = { version = "0.3", features = ["axum"] }
-maud = "0.27"
-sqlx = { version = "0.8", features = [
+axum = { version = "0", features = ["multipart"] }
+datastar = { version = "0", features = ["axum"] }
+maud = "0"
+sqlx = { version = "0", features = [
   "runtime-tokio",
   "sqlite",
   "chrono",
   "macros",
   "migrate",
 ] }
-dotenvy = "0.15"
-thiserror = "2.0"
-serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
-tokio = { version = "1.50", features = [
+dotenvy = "0"
+thiserror = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tokio = { version = "1", features = [
   "rt",
   "rt-multi-thread",
   "sync",
@@ -37,34 +43,32 @@ tokio = { version = "1.50", features = [
   "net",
   "macros",
 ] }
-tokio-stream = { version = "0.1", features = ["sync"] }
-static-serve = "0.5"
-chrono = { version = "0.4", features = ["serde"] }
-tracing = "0.1"
-tracing-subscriber = { version = "0.3", features = ["env-filter"] }
-tracing-error = "0.2"
+tokio-stream = { version = "0", features = ["sync"] }
+static-serve = "0"
+chrono = { version = "0", features = ["serde"] }
+tracing = "0"
+tracing-subscriber = { version = "0", features = ["env-filter"] }
+tracing-error = "0"
 clap = { version = "4", features = ["derive"] }
-futures = "0.3"
-async-stream = "0.3"
-ratatui = "0.30"
-crossterm = "0.29"
-tower = "0.5"
-tower-sessions = "0.14"
-argon2 = "0.5"
-axum-extra = { version = "0.10", features = ["cookie", "multipart"] }
-rand = "0.8"
+futures = "0"
+async-stream = "0"
+crossterm = "0"
+tower = "0"
+tower-sessions = "0"
+argon2 = { version = "0" }
+axum-extra = { version = "0", features = ["cookie", "multipart"] }
+rand_core = { version = "0", features = ["getrandom"] }
 rpassword = "7"
 
 [dev-dependencies]
-reqwest = { version = "0.13", features = ["json", "stream"] }
-tokio-test = "0.4"
-proptest = "1.10"
-tempfile = "3.26.0"
-ratatui-testlib = "0.1"
-insta = { version = "1.46", features = ["yaml"] }
-pretty_assertions = "1.4"
-nix = { version = "0.31", optional = false }
-libc = { version = "0.2", optional = false }
+reqwest = { version = "0", features = ["json", "stream"] }
+tokio-test = "0"
+proptest = "1"
+tempfile = "3"
+insta = { version = "1", features = ["yaml"] }
+pretty_assertions = "1"
+nix = { version = "0" }
+libc = { version = "0" }
 
 [build-dependencies]
 
@@ -81,4 +85,35 @@ panic = 'abort'
 strip = true
 
 [target.'cfg(target_os = "linux")'.dependencies]
-sd-notify = "0.4"
+sd-notify = "0"
+
+[features]
+test-utils = []
+
+[lints.clippy]
+pedantic = { level = "warn", priority = -1 }
+suspicious = { level = "warn", priority = -1 }
+complexity = { level = "warn", priority = -1 }
+perf = { level = "warn", priority = -1 }
+style = { level = "warn", priority = -1 }
+cargo = { level = "warn", priority = -1 }
+
+arithmetic_side_effects = "warn"
+expect_used = { level = "warn" }
+should_panic_without_expect = "warn"
+unused_result_ok = "warn"
+unwrap_used = "warn"
+arbitrary_source_item_ordering = "warn"
+pub_use = "warn"
+todo = "warn"
+
+missing_panics_doc = "deny"
+allow_attributes_without_reason = "deny"
+cfg_not_test = "deny"
+verbose_file_reads = "deny"
+undocumented_unsafe_blocks = "deny"
+multiple_unsafe_ops_per_block = "deny"
+unnecessary_safety_comment = "deny"
+unnecessary_safety_doc = "deny"
+unused_unsafe = "deny"
+tests_outside_test_module = "deny"

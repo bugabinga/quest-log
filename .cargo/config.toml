@@ -1,2 +1,8 @@
 [alias]
 x = "run --package x --"
+
+[profile.dev.features]
+test-utils = true
+
+[profile.test.features]
+test-utils = true

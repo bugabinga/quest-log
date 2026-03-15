@@ -4,6 +4,22 @@ thread_local! {
     static FAKE_TODAY: std::cell::RefCell<Option<NaiveDate>> = const { std::cell::RefCell::new(None) };
 }
 
+/// Returns the current date.
+///
+/// This function provides the current date with the following precedence:
+/// 1. **Test Override**: If [`set_today()`] was called (thread-local), returns that date
+/// 2. **Environment Variable**: If `QUEST_LOG_TODAY` is set (debug builds only)
+/// 3. **Real Date**: Returns the actual current date from the system clock
+///
+/// # Testing
+///
+/// For integration tests, use [`set_today()`] and [`reset_today()`] to override
+/// the date. This provides better test isolation than environment variables.
+///
+/// For manual testing, set the `QUEST_LOG_TODAY` environment variable:
+/// - Specific date: `QUEST_LOG_TODAY=2024-01-15`
+/// - Weekday number: `QUEST_LOG_TODAY=1` (0=Sunday, 1=Monday, etc.)
+/// - Weekday name: `QUEST_LOG_TODAY=Monday`
 pub fn today() -> NaiveDate {
     if let Some(date) = FAKE_TODAY.with(|m| *m.borrow()) {
         return date;
@@ -26,9 +42,10 @@ fn parse_today_override(val: &str) -> NaiveDate {
         && num <= 6
     {
         let today = today();
-        let current_weekday = today.weekday().num_days_from_sunday() as i64;
-        let target = num as i64;
-        return today - chrono::Duration::days(current_weekday - target);
+        let current_weekday = today.weekday().num_days_from_sunday();
+        let target = num as u32;
+        let offset = current_weekday as i64 - target as i64;
+        return today - chrono::Duration::days(offset);
     }
 
     let lower = val.to_lowercase();
@@ -56,12 +73,59 @@ fn parse_today_override(val: &str) -> NaiveDate {
     panic!("Invalid QUEST_LOG_TODAY value: {val}");
 }
 
-#[allow(dead_code)]
+/// Override the current date for testing purposes.
+///
+/// This function sets a thread-local variable that makes [`today()`] return
+/// the specified date instead of the real current date.
+///
+/// # Why Thread-Locals Instead of Environment Variables?
+///
+/// Integration tests use thread-locals (via this function) instead of the
+/// `QUEST_LOG_TODAY` environment variable because:
+///
+/// 1. **Test Isolation**: Thread-locals are isolated per-thread, so each test
+///    can set its own date without affecting other concurrent tests.
+/// 2. **No Cleanup Required**: Environment variables are process-wide and
+///    require manual cleanup after each test to avoid polluting other tests.
+///    Thread-locals automatically reset when the test completes.
+/// 3. **No Race Conditions**: Environment variables can cause race conditions
+///    when tests run in parallel. Thread-locals are thread-safe.
+/// 4. **Immediate Effect**: Setting a thread-local takes effect immediately,
+///    whereas environment variables need process restart.
+///
+/// # Alternative: QUEST_LOG_TODAY Environment Variable
+///
+/// For manual testing, you can set the `QUEST_LOG_TODAY` environment variable
+/// (only works in debug builds):
+///
+/// ```bash
+/// # Set to a specific date
+/// QUEST_LOG_TODAY=2024-01-01 cargo run
+///
+/// # Set to a specific weekday (0 = Sunday, 1 = Monday, etc.)
+/// QUEST_LOG_TODAY=1 cargo run  # Forces Monday
+///
+/// # Set to a weekday by name
+/// QUEST_LOG_TODAY=Monday cargo run
+/// ```
+///
+/// Note: This environment variable is only checked in debug builds for
+/// security reasons (prevents production date manipulation).
+#[cfg(feature = "test-utils")]
+#[allow(dead_code, reason = "only used in tests")]
 pub fn set_today(date: NaiveDate) {
     FAKE_TODAY.with(|m| *m.borrow_mut() = Some(date));
 }
 
-#[allow(dead_code)]
+/// Reset the date override set by [`set_today()`].
+///
+/// After calling this function, [`today()`] will return the real current date
+/// again.
+///
+/// This is typically called in test cleanup (e.g., in a `Drop` impl or
+/// `after_each` hook) to ensure tests don't affect each other.
+#[cfg(feature = "test-utils")]
+#[allow(dead_code, reason = "only used in tests")]
 pub fn reset_today() {
     FAKE_TODAY.with(|m| *m.borrow_mut() = None);
 }
@@ -142,171 +206,163 @@ mod tests {
         assert_eq!(end, NaiveDate::from_ymd_opt(2025, 1, 5).unwrap()); // Sunday
     }
 
-    fn set_today_for_test(date: NaiveDate) {
-        set_today(date);
-    }
-
-    fn cleanup() {
-        reset_today();
-    }
-
     #[test]
     fn test_weekday_0_sunday() {
         let reference = NaiveDate::from_ymd_opt(2024, 1, 3).unwrap(); // Wednesday
-        set_today_for_test(reference);
+        set_today(reference);
         let result = parse_today_override("0");
         assert_eq!(result, NaiveDate::from_ymd_opt(2023, 12, 31).unwrap()); // Previous Sunday
-        cleanup();
+        reset_today();
     }
 
     #[test]
     fn test_weekday_1_monday() {
         let reference = NaiveDate::from_ymd_opt(2024, 1, 3).unwrap(); // Wednesday
-        set_today_for_test(reference);
+        set_today(reference);
         let result = parse_today_override("1");
         assert_eq!(result, NaiveDate::from_ymd_opt(2024, 1, 1).unwrap());
-        cleanup();
+        reset_today();
     }
 
     #[test]
     fn test_weekday_2_tuesday() {
         let reference = NaiveDate::from_ymd_opt(2024, 1, 3).unwrap(); // Wednesday
-        set_today_for_test(reference);
+        set_today(reference);
         let result = parse_today_override("2");
         assert_eq!(result, NaiveDate::from_ymd_opt(2024, 1, 2).unwrap());
-        cleanup();
+        reset_today();
     }
 
     #[test]
     fn test_weekday_3_wednesday() {
         let reference = NaiveDate::from_ymd_opt(2024, 1, 3).unwrap(); // Wednesday
-        set_today_for_test(reference);
+        set_today(reference);
         let result = parse_today_override("3");
         assert_eq!(result, NaiveDate::from_ymd_opt(2024, 1, 3).unwrap());
-        cleanup();
+        reset_today();
     }
 
     #[test]
     fn test_weekday_4_thursday() {
         let reference = NaiveDate::from_ymd_opt(2024, 1, 3).unwrap(); // Wednesday
-        set_today_for_test(reference);
+        set_today(reference);
         let result = parse_today_override("4");
         assert_eq!(result, NaiveDate::from_ymd_opt(2024, 1, 4).unwrap());
-        cleanup();
+        reset_today();
     }
 
     #[test]
     fn test_weekday_5_friday() {
         let reference = NaiveDate::from_ymd_opt(2024, 1, 3).unwrap(); // Wednesday
-        set_today_for_test(reference);
+        set_today(reference);
         let result = parse_today_override("5");
         assert_eq!(result, NaiveDate::from_ymd_opt(2024, 1, 5).unwrap());
-        cleanup();
+        reset_today();
     }
 
     #[test]
     fn test_weekday_6_saturday() {
         let reference = NaiveDate::from_ymd_opt(2024, 1, 3).unwrap(); // Wednesday
-        set_today_for_test(reference);
+        set_today(reference);
         let result = parse_today_override("6");
         assert_eq!(result, NaiveDate::from_ymd_opt(2024, 1, 6).unwrap());
-        cleanup();
+        reset_today();
     }
 
     #[test]
     #[should_panic(expected = "Invalid QUEST_LOG_TODAY value: 7")]
     fn test_weekday_7_invalid() {
         let reference = NaiveDate::from_ymd_opt(2024, 1, 3).unwrap();
-        set_today_for_test(reference);
+        set_today(reference);
         let _ = parse_today_override("7");
-        cleanup();
+        reset_today();
     }
 
     #[test]
     #[should_panic(expected = "Invalid QUEST_LOG_TODAY value: 255")]
     fn test_weekday_255_invalid() {
         let reference = NaiveDate::from_ymd_opt(2024, 1, 3).unwrap();
-        set_today_for_test(reference);
+        set_today(reference);
         let _ = parse_today_override("255");
-        cleanup();
+        reset_today();
     }
 
     #[test]
     #[should_panic(expected = "Invalid QUEST_LOG_TODAY value: -1")]
     fn test_weekday_negative_invalid() {
         let reference = NaiveDate::from_ymd_opt(2024, 1, 3).unwrap();
-        set_today_for_test(reference);
+        set_today(reference);
         let _ = parse_today_override("-1");
-        cleanup();
+        reset_today();
     }
 
     #[test]
     fn test_weekday_name_sunday() {
         let reference = NaiveDate::from_ymd_opt(2024, 1, 3).unwrap(); // Wednesday
-        set_today_for_test(reference);
+        set_today(reference);
         let result = parse_today_override("Sunday");
         assert_eq!(result, NaiveDate::from_ymd_opt(2023, 12, 31).unwrap());
-        cleanup();
+        reset_today();
     }
 
     #[test]
     fn test_weekday_name_monday() {
         let reference = NaiveDate::from_ymd_opt(2024, 1, 3).unwrap();
-        set_today_for_test(reference);
+        set_today(reference);
         let result = parse_today_override("Monday");
         assert_eq!(result, NaiveDate::from_ymd_opt(2024, 1, 1).unwrap());
-        cleanup();
+        reset_today();
     }
 
     #[test]
     fn test_weekday_name_tuesday() {
         let reference = NaiveDate::from_ymd_opt(2024, 1, 3).unwrap();
-        set_today_for_test(reference);
+        set_today(reference);
         let result = parse_today_override("Tuesday");
         assert_eq!(result, NaiveDate::from_ymd_opt(2024, 1, 2).unwrap());
-        cleanup();
+        reset_today();
     }
 
     #[test]
     fn test_weekday_name_wednesday() {
         let reference = NaiveDate::from_ymd_opt(2024, 1, 3).unwrap();
-        set_today_for_test(reference);
+        set_today(reference);
         let result = parse_today_override("Wednesday");
         assert_eq!(result, NaiveDate::from_ymd_opt(2024, 1, 3).unwrap());
-        cleanup();
+        reset_today();
     }
 
     #[test]
     fn test_weekday_name_thursday() {
         let reference = NaiveDate::from_ymd_opt(2024, 1, 3).unwrap();
-        set_today_for_test(reference);
+        set_today(reference);
         let result = parse_today_override("Thursday");
         assert_eq!(result, NaiveDate::from_ymd_opt(2024, 1, 4).unwrap());
-        cleanup();
+        reset_today();
     }
 
     #[test]
     fn test_weekday_name_friday() {
         let reference = NaiveDate::from_ymd_opt(2024, 1, 3).unwrap();
-        set_today_for_test(reference);
+        set_today(reference);
         let result = parse_today_override("Friday");
         assert_eq!(result, NaiveDate::from_ymd_opt(2024, 1, 5).unwrap());
-        cleanup();
+        reset_today();
     }
 
     #[test]
     fn test_weekday_name_saturday() {
         let reference = NaiveDate::from_ymd_opt(2024, 1, 3).unwrap();
-        set_today_for_test(reference);
+        set_today(reference);
         let result = parse_today_override("Saturday");
         assert_eq!(result, NaiveDate::from_ymd_opt(2024, 1, 6).unwrap());
-        cleanup();
+        reset_today();
     }
 
     #[test]
     fn test_weekday_name_case_insensitive() {
         let reference = NaiveDate::from_ymd_opt(2024, 1, 3).unwrap();
-        set_today_for_test(reference);
+        set_today(reference);
 
         assert_eq!(
             parse_today_override("MONDAY"),
@@ -321,223 +377,223 @@ mod tests {
             NaiveDate::from_ymd_opt(2024, 1, 1).unwrap()
         );
 
-        cleanup();
+        reset_today();
     }
 
     #[test]
     fn test_weekday_abbrev_sun() {
         let reference = NaiveDate::from_ymd_opt(2024, 1, 3).unwrap();
-        set_today_for_test(reference);
+        set_today(reference);
         let result = parse_today_override("Sun");
         assert_eq!(result, NaiveDate::from_ymd_opt(2023, 12, 31).unwrap());
-        cleanup();
+        reset_today();
     }
 
     #[test]
     fn test_weekday_abbrev_mon() {
         let reference = NaiveDate::from_ymd_opt(2024, 1, 3).unwrap();
-        set_today_for_test(reference);
+        set_today(reference);
         let result = parse_today_override("Mon");
         assert_eq!(result, NaiveDate::from_ymd_opt(2024, 1, 1).unwrap());
-        cleanup();
+        reset_today();
     }
 
     #[test]
     fn test_weekday_abbrev_tue() {
         let reference = NaiveDate::from_ymd_opt(2024, 1, 3).unwrap();
-        set_today_for_test(reference);
+        set_today(reference);
         let result = parse_today_override("Tue");
         assert_eq!(result, NaiveDate::from_ymd_opt(2024, 1, 2).unwrap());
-        cleanup();
+        reset_today();
     }
 
     #[test]
     fn test_weekday_abbrev_wed() {
         let reference = NaiveDate::from_ymd_opt(2024, 1, 3).unwrap();
-        set_today_for_test(reference);
+        set_today(reference);
         let result = parse_today_override("Wed");
         assert_eq!(result, NaiveDate::from_ymd_opt(2024, 1, 3).unwrap());
-        cleanup();
+        reset_today();
     }
 
     #[test]
     fn test_weekday_abbrev_thu() {
         let reference = NaiveDate::from_ymd_opt(2024, 1, 3).unwrap();
-        set_today_for_test(reference);
+        set_today(reference);
         let result = parse_today_override("Thu");
         assert_eq!(result, NaiveDate::from_ymd_opt(2024, 1, 4).unwrap());
-        cleanup();
+        reset_today();
     }
 
     #[test]
     fn test_weekday_abbrev_fri() {
         let reference = NaiveDate::from_ymd_opt(2024, 1, 3).unwrap();
-        set_today_for_test(reference);
+        set_today(reference);
         let result = parse_today_override("Fri");
         assert_eq!(result, NaiveDate::from_ymd_opt(2024, 1, 5).unwrap());
-        cleanup();
+        reset_today();
     }
 
     #[test]
     fn test_weekday_abbrev_sat() {
         let reference = NaiveDate::from_ymd_opt(2024, 1, 3).unwrap();
-        set_today_for_test(reference);
+        set_today(reference);
         let result = parse_today_override("Sat");
         assert_eq!(result, NaiveDate::from_ymd_opt(2024, 1, 6).unwrap());
-        cleanup();
+        reset_today();
     }
 
     #[test]
     #[should_panic(expected = "Invalid QUEST_LOG_TODAY value: Funday")]
     fn test_weekday_name_invalid() {
         let reference = NaiveDate::from_ymd_opt(2024, 1, 3).unwrap();
-        set_today_for_test(reference);
+        set_today(reference);
         let _ = parse_today_override("Funday");
-        cleanup();
+        reset_today();
     }
 
     #[test]
     #[should_panic(expected = "Invalid QUEST_LOG_TODAY value: Javaday")]
     fn test_weekday_name_invalid_javaday() {
         let reference = NaiveDate::from_ymd_opt(2024, 1, 3).unwrap();
-        set_today_for_test(reference);
+        set_today(reference);
         let _ = parse_today_override("Javaday");
-        cleanup();
+        reset_today();
     }
 
     #[test]
     fn test_full_date_2026_02_20() {
         let reference = NaiveDate::from_ymd_opt(2024, 1, 3).unwrap();
-        set_today_for_test(reference);
+        set_today(reference);
         let result = parse_today_override("2026-02-20");
         assert_eq!(result, NaiveDate::from_ymd_opt(2026, 2, 20).unwrap());
-        cleanup();
+        reset_today();
     }
 
     #[test]
     fn test_full_date_2024_01_01() {
         let reference = NaiveDate::from_ymd_opt(2024, 6, 15).unwrap();
-        set_today_for_test(reference);
+        set_today(reference);
         let result = parse_today_override("2024-01-01");
         assert_eq!(result, NaiveDate::from_ymd_opt(2024, 1, 1).unwrap());
-        cleanup();
+        reset_today();
     }
 
     #[test]
     fn test_full_date_2024_12_31() {
         let reference = NaiveDate::from_ymd_opt(2024, 1, 1).unwrap();
-        set_today_for_test(reference);
+        set_today(reference);
         let result = parse_today_override("2024-12-31");
         assert_eq!(result, NaiveDate::from_ymd_opt(2024, 12, 31).unwrap());
-        cleanup();
+        reset_today();
     }
 
     #[test]
     fn test_full_date_leap_year() {
         let reference = NaiveDate::from_ymd_opt(2024, 1, 1).unwrap();
-        set_today_for_test(reference);
+        set_today(reference);
         let result = parse_today_override("2024-02-29");
         assert_eq!(result, NaiveDate::from_ymd_opt(2024, 2, 29).unwrap());
-        cleanup();
+        reset_today();
     }
 
     #[test]
     #[should_panic(expected = "Invalid QUEST_LOG_TODAY value: 20-02-2026")]
     fn test_full_date_invalid_format_dd_mm_yyyy() {
         let reference = NaiveDate::from_ymd_opt(2024, 1, 3).unwrap();
-        set_today_for_test(reference);
+        set_today(reference);
         let _ = parse_today_override("20-02-2026");
-        cleanup();
+        reset_today();
     }
 
     #[test]
     #[should_panic(expected = "Invalid QUEST_LOG_TODAY value: 2026/02/20")]
     fn test_full_date_invalid_format_slashes() {
         let reference = NaiveDate::from_ymd_opt(2024, 1, 3).unwrap();
-        set_today_for_test(reference);
+        set_today(reference);
         let _ = parse_today_override("2026/02/20");
-        cleanup();
+        reset_today();
     }
 
     #[test]
     #[should_panic(expected = "Invalid QUEST_LOG_TODAY value: ")]
     fn test_empty_string() {
         let reference = NaiveDate::from_ymd_opt(2024, 1, 3).unwrap();
-        set_today_for_test(reference);
+        set_today(reference);
         let _ = parse_today_override("");
-        cleanup();
+        reset_today();
     }
 
     #[test]
     fn test_whitespace_trimmed() {
         let reference = NaiveDate::from_ymd_opt(2024, 1, 3).unwrap();
-        set_today_for_test(reference);
+        set_today(reference);
         let result = parse_today_override("  1  ");
         assert_eq!(result, NaiveDate::from_ymd_opt(2024, 1, 1).unwrap());
-        cleanup();
+        reset_today();
     }
 
     #[test]
     fn test_reference_date_is_sunday() {
         // When reference is Sunday, weekday 0 should return same day
         let reference = NaiveDate::from_ymd_opt(2024, 1, 7).unwrap(); // Sunday
-        set_today_for_test(reference);
+        set_today(reference);
         let result = parse_today_override("0");
         assert_eq!(result, NaiveDate::from_ymd_opt(2024, 1, 7).unwrap());
-        cleanup();
+        reset_today();
     }
 
     #[test]
     fn test_reference_date_is_saturday() {
         // When reference is Saturday, weekday 6 should return same day
         let reference = NaiveDate::from_ymd_opt(2024, 1, 6).unwrap(); // Saturday
-        set_today_for_test(reference);
+        set_today(reference);
         let result = parse_today_override("6");
         assert_eq!(result, NaiveDate::from_ymd_opt(2024, 1, 6).unwrap());
-        cleanup();
+        reset_today();
     }
 
     #[test]
     fn test_cross_month_boundary() {
         // Wednesday Jan 3 2024 → request Monday (1) → should give Jan 1
         let reference = NaiveDate::from_ymd_opt(2024, 1, 3).unwrap();
-        set_today_for_test(reference);
+        set_today(reference);
         let result = parse_today_override("1");
         assert_eq!(result, NaiveDate::from_ymd_opt(2024, 1, 1).unwrap());
-        cleanup();
+        reset_today();
     }
 
     #[test]
     fn test_cross_year_boundary() {
         // Dec 31 2024 is Tuesday → request Tuesday (2) → should give Dec 31
         let reference = NaiveDate::from_ymd_opt(2024, 12, 31).unwrap(); // Tuesday
-        set_today_for_test(reference);
+        set_today(reference);
         let result = parse_today_override("2");
         assert_eq!(result, NaiveDate::from_ymd_opt(2024, 12, 31).unwrap());
-        cleanup();
+        reset_today();
     }
 
     #[test]
     fn test_number_takes_precedence_over_name() {
         // "1" should parse as number, not name
         let reference = NaiveDate::from_ymd_opt(2024, 1, 3).unwrap();
-        set_today_for_test(reference);
+        set_today(reference);
         let result = parse_today_override("1");
         assert_eq!(result, NaiveDate::from_ymd_opt(2024, 1, 1).unwrap());
-        cleanup();
+        reset_today();
     }
 
     #[test]
     fn test_fake_today_takes_precedence_over_real() {
         // When fake is set, it should be returned regardless of env var
         let fake_date = NaiveDate::from_ymd_opt(2024, 6, 15).unwrap();
-        set_today_for_test(fake_date);
+        set_today(fake_date);
 
         // The fake should take precedence
         let result = today();
         assert_eq!(result, fake_date);
 
-        cleanup();
+        reset_today();
     }
 
     #[test]
@@ -547,7 +603,7 @@ mod tests {
         let result = today();
         // Just verify it returns some valid date in the valid range
         assert!(result.year() >= 2020 && result.year() <= 2030);
-        cleanup();
+        reset_today();
     }
 
     #[test]

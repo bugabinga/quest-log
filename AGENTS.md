@@ -4,43 +4,55 @@
 
 **ALWAYS** use `cargo x` for development tasks. Commands like `cargo x test`,
 `cargo x lint`, `cargo x check` should be used instead of calling cargo
-directly.
+directly. All build/deploy/maintenance commands MUST run through `cargo x`.
+Direct `cargo`, `rustc`, or other tool commands are forbidden. If a command is
+missing from `x/src/main.rs`, add it there instead.
 
-All build/deploy/maintenance commands MUST run through `cargo x`. Direct
-`cargo`, `rustc`, or other tool commands are forbidden. If a command is missing
-from `x/src/main.rs`, add it there instead.
+## Project Structure
 
-## Skills
+### Source code
 
-Load these skills for this codebase:
+src/ ├── main.rs # Server entry point ├── lib.rs # Core business logic ├──
+database.rs # SQLite operations ├── models.rs # Data structures ├── handlers/ #
+HTTP route handlers │ ├── quests.rs # Main UI endpoints │ ├── parent.rs #
+Settings endpoints │ └── stats.rs # Highscore endpoints ├── auth.rs #
+Authentication ├── state.rs # App state management ├── time.rs # Time utilities
+├── systemd.rs # Systemd integration └── ui/ # UI fragments └── fragments/ #
+HTML components
 
-- **rust** - Core Rust patterns and build optimization
-- **rust-maud** - HTML template compilation
-- **datastar** - Frontend reactivity and SSE
-- **logging-monitoring** - Tracing and observability
-- **testing-rust** - Unit and integration tests
-- **error-handling** - Error patterns
-- **security-checklist** - Input validation
-- **git-commit** - Semantic commits, conventional format
-- **git-merge** - Merge branches, resolve conflicts
-- **git-branch** - Feature branch management
+### Test files
 
-Use `/skill name <name>` to load before working on relevant tasks.
+tests/ # Integration tests
 
-## Code Quality
+### Configuration
 
-Extreme high production quality, well compressed (DRY), simple structural style
-avoiding abstractions and indirection.
+Containerfile # Container build definition migrations/ # Database migrations
+static/ # Static assets (images, JS, CSS) documentation/ # Documentation and
+ADRs
 
-## Testing
+## Commands
 
-**Unit Tests:** `src/*` - fast feedback for core logic
+| Command             | Description                              |
+| ------------------- | ---------------------------------------- |
+| `cargo x test`      | Run unit tests                           |
+| `cargo x verify`    | Run all tests (integration)              |
+| `cargo x fmt`       | Format Rust and JS code                  |
+| `cargo x lint`      | Check formatting, clippy, and lint       |
+| `cargo x check`     | Full check (lint + verify + cargo check) |
+| `cargo x run`       | Run the application                      |
+| `cargo x watch`     | Watch for changes and rebuild            |
+| `cargo x clean`     | Clean build artifacts and database       |
+| `cargo x container` | Container operations (build, push, etc.) |
+| `cargo x bundle`    | Bundle datastar from CDN                 |
+| `cargo x assets`    | Process assets (favicons, icons)         |
+| `cargo x commit`    | Validate commit message format           |
 
-**Integration Tests:** `tests/` directory - complete workflows
+**Note:** Test commands (`cargo x test`, `cargo x verify`, `cargo x check`)
+automatically enable the `test-utils` feature flag, which provides test
+utilities like date override functions. Developers should always use `cargo x`
+commands instead of running `cargo` directly.
 
-Use in-memory SQLite databases for isolation.
-
-## Code Style
+## Code Standards
 
 ### Rust
 
@@ -55,6 +67,48 @@ Use in-memory SQLite databases for isolation.
 - Semantic HTML, BEM naming, flexbox/grid layouts, mobile-first
 - Never hardcode colors - derive everything from 3 base colors
 - Use data attributes for datastar
+
+### Datastar + Maud + Axum Integration
+
+When building reactive UI features, follow these patterns:
+
+- Use Maud templates in `src/ui/fragments/` for type-safe HTML components
+- Return SSE streams with `PatchElements` and `PatchSignals` from handlers
+- Use `ReadSignals` extractor to get client-sent data
+- Enable view transitions for smooth animations
+- Broadcast updates to all connected clients via `state.bcast`
+
+**For guidance on Datastar/Maud/Axum integration, load the `datastar-maud-axum`
+skill.**
+
+## Environment
+
+Required:
+
+- `QUEST_LOG_DATA_DIR` - Directory path for storing the SQLite database file
+  (must be absolute path, default: current directory)
+- `PORT` - Server port (default: `3000`)
+
+Setup:
+
+- Database migrations are embedded in the binary and applied automatically at
+  startup
+- For explicit migration runs: `cargo x container migrate`
+
+## Gotchas
+
+- Systemd integration requires `--features systemd` flag (Linux only)
+- Container builds require clean git state for release builds
+- Datastar bundling requires deno to be installed
+- Tests must run with SQLite in-memory databases for isolation
+- HTML templates use Maud for compile-time validation
+- Environment variables must be set before running the application
+
+## External References
+
+For architecture details: @ARCHITECTURE.md For user manual:
+@documentation/user_manual/EDITOR.md For ADRs: @documentation/adrs/ For project
+overview: @README.md
 
 ## Commit Guidelines
 
