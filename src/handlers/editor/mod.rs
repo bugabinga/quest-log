@@ -148,6 +148,9 @@ pub struct LoginRequest {
 }
 
 /// Process login attempt
+///
+/// # Panics
+/// Never panics.
 pub async fn login_handler(
     State(state): State<AppState>,
     headers: HeaderMap,
@@ -281,18 +284,6 @@ pub async fn logout_handler(
 
 // ===== Quest CRUD =====
 
-/// Get all quests as JSON (for tab loading)
-pub async fn get_quests_handler(
-    State(state): State<AppState>,
-) -> Result<impl IntoResponse, EditorError> {
-    let quests = state.db.get_all_quests().await.map_err(|e| {
-        error!(error = %e, "Failed to load quests");
-        EditorError::Database
-    })?;
-
-    Ok(axum::Json(quests))
-}
-
 /// Create a new quest
 pub async fn create_quest_handler(
     State(state): State<AppState>,
@@ -403,40 +394,6 @@ pub async fn create_quest_handler(
     )))
 }
 
-/// Update a quest
-pub async fn update_quest_handler(
-    State(state): State<AppState>,
-    headers: HeaderMap,
-    Path(id): Path<i64>,
-    Form(request): Form<UpdateQuestRequest>,
-) -> Result<Sse<impl Stream<Item = Result<Event, std::convert::Infallible>>>, EditorError> {
-    // Validate session
-    extract_and_validate_session(&headers, &state).await?;
-
-    let quest = state.db.update_quest(id, request).await.map_err(|e| {
-        error!(error = %e, quest_id = id, "Failed to update quest");
-        EditorError::Database
-    })?;
-
-    if quest.is_none() {
-        warn!(quest_id = id, "Quest not found for update");
-        return Err(EditorError::NotFound);
-    }
-
-    info!(quest_id = id, "Quest updated");
-
-    let quests = state
-        .db
-        .get_all_quests()
-        .await
-        .map_err(|_| EditorError::Database)?;
-    let html = render_quests_table(&quests);
-
-    let events: Vec<Event> = vec![PatchElements::new(html).into()];
-
-    Ok(Sse::new(stream::iter(events.into_iter().map(Ok))))
-}
-
 /// Delete a quest
 pub async fn delete_quest_handler(
     State(state): State<AppState>,
@@ -477,19 +434,53 @@ pub async fn delete_quest_handler(
     Ok(Sse::new(stream::iter(events.into_iter().map(Ok))))
 }
 
-// ===== Reward CRUD =====
-
-/// Get all rewards as JSON
-pub async fn get_rewards_handler(
+/// Get all quests as JSON (for tab loading)
+pub async fn get_quests_handler(
     State(state): State<AppState>,
 ) -> Result<impl IntoResponse, EditorError> {
-    let rewards = state.db.get_all_rewards().await.map_err(|e| {
-        error!(error = %e, "Failed to load rewards");
+    let quests = state.db.get_all_quests().await.map_err(|e| {
+        error!(error = %e, "Failed to load quests");
         EditorError::Database
     })?;
 
-    Ok(axum::Json(rewards))
+    Ok(axum::Json(quests))
 }
+
+/// Update a quest
+pub async fn update_quest_handler(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(id): Path<i64>,
+    Form(request): Form<UpdateQuestRequest>,
+) -> Result<Sse<impl Stream<Item = Result<Event, std::convert::Infallible>>>, EditorError> {
+    // Validate session
+    extract_and_validate_session(&headers, &state).await?;
+
+    let quest = state.db.update_quest(id, request).await.map_err(|e| {
+        error!(error = %e, quest_id = id, "Failed to update quest");
+        EditorError::Database
+    })?;
+
+    if quest.is_none() {
+        warn!(quest_id = id, "Quest not found for update");
+        return Err(EditorError::NotFound);
+    }
+
+    info!(quest_id = id, "Quest updated");
+
+    let quests = state
+        .db
+        .get_all_quests()
+        .await
+        .map_err(|_| EditorError::Database)?;
+    let html = render_quests_table(&quests);
+
+    let events: Vec<Event> = vec![PatchElements::new(html).into()];
+
+    Ok(Sse::new(stream::iter(events.into_iter().map(Ok))))
+}
+
+// ===== Reward CRUD =====
 
 /// Create a new reward
 pub async fn create_reward_handler(
@@ -590,40 +581,6 @@ pub async fn create_reward_handler(
     Ok(Sse::new(stream::iter(events.into_iter().map(Ok))))
 }
 
-/// Update a reward
-pub async fn update_reward_handler(
-    State(state): State<AppState>,
-    headers: HeaderMap,
-    Path(id): Path<i64>,
-    Form(request): Form<UpdateRewardRequest>,
-) -> Result<Sse<impl Stream<Item = Result<Event, std::convert::Infallible>>>, EditorError> {
-    // Validate session
-    extract_and_validate_session(&headers, &state).await?;
-
-    let reward = state.db.update_reward(id, request).await.map_err(|e| {
-        error!(error = %e, reward_id = id, "Failed to update reward");
-        EditorError::Database
-    })?;
-
-    if reward.is_none() {
-        warn!(reward_id = id, "Reward not found for update");
-        return Err(EditorError::NotFound);
-    }
-
-    info!(reward_id = id, "Reward updated");
-
-    let rewards = state
-        .db
-        .get_all_rewards()
-        .await
-        .map_err(|_| EditorError::Database)?;
-    let html = render_rewards_table(&rewards);
-
-    let events: Vec<Event> = vec![PatchElements::new(html).into()];
-
-    Ok(Sse::new(stream::iter(events.into_iter().map(Ok))))
-}
-
 /// Delete a reward
 pub async fn delete_reward_handler(
     State(state): State<AppState>,
@@ -660,6 +617,52 @@ pub async fn delete_reward_handler(
         PatchElements::new(html).into(),
         PatchSignals::new(signals.to_string()).into(),
     ];
+
+    Ok(Sse::new(stream::iter(events.into_iter().map(Ok))))
+}
+
+/// Get all rewards as JSON
+pub async fn get_rewards_handler(
+    State(state): State<AppState>,
+) -> Result<impl IntoResponse, EditorError> {
+    let rewards = state.db.get_all_rewards().await.map_err(|e| {
+        error!(error = %e, "Failed to load rewards");
+        EditorError::Database
+    })?;
+
+    Ok(axum::Json(rewards))
+}
+
+/// Update a reward
+pub async fn update_reward_handler(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(id): Path<i64>,
+    Form(request): Form<UpdateRewardRequest>,
+) -> Result<Sse<impl Stream<Item = Result<Event, std::convert::Infallible>>>, EditorError> {
+    // Validate session
+    extract_and_validate_session(&headers, &state).await?;
+
+    let reward = state.db.update_reward(id, request).await.map_err(|e| {
+        error!(error = %e, reward_id = id, "Failed to update reward");
+        EditorError::Database
+    })?;
+
+    if reward.is_none() {
+        warn!(reward_id = id, "Reward not found for update");
+        return Err(EditorError::NotFound);
+    }
+
+    info!(reward_id = id, "Reward updated");
+
+    let rewards = state
+        .db
+        .get_all_rewards()
+        .await
+        .map_err(|_| EditorError::Database)?;
+    let html = render_rewards_table(&rewards);
+
+    let events: Vec<Event> = vec![PatchElements::new(html).into()];
 
     Ok(Sse::new(stream::iter(events.into_iter().map(Ok))))
 }
@@ -717,6 +720,14 @@ const DAY_NAMES: &[&str] = &[
     "Friday",
     "Saturday",
 ];
+
+fn escape_html(s: &str) -> String {
+    s.replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+        .replace('"', "&quot;")
+        .replace('\'', "&#39;")
+}
 
 fn render_quests_table(quests: &[crate::models::Quest]) -> String {
     let mut html = String::new();
@@ -787,37 +798,29 @@ fn render_rewards_table(rewards: &[crate::models::Reward]) -> String {
     html
 }
 
-fn escape_html(s: &str) -> String {
-    s.replace('&', "&amp;")
-        .replace('<', "&lt;")
-        .replace('>', "&gt;")
-        .replace('"', "&quot;")
-        .replace('\'', "&#39;")
-}
-
 /// Editor-specific errors
 #[derive(Debug, Clone, Copy)]
 pub enum EditorError {
-    NotFound,
     Database,
-    Validation,
+    NotFound,
     Unauthorized,
+    Validation,
 }
 
 impl IntoResponse for EditorError {
     fn into_response(self) -> Response<Body> {
         let message = match self {
-            EditorError::NotFound => "Not found",
             EditorError::Database => "Database error",
-            EditorError::Validation => "Invalid request",
+            EditorError::NotFound => "Not found",
             EditorError::Unauthorized => "Unauthorized",
+            EditorError::Validation => "Invalid request",
         };
 
         let status = match self {
-            EditorError::NotFound => StatusCode::NOT_FOUND,
             EditorError::Database => StatusCode::INTERNAL_SERVER_ERROR,
-            EditorError::Validation => StatusCode::BAD_REQUEST,
+            EditorError::NotFound => StatusCode::NOT_FOUND,
             EditorError::Unauthorized => StatusCode::UNAUTHORIZED,
+            EditorError::Validation => StatusCode::BAD_REQUEST,
         };
 
         (status, Html(message)).into_response()

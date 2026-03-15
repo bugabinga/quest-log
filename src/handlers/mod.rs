@@ -40,22 +40,6 @@ pub enum AppError {
 }
 
 impl AppError {
-    fn status_code(&self) -> StatusCode {
-        match self {
-            Self::Database => StatusCode::INTERNAL_SERVER_ERROR,
-            Self::NotFound => StatusCode::NOT_FOUND,
-            Self::ValidationError => StatusCode::BAD_REQUEST,
-        }
-    }
-
-    fn title(&self) -> &'static str {
-        match self {
-            Self::Database => "Oops!",
-            Self::NotFound => "Nothing Here",
-            Self::ValidationError => "Can't Do That",
-        }
-    }
-
     fn heading(&self) -> &'static str {
         match self {
             Self::Database => "Something went wrong",
@@ -71,24 +55,28 @@ impl AppError {
             Self::ValidationError => "You can only complete quests on their assigned day.",
         }
     }
+
+    fn status_code(&self) -> StatusCode {
+        match self {
+            Self::Database => StatusCode::INTERNAL_SERVER_ERROR,
+            Self::NotFound => StatusCode::NOT_FOUND,
+            Self::ValidationError => StatusCode::BAD_REQUEST,
+        }
+    }
+
+    fn title(&self) -> &'static str {
+        match self {
+            Self::Database => "Oops!",
+            Self::NotFound => "Nothing Here",
+            Self::ValidationError => "Can't Do That",
+        }
+    }
 }
 
 impl IntoResponse for AppError {
     fn into_response(self) -> Response<Body> {
-        let html = ui::error_page(self.title(), self.heading(), self.message());
+        let html = ui::error::error_page(self.title(), self.heading(), self.message());
         (self.status_code(), Html(html.into_string())).into_response()
-    }
-}
-
-fn get_fantasy_day_name(weekday: Weekday) -> &'static str {
-    match weekday {
-        Weekday::Mon => "Monday: Day of the Sword 🗡️",
-        Weekday::Tue => "Tuesday: Day of the Shield 🛡️",
-        Weekday::Wed => "Wednesday: Day of the Wand 🪄",
-        Weekday::Thu => "Thursday: Day of the Tome 📚",
-        Weekday::Fri => "Friday: Day of the Arcane ✨",
-        Weekday::Sat => "Saturday: Day of the Crown 👑",
-        Weekday::Sun => "Sunday: Day of Rest 🏰",
     }
 }
 
@@ -115,9 +103,21 @@ pub struct QuestsQuery {
 
 #[derive(Deserialize)]
 pub struct ToggleQuestRequest {
-    pub quest_id: QuestId,
     #[serde(default)]
     pub client_id: Option<String>,
+    pub quest_id: QuestId,
+}
+
+fn get_fantasy_day_name(weekday: Weekday) -> &'static str {
+    match weekday {
+        Weekday::Mon => "Monday: Day of the Sword 🗡️",
+        Weekday::Tue => "Tuesday: Day of the Shield 🛡️",
+        Weekday::Wed => "Wednesday: Day of the Wand 🪄",
+        Weekday::Thu => "Thursday: Day of the Tome 📚",
+        Weekday::Fri => "Friday: Day of the Arcane ✨",
+        Weekday::Sat => "Saturday: Day of the Crown 👑",
+        Weekday::Sun => "Sunday: Day of Rest 🏰",
+    }
 }
 
 #[instrument(name = "📜 GET /", skip(state, query), fields(date = ?query.date))]
@@ -161,11 +161,11 @@ async fn quests_handler(
     // Validate within current week (Monday to Sunday)
     let (week_start, week_end) = time::get_week_bounds(today);
     if selected_date < week_start || selected_date > week_end {
-        tracing::warn!(date = %selected_date, week_start = %week_start, week_end = %week_end, "⚠️  Date outside current week - rejecting");
+        tracing::warn!(date = %selected_date, week_start = %week_start, week_end = %week_end, "⚠️ Date outside current week - rejecting");
         return Err(AppError::ValidationError);
     }
 
-    let day_of_week = selected_date.weekday().num_days_from_sunday() as i32;
+    let day_of_week = selected_date.weekday().num_days_from_sunday().cast_signed();
 
     let quests = match db.get_quests_for_day(day_of_week).await {
         Ok(quests) => {
@@ -211,7 +211,7 @@ async fn quests_handler(
 
     let is_today = selected_date == today;
     let day_name = get_fantasy_day_name(selected_date.weekday());
-    let weekday_num = selected_date.weekday().num_days_from_monday() as u8;
+    let weekday_num = u8::try_from(selected_date.weekday().num_days_from_monday()).unwrap_or(0);
     let selected_date_formatted = time::format_date_display(selected_date);
     let can_navigate_left = selected_date > week_start;
     let can_navigate_right = selected_date < week_end;
@@ -228,7 +228,7 @@ async fn quests_handler(
         "nav-btn right disabled".to_string()
     };
 
-    let stats = db
+    let weekly_stats = db
         .get_week_stats(today, week_start, week_end)
         .await
         .unwrap_or_else(|e| {
@@ -238,13 +238,15 @@ async fn quests_handler(
                 exp_today_max: quests_display.iter().map(|q| q.exp_value).sum(),
                 week_exp: 0,
                 week_exp_max: 0,
-                quests_completed: quests_display.iter().filter(|q| q.completed_today).count()
-                    as i32,
-                quests_total: quests_display.len() as i32,
+                quests_completed: i32::try_from(
+                    quests_display.iter().filter(|q| q.completed_today).count(),
+                )
+                .unwrap_or(0),
+                quests_total: i32::try_from(quests_display.len()).unwrap_or(0),
             }
         });
 
-    let html = ui::quests_page(
+    let html = ui::quests::quests_page(
         &quests_display,
         &error_message,
         &selected_date_formatted,
@@ -257,10 +259,15 @@ async fn quests_handler(
         &prev_date,
         &next_date,
         weekday_num,
-        &stats,
+        &weekly_stats,
     );
 
     Ok(Html(html.into_string()).into_response())
+}
+
+#[derive(Deserialize)]
+pub struct NavigatePath {
+    pub date: String,
 }
 
 #[instrument(name = "✨ toggle_quest", skip(state, request), fields(quest_id = request.quest_id.as_i64()))]
@@ -286,7 +293,7 @@ pub async fn toggle_quest(
         return Err(AppError::NotFound);
     };
 
-    let quest_day = quest.day_of_week as u32;
+    let quest_day = quest.day_of_week.cast_unsigned();
     let today_day = today.weekday().num_days_from_sunday();
     if quest_day != today_day {
         tracing::warn!(
@@ -316,7 +323,7 @@ pub async fn toggle_quest(
 
     let quest_display = QuestDisplay::from_quest(quest, completed_today, today);
 
-    let day_of_week = today.weekday().num_days_from_sunday() as i32;
+    let day_of_week = today.weekday().num_days_from_sunday().cast_signed();
     let all_quests = db.get_quests_for_day(day_of_week).await.unwrap_or_default();
     let mut total_exp = 0;
     let mut quests_completed = 0;
@@ -331,7 +338,7 @@ pub async fn toggle_quest(
     }
 
     let exp_today_max: i32 = all_quests.iter().map(|q| q.exp_value).sum();
-    let quests_total = all_quests.len() as i32;
+    let quests_total = i32::try_from(all_quests.len()).unwrap_or(0);
 
     let (week_start, week_end) = time::get_week_bounds(today);
     let week_exp = db
@@ -376,11 +383,6 @@ pub async fn toggle_quest(
     Ok(Sse::new(stream))
 }
 
-#[derive(Deserialize)]
-pub struct NavigatePath {
-    pub date: String,
-}
-
 #[instrument(name = "🧭 navigate", skip(state, path, headers))]
 pub async fn navigate(
     State(state): State<AppState>,
@@ -398,14 +400,14 @@ pub async fn navigate(
         match NaiveDate::parse_from_str(&path.date, "%Y-%m-%d") {
             Ok(d) => d,
             Err(e) => {
-                tracing::warn!(target_date = %path.date, error = %e, "⚠️  Failed to parse date");
+                tracing::warn!(target_date = %path.date, error = %e, "⚠️ Failed to parse date");
                 return Err(AppError::NotFound);
             }
         }
     };
 
     let week_start = selected_date
-        - chrono::Duration::days(selected_date.weekday().num_days_from_monday() as i64);
+        - chrono::Duration::days(i64::from(selected_date.weekday().num_days_from_monday()));
     let week_end = week_start + chrono::Duration::days(6);
 
     if selected_date < week_start || selected_date > week_end {
@@ -413,7 +415,7 @@ pub async fn navigate(
         return Err(AppError::NotFound);
     }
 
-    let day_of_week = selected_date.weekday().num_days_from_sunday() as i32;
+    let day_of_week = selected_date.weekday().num_days_from_sunday().cast_signed();
     let is_today = selected_date == today;
 
     let quests = db
@@ -427,7 +429,7 @@ pub async fn navigate(
             .is_quest_completed_today(quest.id, selected_date)
             .await
             .unwrap_or_else(|e| {
-                tracing::warn!(error = %e, quest_id = quest.id, "⚠️  Failed to check completion status");
+                tracing::warn!(error = %e, quest_id = quest.id, "⚠️ Failed to check completion status");
                 false
             });
         quests_display.push(QuestDisplay::from_quest(
@@ -442,9 +444,10 @@ pub async fn navigate(
         .filter(|q| q.completed_today)
         .map(|q| q.exp_value)
         .sum();
-    let quests_completed = quests_display.iter().filter(|q| q.completed_today).count() as i32;
+    let quests_completed =
+        i32::try_from(quests_display.iter().filter(|q| q.completed_today).count()).unwrap_or(0);
     let exp_today_max: i32 = quests_display.iter().map(|q| q.exp_value).sum();
-    let quests_total = quests_display.len() as i32;
+    let quests_total = i32::try_from(quests_display.len()).unwrap_or(0);
 
     let week_exp = db
         .calculate_weekly_exp(week_start, week_end)
@@ -460,7 +463,7 @@ pub async fn navigate(
 
     let day_name = get_fantasy_day_name(selected_date.weekday()).to_string();
     let selected_date_formatted = time::format_date_display(selected_date);
-    let weekday_num = selected_date.weekday().num_days_from_monday() as u8;
+    let weekday_num = u8::try_from(selected_date.weekday().num_days_from_monday()).unwrap_or(0);
 
     let can_navigate_left = selected_date > week_start;
     let can_navigate_right = selected_date < week_end;
@@ -536,6 +539,13 @@ pub async fn navigate(
     Ok(Sse::new(stream))
 }
 
+#[derive(Deserialize)]
+pub struct ClaimRewardRequest {
+    #[serde(default)]
+    pub client_id: Option<String>,
+    pub reward_id: i64,
+}
+
 #[instrument(name = "📡 events", skip(state))]
 pub async fn events(
     State(state): State<AppState>,
@@ -573,13 +583,6 @@ pub async fn events(
     };
 
     Sse::new(stream)
-}
-
-#[derive(Deserialize)]
-pub struct ClaimRewardRequest {
-    pub reward_id: i64,
-    #[serde(default)]
-    pub client_id: Option<String>,
 }
 
 #[instrument(name = "🏆 claim_reward", skip(state, request))]
@@ -699,7 +702,7 @@ async fn bounty_handler(state: AppState) -> Result<impl IntoResponse, AppError> 
     let all_rewards_claimed =
         !rewards.is_empty() && rewards.iter().all(|r| r.state == ClaimState::Claimed);
 
-    let html = ui::bounty_page(week_exp, &rewards, all_rewards_claimed);
+    let html = ui::bounty::bounty_page(week_exp, &rewards, all_rewards_claimed);
 
     Ok(Html(html.into_string()).into_response())
 }
