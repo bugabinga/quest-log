@@ -1,5 +1,4 @@
 use crate::auth;
-use crate::tui;
 use clap::{Parser, Subcommand};
 
 #[derive(Parser)]
@@ -13,7 +12,6 @@ struct Cli {
 #[derive(Subcommand)]
 enum Commands {
     Serve,
-    Ui,
     /// Apply embedded migrations and exit (useful for CI/release hooks)
     MigrateOnly,
     /// Generate password hash for QUEST_LOG_EDITOR_PASSWORD_HASH env var
@@ -24,11 +22,7 @@ pub async fn run_cli() -> Result<bool, Box<dyn std::error::Error>> {
     let cli = Cli::parse();
 
     match cli.command {
-        None | Some(Commands::Ui) => {
-            tui::run_tui().await?;
-            Ok(false)
-        }
-        Some(Commands::Serve) => Ok(true),
+        None | Some(Commands::Serve) => Ok(true),
         Some(Commands::MigrateOnly) => {
             // Construct the database which will apply embedded migrations in Database::new()
             let _db = crate::database::Database::new().await?;

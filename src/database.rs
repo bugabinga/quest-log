@@ -16,9 +16,16 @@ pub struct Database {
     pool: SqlitePool,
 }
 
-#[allow(dead_code)]
 impl Database {
     /// Create a new database connection pool
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the database cannot be created or connected to.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the current directory cannot be determined and QUEST_LOG_DATA_DIR is not set.
     pub async fn new() -> Result<Self, sqlx::Error> {
         let data_dir = env::var("QUEST_LOG_DATA_DIR")
             .unwrap_or_else(|_| {
@@ -637,7 +644,6 @@ impl Database {
     }
 
     /// Update a quest with optional image
-    #[allow(clippy::too_many_arguments)]
     pub async fn update_quest_with_image(
         &self,
         id: i64,
@@ -745,7 +751,6 @@ impl Database {
     }
 
     /// Update a reward with optional image
-    #[allow(clippy::too_many_arguments)]
     pub async fn update_reward_with_image(
         &self,
         id: i64,
@@ -931,7 +936,7 @@ impl Database {
 
         // Check if reward already claimed this week
         let existing_claim: (i64,) = sqlx::query_as(
-            "SELECT COUNT(*) FROM reward_claims 
+            "SELECT COUNT(*) FROM reward_claims
              WHERE reward_id = ? AND claimed_date >= ? AND claimed_date <= ?",
         )
         .bind(reward_id)
@@ -973,7 +978,7 @@ impl Database {
         let mut result = Vec::new();
         for reward in rewards {
             let claimed_this_week: (i64,) = sqlx::query_as(
-                "SELECT COUNT(*) FROM reward_claims 
+                "SELECT COUNT(*) FROM reward_claims
                  WHERE reward_id = ? AND claimed_date >= ? AND claimed_date <= ?",
             )
             .bind(reward.id)
@@ -1045,7 +1050,7 @@ impl Database {
         }
 
         let existing_claim: (i64,) = sqlx::query_as(
-            "SELECT COUNT(*) FROM reward_claims 
+            "SELECT COUNT(*) FROM reward_claims
              WHERE reward_id = ? AND claimed_date >= ? AND claimed_date <= ?",
         )
         .bind(reward_id)

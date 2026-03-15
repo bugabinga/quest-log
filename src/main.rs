@@ -6,7 +6,6 @@ mod models;
 mod state;
 mod systemd;
 mod time;
-mod tui;
 mod ui;
 
 use crate::database::Database;
@@ -24,16 +23,6 @@ use tokio::sync::broadcast;
 use tracing_error::ErrorLayer;
 use tracing_subscriber::{EnvFilter, fmt, layer::SubscriberExt, util::SubscriberInitExt};
 
-#[cfg(debug_assertions)]
-embed_assets!("static", compress = true);
-
-#[cfg(not(debug_assertions))]
-// In release builds we embed the static directory compressed. Avoid passing
-// ignore_paths here because the macro validation fails if a glob doesn't
-// match any files in the build context inside the container builder.
-// When building inside CI/container the static/ directory is copied into the
-// build context by the Containerfile so the macro can run. We keep the simple
-// form here without ignore_paths to avoid compile-time glob validation failures.
 embed_assets!("static", compress = true);
 
 fn setup_logging() {
@@ -195,6 +184,10 @@ async fn main() {
             let fds = systemd::take_listen_fds();
             if let Some(fd) = fds.first() {
                 use std::os::unix::io::FromRawFd;
+                // Safety: The fd was received from systemd's sd_listen_fds,
+                // which guarantees it is a valid, open TCP socket. We transfer
+                // ownership to FromRawFd, which consumes the fd and prevents
+                // further use of the raw fd.
                 unsafe {
                     // Try to construct a std listener from the provided fd and
                     // convert it to a tokio listener. If this fails, fall back

@@ -28,11 +28,11 @@ impl AppState {
 
     /// Get the session duration from environment or use default
     pub fn session_duration(&self) -> Duration {
-        let hours: i64 = std::env::var("QUEST_LOG_EDITOR_SESSION_DURATION_HOURS")
+        let hours: u64 = std::env::var("QUEST_LOG_EDITOR_SESSION_DURATION_HOURS")
             .ok()
             .and_then(|s| s.parse().ok())
             .unwrap_or(SESSION_DURATION_HOURS);
-        Duration::from_secs(hours as u64 * 3600)
+        Duration::from_secs(hours * 3600)
     }
 
     /// Create a new editor session

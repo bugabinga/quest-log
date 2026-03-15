@@ -9,29 +9,29 @@ use tokio::task::JoinHandle;
 /// Send a READY=1 notification to systemd with an optional STATUS message.
 pub fn notify_ready(status: Option<&str>) {
     if let Some(s) = status {
-        let _ = sd_notify::notify(false, &[NotifyState::Status(s)]);
+        let _ = sd_notify::notify(&[NotifyState::Status(s)]);
     }
-    let _ = sd_notify::notify(false, &[NotifyState::Ready]);
+    let _ = sd_notify::notify(&[NotifyState::Ready]);
 }
 
 /// Attempt to start a watchdog heartbeat task if WATCHDOG is enabled.
 /// Returns a JoinHandle that should be aborted/joined on shutdown.
 pub fn start_watchdog() -> Option<JoinHandle<()>> {
-    let mut usec: u64 = 0;
+    let mut usec: u128 = 0;
     // Unset the env vars for children so they don't inherit WATCHDOG_USEC
-    if !sd_notify::watchdog_enabled(true, &mut usec) {
-        return None;
-    }
+    if let Some(duration) = sd_notify::watchdog_enabled() {
+        usec = duration.as_micros();
+    };
     if usec == 0 {
         return None;
     }
 
     // Be conservative: send heartbeat at one-third of the watchdog interval
-    let interval = Duration::from_micros(usec / 3);
+    let interval = Duration::from_micros((usec / 3) as u64);
 
     Some(tokio::spawn(async move {
         loop {
-            let _ = sd_notify::notify(false, &[NotifyState::Watchdog]);
+            let _ = sd_notify::notify(&[NotifyState::Watchdog]);
             tokio::time::sleep(interval).await;
         }
     }))
@@ -71,8 +71,12 @@ pub fn take_listen_fds() -> Vec<RawFd> {
     }
 
     // Unset env so children won't inherit and repeated calls won't re-read
+    // SAFETY: LISTEN_FDS is set by systemd's sd-daemon, removing it prevents double-initialization
     unsafe {
         std::env::remove_var("LISTEN_FDS");
+    }
+    // SAFETY: LISTEN_PID is set by systemd's sd-daemon, removing it prevents double-initialization
+    unsafe {
         std::env::remove_var("LISTEN_PID");
     }
 
