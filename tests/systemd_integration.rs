@@ -11,16 +11,17 @@ fn systemd_watchdog_and_notify_smoke() {
         std::env::set_var("WATCHDOG_PID", std::process::id().to_string());
     }
 
-    let mut usec: u64 = 0;
-    let enabled = sd_notify::watchdog_enabled(true, &mut usec);
+    let mut usec: u128 = 0;
+    if let Some(duration) = sd_notify::watchdog_enabled() {
+        usec = duration.as_micros();
+    }
     assert!(
-        enabled,
+        usec == 30_000_000,
         "watchdog should be reported as enabled when WATCHDOG_USEC is set"
     );
-    assert_eq!(usec, 30_000_000);
 
     // Call notify READY/STATUS and ensure it doesn't panic. We cannot assert systemd received it
     // because runners typically don't have NOTIFY_SOCKET, but the call should be safe.
-    let _ = sd_notify::notify(false, &[NotifyState::Status("test")]);
-    let _ = sd_notify::notify(false, &[NotifyState::Ready]);
+    let _ = sd_notify::notify(&[NotifyState::Status("test")]);
+    let _ = sd_notify::notify(&[NotifyState::Ready]);
 }

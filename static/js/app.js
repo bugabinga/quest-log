@@ -707,4 +707,4 @@ function _parseSseData(data) {
   globalThis.addEventListener("unhandledrejection", function (event) {
     console.error("[JS] Unhandled promise rejection:", event.reason);
   });
-})();
+});
