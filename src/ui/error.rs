@@ -18,5 +18,6 @@ pub fn error_page(title: &str, heading: &str, message: &str) -> maud::Markup {
         computed: None,
         show_nav: false,
         active_route: None,
+        extra_scripts: None,
     })
 }

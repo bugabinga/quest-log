@@ -20,6 +20,7 @@ pub struct PageData {
     pub computed: Option<String>,
     pub show_nav: bool,
     pub active_route: Option<String>,
+    pub extra_scripts: Option<String>,
 }
 
 pub fn base_page(data: PageData) -> maud::Markup {
@@ -35,6 +36,9 @@ pub fn base_page(data: PageData) -> maud::Markup {
                 link rel="stylesheet" href="/style.css";
                 script type="module" src="/js/datastar.js" {}
                 script type="module" src="/js/app.js" {}
+                @if let Some(ref extra_scripts) = data.extra_scripts {
+                    (PreEscaped(extra_scripts))
+                }
             }
             body data-weekday=(data.weekday.map(|w| w.to_string()).unwrap_or_default().as_str()) {
                 @if data.show_nav {

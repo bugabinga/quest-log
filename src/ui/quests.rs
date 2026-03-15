@@ -3,7 +3,6 @@ use crate::ui::base::{PageData, base_page};
 use crate::ui::fragments::toggle::QuestDisplay;
 use maud::{PreEscaped, html};
 
-#[allow(clippy::too_many_arguments)]
 pub fn quests_page(
     quests: &[QuestDisplay],
     error_message: &str,
@@ -187,5 +186,6 @@ pub fn quests_page(
         computed: Some(computed),
         show_nav: true,
         active_route: Some("/".to_string()),
+        extra_scripts: None,
     })
 }

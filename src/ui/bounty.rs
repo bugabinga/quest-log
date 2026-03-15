@@ -38,5 +38,6 @@ pub fn bounty_page(
         computed: Some(computed),
         show_nav: true,
         active_route: Some("/bounty".to_string()),
+        extra_scripts: None,
     })
 }
