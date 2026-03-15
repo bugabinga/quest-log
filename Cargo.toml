@@ -119,5 +119,3 @@ multiple_unsafe_ops_per_block = "deny"
 unnecessary_safety_comment = "deny"
 unnecessary_safety_doc = "deny"
 tests_outside_test_module = "deny"
-
-# lints.rust handles rustc lints (unused_unsafe is a rustc lint)
