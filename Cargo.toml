@@ -106,7 +106,6 @@ expect_used = { level = "warn" }
 should_panic_without_expect = "warn"
 unused_result_ok = "warn"
 unwrap_used = "warn"
-arbitrary_source_item_ordering = "warn"
 pub_use = "warn"
 todo = "warn"
 
