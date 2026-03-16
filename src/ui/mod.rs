@@ -4,4 +4,5 @@ pub mod bounty;
 pub mod editor;
 pub mod error;
 pub mod fragments;
+pub mod highscore;
 pub mod quests;

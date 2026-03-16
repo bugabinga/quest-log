@@ -20,10 +20,23 @@ pub struct Quest {
 // Quest completion tracking
 #[derive(Debug, Clone, FromRow, Serialize, Deserialize)]
 pub struct QuestCompletion {
-    pub id: i64,
-    pub quest_id: i64,
     pub completed_date: NaiveDate,
     pub created_at: DateTime<Utc>,
+    pub id: i64,
+    pub quest_id: i64,
+}
+
+/// Enum for updating optional fields in database operations.
+///
+/// Used to distinguish between:
+/// - NoChange: Don't update this field
+/// - Clear: Set field to NULL/None
+/// - Set(value): Set field to new value
+#[derive(Debug, Clone)]
+pub enum UpdateField<T> {
+    NoChange,
+    Clear,
+    Set(T),
 }
 
 // Reward model
@@ -97,9 +110,9 @@ pub enum ToggleResult {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 pub enum ClaimState {
-    Locked,
     Claimable,
     Claimed,
+    Locked,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -117,15 +130,15 @@ pub struct WeeklyRewardDisplay {
 pub struct QuestStats {
     pub exp_today: i32,
     pub exp_today_max: i32,
-    pub week_exp: i32,
-    pub week_exp_max: i32,
     pub quests_completed: i32,
     pub quests_total: i32,
+    pub week_exp: i32,
+    pub week_exp_max: i32,
 }
 
 #[derive(Debug, Clone, FromRow, Serialize, Deserialize)]
 pub struct WeeklyChampion {
+    pub earned_at: DateTime<Utc>,
     pub id: i64,
     pub week_start: NaiveDate,
-    pub earned_at: DateTime<Utc>,
 }

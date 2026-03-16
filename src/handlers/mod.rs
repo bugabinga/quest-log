@@ -1,6 +1,7 @@
 //! HTTP handlers for the Quest Log application
 
 pub mod editor;
+pub mod stats;
 
 use axum::body::Body;
 use axum::extract::{Path, Query, State};
@@ -138,6 +139,11 @@ pub async fn quests_with_date(
     quests_handler(state, Some(date_str)).await
 }
 
+#[derive(Deserialize)]
+pub struct NavigatePath {
+    pub date: String,
+}
+
 async fn quests_handler(
     state: AppState,
     date_str: Option<String>,
@@ -265,11 +271,6 @@ async fn quests_handler(
     Ok(Html(html.into_string()).into_response())
 }
 
-#[derive(Deserialize)]
-pub struct NavigatePath {
-    pub date: String,
-}
-
 #[instrument(name = "✨ toggle_quest", skip(state, request), fields(quest_id = request.quest_id.as_i64()))]
 pub async fn toggle_quest(
     State(state): State<AppState>,
@@ -381,6 +382,13 @@ pub async fn toggle_quest(
     let events: Vec<Event> = vec![quest_patch.into(), signals_patch.into()];
     let stream = stream::iter(events.into_iter().map(Ok));
     Ok(Sse::new(stream))
+}
+
+#[derive(Deserialize)]
+pub struct ClaimRewardRequest {
+    #[serde(default)]
+    pub client_id: Option<String>,
+    pub reward_id: i64,
 }
 
 #[instrument(name = "🧭 navigate", skip(state, path, headers))]
@@ -537,13 +545,6 @@ pub async fn navigate(
 
     let stream = stream::iter(events.into_iter().map(Ok));
     Ok(Sse::new(stream))
-}
-
-#[derive(Deserialize)]
-pub struct ClaimRewardRequest {
-    #[serde(default)]
-    pub client_id: Option<String>,
-    pub reward_id: i64,
 }
 
 #[instrument(name = "📡 events", skip(state))]

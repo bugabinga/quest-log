@@ -71,6 +71,12 @@ async fn extract_and_validate_session(
     Ok(token.to_string())
 }
 
+/// Login request
+#[derive(Debug, Deserialize)]
+pub struct LoginRequest {
+    password: String,
+}
+
 /// Editor page - shows auth modal if not authenticated, otherwise shows editor
 pub async fn editor_page_handler(
     State(state): State<AppState>,
@@ -139,12 +145,6 @@ pub async fn editor_page_handler(
 
     let html = ui::editor::editor_page(true, "quests", &quests, &rewards, &settings);
     Ok(Html(html.into_string()))
-}
-
-/// Login request
-#[derive(Debug, Deserialize)]
-pub struct LoginRequest {
-    password: String,
 }
 
 /// Process login attempt
@@ -681,6 +681,16 @@ pub async fn get_settings_handler(
     Ok(axum::Json(settings))
 }
 
+const DAY_NAMES: &[&str] = &[
+    "Sunday",
+    "Monday",
+    "Tuesday",
+    "Wednesday",
+    "Thursday",
+    "Friday",
+    "Saturday",
+];
+
 /// Update settings
 pub async fn update_settings_handler(
     State(state): State<AppState>,
@@ -710,16 +720,6 @@ pub async fn update_settings_handler(
 }
 
 // ===== Helper Functions =====
-
-const DAY_NAMES: &[&str] = &[
-    "Sunday",
-    "Monday",
-    "Tuesday",
-    "Wednesday",
-    "Thursday",
-    "Friday",
-    "Saturday",
-];
 
 fn escape_html(s: &str) -> String {
     s.replace('&', "&amp;")
@@ -762,6 +762,15 @@ fn render_quests_table(quests: &[crate::models::Quest]) -> String {
     html
 }
 
+/// Editor-specific errors
+#[derive(Debug, Clone, Copy)]
+pub enum EditorError {
+    Database,
+    NotFound,
+    Unauthorized,
+    Validation,
+}
+
 fn render_rewards_table(rewards: &[crate::models::Reward]) -> String {
     let mut html = String::new();
 
@@ -796,15 +805,6 @@ fn render_rewards_table(rewards: &[crate::models::Reward]) -> String {
 
     html.push_str("</tbody></table>");
     html
-}
-
-/// Editor-specific errors
-#[derive(Debug, Clone, Copy)]
-pub enum EditorError {
-    Database,
-    NotFound,
-    Unauthorized,
-    Validation,
 }
 
 impl IntoResponse for EditorError {
