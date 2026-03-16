@@ -408,6 +408,23 @@ impl Database {
         Ok(result)
     }
 
+    pub async fn get_total_completions_count(&self) -> Result<i32, sqlx::Error> {
+        tracing::trace!("📋 Fetching total completions count");
+        let result: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM quest_completions")
+            .fetch_one(&self.pool)
+            .await?;
+        Ok(result.0 as i32)
+    }
+
+    pub async fn get_all_completions(&self) -> Result<Vec<QuestCompletion>, sqlx::Error> {
+        tracing::trace!("📋 Fetching all completions");
+        sqlx::query_as::<_, QuestCompletion>(
+            "SELECT * FROM quest_completions ORDER BY completed_date DESC",
+        )
+        .fetch_all(&self.pool)
+        .await
+    }
+
     #[instrument(name = "🎯 toggle_quest_completion", skip(self))]
     pub async fn toggle_quest_completion(
         &self,
@@ -1095,6 +1112,15 @@ impl Database {
             .bind(week_start)
             .fetch_optional(&self.pool)
             .await
+    }
+
+    pub async fn get_all_weekly_champions(&self) -> Result<Vec<WeeklyChampion>, sqlx::Error> {
+        tracing::trace!("🏆 Fetching all weekly champions");
+        sqlx::query_as::<_, WeeklyChampion>(
+            "SELECT * FROM weekly_champions ORDER BY week_start DESC",
+        )
+        .fetch_all(&self.pool)
+        .await
     }
 
     pub async fn create_weekly_champion(

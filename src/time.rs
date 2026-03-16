@@ -136,6 +136,11 @@ pub fn get_week_bounds(date: NaiveDate) -> (NaiveDate, NaiveDate) {
     (week_start, week_end)
 }
 
+pub fn end_of_week(date: NaiveDate) -> NaiveDate {
+    date - chrono::Duration::days(date.weekday().num_days_from_monday() as i64)
+        + chrono::Duration::days(6)
+}
+
 pub fn format_date_iso(date: NaiveDate) -> String {
     date.format("%Y-%m-%d").to_string()
 }
