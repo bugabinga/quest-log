@@ -37,22 +37,23 @@ pub fn start_watchdog() -> Option<JoinHandle<()>> {
     }))
 }
 
-/// If systemd passed socket file descriptors (socket activation), return a Vec of RawFd.
-/// Caller is responsible for consuming them exactly once (FromRawFd).
+/// If systemd passed socket file descriptors (socket activation), return a Vec of `RawFd`.
+/// Caller is responsible for consuming them exactly once (`FromRawFd`).
 pub fn take_listen_fds() -> Vec<RawFd> {
     // sd_notify doesn't provide listen_fds helpers; use the environment variable directly.
     // The standard behavior is that systemd sets LISTEN_FDS and LISTEN_PID.
     let listen_fds = std::env::var("LISTEN_FDS").ok();
     let listen_pid = std::env::var("LISTEN_PID").ok();
 
-    if listen_fds.is_none() || listen_pid.is_none() {
+    let Some(listen_fds) = listen_fds else {
         return Vec::new();
-    }
+    };
+    let Some(listen_pid) = listen_pid else {
+        return Vec::new();
+    };
 
     // Ensure the PID matches our PID
-    let pid_str = listen_pid
-        .as_ref()
-        .expect("LISTEN_PID was checked for None");
+    let pid_str = &listen_pid;
     if let Ok(pid) = pid_str.parse::<u32>() {
         if pid != std::process::id() {
             return Vec::new();
@@ -61,11 +62,7 @@ pub fn take_listen_fds() -> Vec<RawFd> {
         return Vec::new();
     }
 
-    let nfds: i32 = match listen_fds
-        .as_ref()
-        .expect("LISTEN_FDS was checked for None")
-        .parse()
-    {
+    let nfds: i32 = match listen_fds.parse() {
         Ok(n) if n > 0 => n,
         _ => return Vec::new(),
     };
@@ -74,7 +71,11 @@ pub fn take_listen_fds() -> Vec<RawFd> {
     let start_fd: i32 = 3;
     let mut fds = Vec::new();
     for i in 0..nfds {
-        fds.push(start_fd.checked_add(i).expect("fd overflow") as RawFd);
+        fds.push(
+            start_fd
+                .checked_add(i)
+                .unwrap_or_else(|| panic!("fd overflow")) as RawFd,
+        );
     }
 
     // Unset env so children won't inherit and repeated calls won't re-read

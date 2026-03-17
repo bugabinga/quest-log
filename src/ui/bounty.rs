@@ -31,7 +31,7 @@ pub fn bounty_page(
         }
     };
 
-    base_page(PageData {
+    let page_data = PageData {
         title: "Bounty Board".to_string(),
         body_content,
         weekday: None,
@@ -40,5 +40,7 @@ pub fn bounty_page(
         show_nav: true,
         active_route: Some("/bounty".to_string()),
         extra_scripts: None,
-    })
+    };
+
+    base_page(&page_data)
 }

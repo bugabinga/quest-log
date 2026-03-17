@@ -177,7 +177,7 @@ pub fn quests_page(
         }
     };
 
-    base_page(PageData {
+    let page_data = PageData {
         title: day_name.to_string(),
         body_content,
         weekday: Some(weekday_num),
@@ -186,5 +186,7 @@ pub fn quests_page(
         show_nav: true,
         active_route: Some("/".to_string()),
         extra_scripts: None,
-    })
+    };
+
+    base_page(&page_data)
 }

@@ -38,8 +38,14 @@ impl AppState {
     }
 
     /// Create a new editor session
+    ///
+    /// # Panics
+    ///
+    /// Panics if the session duration cannot be added to the current time
     pub async fn create_session(&self, token: String) -> Instant {
-        let expiry = Instant::now() + Self::session_duration();
+        let expiry = Instant::now()
+            .checked_add(Self::session_duration())
+            .unwrap_or_else(|| panic!("time overflow"));
         let mut sessions = self.editor_sessions.write().await;
         sessions.insert(token, expiry);
         expiry

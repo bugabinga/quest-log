@@ -364,15 +364,15 @@ pub async fn toggle_quest(
 
     let day_of_week = today.weekday().num_days_from_sunday().cast_signed();
     let all_quests = db.get_quests_for_day(day_of_week).await.unwrap_or_default();
-    let mut total_exp = 0;
-    let mut quests_completed = 0;
+    let mut total_exp: i32 = 0;
+    let mut quests_completed: i32 = 0;
 
     for q in &all_quests {
         if let Ok(completed) = db.is_quest_completed_today(q.id, today).await
             && completed
         {
-            total_exp += q.exp_value;
-            quests_completed += 1;
+            total_exp = total_exp.saturating_add(q.exp_value);
+            quests_completed = quests_completed.saturating_add(1);
         }
     }
 
@@ -388,7 +388,8 @@ pub async fn toggle_quest(
     let mut week_exp_max = 0i32;
     for dow in 0..7 {
         if let Ok(quests) = db.get_quests_for_day(dow).await {
-            week_exp_max += quests.iter().map(|q| q.exp_value).sum::<i32>();
+            week_exp_max =
+                week_exp_max.saturating_add(quests.iter().map(|q| q.exp_value).sum::<i32>());
         }
     }
 
@@ -435,6 +436,10 @@ pub struct ClaimRewardRequest {
 /// # Errors
 ///
 /// Returns an error if database operation fails
+///
+/// # Panics
+///
+/// Panics if the week start or end date overflows
 pub async fn navigate(
     State(state): State<AppState>,
     Path(path): Path<NavigatePath>,
@@ -458,8 +463,13 @@ pub async fn navigate(
     };
 
     let week_start = selected_date
-        - chrono::Duration::days(i64::from(selected_date.weekday().num_days_from_monday()));
-    let week_end = week_start + chrono::Duration::days(6);
+        .checked_sub_days(chrono::Days::new(u64::from(
+            selected_date.weekday().num_days_from_monday(),
+        )))
+        .unwrap_or_else(|| panic!("date overflow"));
+    let week_end = week_start
+        .checked_add_days(chrono::Days::new(6))
+        .unwrap_or_else(|| panic!("date overflow"));
 
     if selected_date < week_start || selected_date > week_end {
         tracing::debug!(target_date = %selected_date, week_start = %week_start, week_end = %week_end, "🧭 Navigate: date outside week bounds");
@@ -508,7 +518,8 @@ pub async fn navigate(
     let mut week_exp_max = 0i32;
     for dow in 0..7 {
         if let Ok(quests) = db.get_quests_for_day(dow).await {
-            week_exp_max += quests.iter().map(|q| q.exp_value).sum::<i32>();
+            week_exp_max =
+                week_exp_max.saturating_add(quests.iter().map(|q| q.exp_value).sum::<i32>());
         }
     }
 

@@ -83,7 +83,7 @@ pub fn editor_page(
         div id="toast-container" class="toast-container" {}
     };
 
-    base_page(PageData {
+    let page_data = PageData {
         title: "Quest Log Editor 🗝️".to_string(),
         body_content,
         weekday: None,
@@ -92,7 +92,9 @@ pub fn editor_page(
         show_nav: true,
         active_route: Some("/editor".to_string()),
         extra_scripts: None,
-    })
+    };
+
+    base_page(&page_data)
 }
 
 /// Quests panel for the editor

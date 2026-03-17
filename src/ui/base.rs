@@ -24,7 +24,7 @@ pub struct PageData {
 }
 
 #[must_use]
-pub fn base_page(data: PageData) -> maud::Markup {
+pub fn base_page(data: &PageData) -> maud::Markup {
     html! {
         (DOCTYPE)
         html lang="en" {

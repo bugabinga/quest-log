@@ -86,6 +86,6 @@ pub async fn highscore(State(state): State<AppState>) -> Result<impl IntoRespons
         completions_by_date,
     };
 
-    let html = ui::highscore::highscore_page(data);
+    let html = ui::highscore::highscore_page(&data);
     Ok(Html(html.into_string()).into_response())
 }

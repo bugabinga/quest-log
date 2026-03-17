@@ -5,7 +5,7 @@ use crate::ui::base::{PageData, base_page};
 use maud::html;
 
 #[must_use]
-pub fn highscore_page(data: HighscoreData) -> maud::Markup {
+pub fn highscore_page(data: &HighscoreData) -> maud::Markup {
     let body_content = html! {
         h1 class="rainbow-text" { "🏆 Highscore 🏆" }
 
@@ -61,7 +61,7 @@ pub fn highscore_page(data: HighscoreData) -> maud::Markup {
         }
     };
 
-    base_page(PageData {
+    let page_data = PageData {
         title: "Highscore".to_string(),
         body_content,
         weekday: None,
@@ -70,7 +70,9 @@ pub fn highscore_page(data: HighscoreData) -> maud::Markup {
         show_nav: true,
         active_route: Some("/highscore".to_string()),
         extra_scripts: None,
-    })
+    };
+
+    base_page(&page_data)
 }
 
 fn format_date(date: NaiveDate) -> String {

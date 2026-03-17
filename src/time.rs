@@ -133,7 +133,8 @@ pub fn reset_today() {
 
 #[must_use]
 pub fn get_week_bounds(date: NaiveDate) -> (NaiveDate, NaiveDate) {
-    let week_start = date - chrono::Duration::days(i64::from(date.weekday().num_days_from_monday()));
+    let week_start =
+        date - chrono::Duration::days(i64::from(date.weekday().num_days_from_monday()));
     let week_end = week_start + chrono::Duration::days(6);
     (week_start, week_end)
 }

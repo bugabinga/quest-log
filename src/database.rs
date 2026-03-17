@@ -1444,12 +1444,18 @@ impl Database {
     /// # Errors
     ///
     /// Returns an error if the database query fails
+    ///
+    /// # Panics
+    ///
+    /// Panics if the week end date overflows
     pub async fn claim_reward_for_week(
         &self,
         reward_id: i64,
         week_start: NaiveDate,
     ) -> Result<bool, sqlx::Error> {
-        let week_end = week_start + chrono::Duration::days(6);
+        let week_end = week_start
+            .checked_add_days(chrono::Days::new(6))
+            .unwrap_or_else(|| panic!("date overflow"));
         let today = time::today();
         let is_sunday = today.weekday().num_days_from_sunday() == 0;
 
