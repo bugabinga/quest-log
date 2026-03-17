@@ -192,7 +192,6 @@ async fn test_partial_claim_should_not_return_all_rewards_claimed() {
 /// This test verifies the database layer requirement:
 /// - A `weekly_champions` table should exist to track when a user
 ///   completes all weekly rewards
-/// - A `get_weekly_champion(week_start)` method should be available
 ///
 /// Currently FAILS because:
 /// - The weekly_champions table doesn't exist in migrations
@@ -210,12 +209,11 @@ async fn test_weekly_champions_table_should_track_completion() {
     time::set_today(sunday);
 
     // Initially, no champion record should exist
-    // This requires get_weekly_champion method to exist
-    // Currently fails because method doesn't exist
-    let initial_champion = db
-        .get_weekly_champion(week_start)
+    let all_champions = db
+        .get_all_weekly_champions()
         .await
-        .expect("Failed to check initial champion - get_weekly_champion method should exist");
+        .expect("Failed to get all champions");
+    let initial_champion = all_champions.iter().find(|c| c.week_start == week_start);
 
     assert!(
         initial_champion.is_none(),
@@ -254,10 +252,11 @@ async fn test_weekly_champions_table_should_track_completion() {
     // Now champion record should exist
     // This requires the database to create a weekly_champions record
     // when all rewards are claimed
-    let champion = db
-        .get_weekly_champion(week_start)
+    let all_champions = db
+        .get_all_weekly_champions()
         .await
-        .expect("Failed to get champion after claiming");
+        .expect("Failed to get all champions after claiming");
+    let champion = all_champions.iter().find(|c| c.week_start == week_start);
 
     assert!(
         champion.is_some(),

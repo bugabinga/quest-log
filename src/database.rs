@@ -41,7 +41,7 @@ pub struct Database {
     pool: SqlitePool,
 }
 
-#[cfg(test)]
+#[cfg(feature = "test-utils")]
 impl Database {
     pub fn with_pool(pool: SqlitePool) -> Self {
         Self { pool }

@@ -35,7 +35,7 @@ pub enum ServerMessage {
 
 #[derive(Debug, thiserror::Error)]
 pub enum AppError {
-    #[error("Database error: {0}")]
+    #[error("Something went wrong")]
     Database(#[from] sqlx::Error),
     #[error("Not found")]
     NotFound,
@@ -57,7 +57,7 @@ impl AppError {
 
     fn message(&self) -> String {
         match self {
-            Self::Database(e) => format!("Database error: {e}"),
+            Self::Database(_) => "Something went wrong".to_string(),
             Self::NotFound => "Like your motivation. Or your quests.".to_string(),
             Self::ValidationError(msg) | Self::Authentication(msg) => msg.clone(),
         }

@@ -1,9 +1,10 @@
 //! Database migration integration tests
 //! Tests migration safety, data integrity, and rollback scenarios
 
-use chrono::{Datelike, Utc};
+use chrono::{Datelike, NaiveDate, Utc};
 use quest_log::database::Database;
 use quest_log::models::ToggleResult;
+use quest_log::time;
 use sqlx::SqlitePool;
 
 #[tokio::test]
@@ -64,11 +65,15 @@ async fn test_migration_data_preservation() {
 
     let original_quest = db.create_quest(quest_req).await.unwrap();
 
-    // Complete the quest
-    let today = Utc::now().date_naive();
-    db.toggle_quest_completion(original_quest.id, today)
+    // Complete the quest on a date within the week we want to claim
+    // Set up the test week: Jan 8 (Monday) to Jan 14 (Sunday)
+    let quest_date = NaiveDate::from_ymd_opt(2024, 1, 10).unwrap(); // Wednesday
+    db.toggle_quest_completion(original_quest.id, quest_date)
         .await
         .unwrap();
+
+    // Save quest_date for verification below
+    let today = quest_date;
 
     // Create a reward and claim it
     let reward_req = quest_log::models::CreateRewardRequest {
@@ -79,9 +84,17 @@ async fn test_migration_data_preservation() {
 
     let reward = db.create_reward(reward_req).await.unwrap();
 
-    // Calculate week_start based on the completion date (start of week containing today)
-    let week_start = today - chrono::Duration::days(today.weekday().num_days_from_monday() as i64);
-    let claimed = db.claim_reward(reward.id, week_start).await.unwrap();
+    // Set today to the Sunday AFTER the week we want to claim for
+    // (claim_reward_for_week requires Sunday and the week to have ended)
+    let sunday_after = NaiveDate::from_ymd_opt(2024, 1, 14).unwrap();
+    time::set_today(sunday_after);
+
+    // Calculate week_start - the previous Monday
+    let week_start = NaiveDate::from_ymd_opt(2024, 1, 8).unwrap();
+    let claimed = db
+        .claim_reward_for_week(reward.id, week_start)
+        .await
+        .unwrap();
     assert!(claimed);
 
     // Run migrations again (simulating a deployment with new migrations)
@@ -188,10 +201,10 @@ async fn test_migration_schema_integrity() {
         .await
         .expect("Quest retrieval should work");
 
-    // Test quest_completions table
-    let today = Utc::now().date_naive();
+    // Test quest_completions table - complete on a date within the test week
+    let quest_date = NaiveDate::from_ymd_opt(2024, 1, 10).unwrap(); // Wednesday
     let completed = db
-        .toggle_quest_completion(quest.id, today)
+        .toggle_quest_completion(quest.id, quest_date)
         .await
         .expect("Quest completions table should exist");
     assert_eq!(completed, ToggleResult::NewlyCompleted);
@@ -212,11 +225,16 @@ async fn test_migration_schema_integrity() {
         .expect("Rewards retrieval should work");
     assert!(!rewards.is_empty());
 
+    // Set today to the Sunday AFTER the week we want to claim for
+    // (claim_reward_for_week requires Sunday and the week to have ended)
+    let sunday_after = NaiveDate::from_ymd_opt(2024, 1, 14).unwrap();
+    time::set_today(sunday_after);
+
     // Test reward_claims table (implicitly tested through claiming)
-    // Calculate week_start based on the completion date
-    let week_start = today - chrono::Duration::days(today.weekday().num_days_from_monday() as i64);
+    // Calculate week_start - the previous Monday
+    let week_start = NaiveDate::from_ymd_opt(2024, 1, 8).unwrap();
     let claimed = db
-        .claim_reward(reward.id, week_start)
+        .claim_reward_for_week(reward.id, week_start)
         .await
         .expect("Reward claims table should exist");
     assert!(claimed);

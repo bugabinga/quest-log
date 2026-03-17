@@ -121,11 +121,15 @@ async fn test_business_logic_integration() {
         "Weekly EXP should be 50 + 25 + 10 + 25 = 110"
     );
 
+    // Set today to Sunday to enable reward claiming
+    let sunday = NaiveDate::from_ymd_opt(2024, 1, 7).unwrap();
+    time::set_today(sunday);
+
     // Test reward claiming workflow
 
     // Should not be able to claim any rewards yet (need 50+ EXP for Bronze)
     let can_claim_bronze = db
-        .claim_reward(r1.id, week_start)
+        .claim_reward_for_week(r1.id, week_start)
         .await
         .expect("Failed to check bronze reward claim");
     assert!(
@@ -142,7 +146,7 @@ async fn test_business_logic_integration() {
 
     // Try to claim bronze again - should fail
     let claim_again = db
-        .claim_reward(r1.id, week_start)
+        .claim_reward_for_week(r1.id, week_start)
         .await
         .expect("Failed to claim bronze again");
     assert!(
@@ -152,7 +156,7 @@ async fn test_business_logic_integration() {
 
     // Should still be able to claim silver (100 EXP required, we have 110)
     let can_claim_silver = db
-        .claim_reward(r2.id, week_start)
+        .claim_reward_for_week(r2.id, week_start)
         .await
         .expect("Failed to check silver reward claim");
     assert!(
@@ -171,7 +175,7 @@ async fn test_business_logic_integration() {
 
     // Should not be able to claim gold (200 EXP required, we only have 110)
     let can_claim_gold = db
-        .claim_reward(r3.id, week_start)
+        .claim_reward_for_week(r3.id, week_start)
         .await
         .expect("Failed to check gold reward claim");
     assert!(
@@ -199,7 +203,7 @@ async fn test_business_logic_integration() {
         .await
         .expect("Failed to create impossible reward");
     let can_claim_impossible = db
-        .claim_reward(impossible_reward.id, week_start)
+        .claim_reward_for_week(impossible_reward.id, week_start)
         .await
         .expect("Failed to check impossible reward");
     assert!(
