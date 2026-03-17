@@ -32,8 +32,6 @@ use tracing::{debug, warn};
 pub enum AuthError {
     #[error("Password hashing failed: {0}")]
     HashingFailed(String),
-    #[error("Password hash environment variable not set")]
-    HashEnvNotSet,
 }
 
 impl From<PasswordHashError> for AuthError {

@@ -55,7 +55,7 @@ async-stream = "*"
 crossterm = "*"
 tower = "*"
 tower-sessions = "*"
-argon2 = { version = "*" }
+argon2 = "*"
 axum-extra = { version = "*", features = ["cookie", "multipart"] }
 rand_core = { version = "*", features = ["getrandom"] }
 rpassword = "*"
@@ -103,6 +103,7 @@ cargo = { level = "warn", priority = -1 }
 
 too_many_lines = "allow"
 too_many_arguments = "allow"
+multiple_crate_versions = "allow"
 
 expect_used = { level = "warn" }
 should_panic_without_expect = "warn"

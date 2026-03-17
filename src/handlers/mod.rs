@@ -43,8 +43,6 @@ pub enum AppError {
     ValidationError(String),
     #[error("Authentication error: {0}")]
     Authentication(String),
-    #[error("Internal error: {0}")]
-    Internal(String),
 }
 
 impl AppError {
@@ -54,7 +52,6 @@ impl AppError {
             Self::NotFound => "Gone.",
             Self::ValidationError(_) => "Wrong Day!",
             Self::Authentication(_) => "Access Denied",
-            Self::Internal(_) => "Internal Error",
         }
     }
 
@@ -62,15 +59,13 @@ impl AppError {
         match self {
             Self::Database(e) => format!("Database error: {e}"),
             Self::NotFound => "Like your motivation. Or your quests.".to_string(),
-            Self::ValidationError(msg) | Self::Authentication(msg) | Self::Internal(msg) => {
-                msg.clone()
-            }
+            Self::ValidationError(msg) | Self::Authentication(msg) => msg.clone(),
         }
     }
 
     fn status_code(&self) -> StatusCode {
         match self {
-            Self::Database(_) | Self::Internal(_) => StatusCode::INTERNAL_SERVER_ERROR,
+            Self::Database(_) => StatusCode::INTERNAL_SERVER_ERROR,
             Self::NotFound => StatusCode::NOT_FOUND,
             Self::ValidationError(_) => StatusCode::BAD_REQUEST,
             Self::Authentication(_) => StatusCode::UNAUTHORIZED,
@@ -83,7 +78,6 @@ impl AppError {
             Self::NotFound => "Nothing Here",
             Self::ValidationError(_) => "Can't Do That",
             Self::Authentication(_) => "Access Denied",
-            Self::Internal(_) => "Internal Error",
         }
     }
 }

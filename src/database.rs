@@ -4,6 +4,31 @@ use std::env;
 use std::path::Path;
 use tracing::instrument;
 
+#[derive(Clone, Debug, Default)]
+pub enum SetOrRemove<T> {
+    #[default]
+    Unchanged,
+    Set(T),
+}
+
+impl<T> SetOrRemove<T> {
+    #[must_use]
+    pub fn set(value: T) -> Self {
+        Self::Set(value)
+    }
+
+    pub fn as_option(&self) -> Option<&T> {
+        match self {
+            Self::Set(value) => Some(value),
+            Self::Unchanged => None,
+        }
+    }
+
+    pub fn is_unchanged(&self) -> bool {
+        matches!(self, Self::Unchanged)
+    }
+}
+
 use crate::models::{
     ClaimState, CreateQuestRequest, CreateRewardRequest, Quest, QuestCompletion, Reward, Settings,
     ToggleResult, UpdateQuestRequest, UpdateRewardRequest, UpdateSettingsRequest, WeeklyChampion,
@@ -14,6 +39,30 @@ use crate::time;
 #[derive(Clone, Debug)]
 pub struct Database {
     pool: SqlitePool,
+}
+
+#[cfg(test)]
+impl Database {
+    pub fn with_pool(pool: SqlitePool) -> Self {
+        Self { pool }
+    }
+
+    pub fn pool(&self) -> &SqlitePool {
+        &self.pool
+    }
+
+    pub async fn get_completions_for_date(
+        &self,
+        date: NaiveDate,
+    ) -> Result<Vec<QuestCompletion>, sqlx::Error> {
+        tracing::trace!(date = %date, "📋 Fetching completions for date");
+        sqlx::query_as::<_, QuestCompletion>(
+            "SELECT * FROM quest_completions WHERE completed_date = ?",
+        )
+        .bind(date)
+        .fetch_all(&self.pool)
+        .await
+    }
 }
 
 impl Database {
@@ -99,18 +148,6 @@ impl Database {
         }
 
         Ok(db)
-    }
-
-    /// Create a new database instance with an existing pool (for testing)
-    #[must_use]
-    pub fn with_pool(pool: SqlitePool) -> Self {
-        Self { pool }
-    }
-
-    /// Get the underlying pool (for handlers that need direct access)
-    #[must_use]
-    pub fn pool(&self) -> &SqlitePool {
-        &self.pool
     }
 
     /// Run database migrations
@@ -410,33 +447,6 @@ impl Database {
             tracing::info!(quest_id = id, "💨 Quest deleted!");
         }
         Ok(deleted)
-    }
-
-    // Quest completion operations
-    /// Get all quest completions for a specific date
-    ///
-    /// # Arguments
-    ///
-    /// * `date` - The date to fetch completions for
-    ///
-    /// # Returns
-    ///
-    /// Vector of quest completions for the specified date
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if the database query fails
-    pub async fn get_completions_for_date(
-        &self,
-        date: NaiveDate,
-    ) -> Result<Vec<QuestCompletion>, sqlx::Error> {
-        tracing::trace!(date = %date, "📋 Fetching completions for date");
-        sqlx::query_as::<_, QuestCompletion>(
-            "SELECT * FROM quest_completions WHERE completed_date = ?",
-        )
-        .bind(date)
-        .fetch_all(&self.pool)
-        .await
     }
 
     /// Check if a quest is completed today
@@ -948,8 +958,8 @@ impl Database {
         exp_value: Option<i32>,
         day_of_week: Option<i32>,
         is_active: Option<bool>,
-        image_data: Option<Option<Vec<u8>>>,
-        image_content_type: Option<Option<String>>,
+        image_data: SetOrRemove<Vec<u8>>,
+        image_content_type: SetOrRemove<String>,
     ) -> Result<Option<Quest>, sqlx::Error> {
         tracing::debug!(quest_id = id, "🔄 Updating quest with image");
         let now = Utc::now();
@@ -999,11 +1009,11 @@ impl Database {
                 .await?;
         }
 
-        // Handle image update - None means don't change, Some(None) means remove image
-        if let Some(image_data) = image_data {
+        // Handle image update - Unchanged means don't change, Removed means remove image
+        if !image_data.is_unchanged() {
             sqlx::query("UPDATE quests SET image_data = ?, image_content_type = ?, updated_at = ? WHERE id = ?")
-                .bind(&image_data)
-                .bind(image_content_type.unwrap_or(None))
+                .bind(image_data.as_option())
+                .bind(image_content_type.as_option())
                 .bind(now)
                 .bind(id)
                 .execute(&self.pool)
@@ -1088,8 +1098,8 @@ impl Database {
         description: Option<String>,
         required_exp: Option<i32>,
         is_active: Option<bool>,
-        image_data: Option<Option<Vec<u8>>>,
-        image_content_type: Option<Option<String>>,
+        image_data: SetOrRemove<Vec<u8>>,
+        image_content_type: SetOrRemove<String>,
     ) -> Result<Option<Reward>, sqlx::Error> {
         tracing::debug!(reward_id = id, "🔄 Updating reward with image");
         let now = Utc::now();
@@ -1130,11 +1140,11 @@ impl Database {
                 .await?;
         }
 
-        // Handle image update - None means don't change, Some(None) means remove image
-        if let Some(image_data) = image_data {
+        // Handle image update - Unchanged means don't change, Removed means remove image
+        if !image_data.is_unchanged() {
             sqlx::query("UPDATE rewards SET image_data = ?, image_content_type = ?, updated_at = ? WHERE id = ?")
-                .bind(&image_data)
-                .bind(image_content_type.unwrap_or(None))
+                .bind(image_data.as_option())
+                .bind(image_content_type.as_option())
                 .bind(now)
                 .bind(id)
                 .execute(&self.pool)
@@ -1291,76 +1301,6 @@ impl Database {
     }
 
     // Reward claiming logic
-    /// Claim a reward for a specific week
-    ///
-    /// # Arguments
-    ///
-    /// * `reward_id` - The ID of the reward to claim
-    /// * `week_start` - The start date of the week for which to claim the reward
-    ///
-    /// # Returns
-    ///
-    /// True if the reward was successfully claimed, false if the reward was not found, not active, or already claimed
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if the database query fails
-    pub async fn claim_reward(
-        &self,
-        reward_id: i64,
-        week_start: NaiveDate,
-    ) -> Result<bool, sqlx::Error> {
-        tracing::debug!(reward_id, week_start = %week_start, "🎁 Claiming reward");
-        // Get the reward
-        let reward =
-            sqlx::query_as::<_, Reward>("SELECT * FROM rewards WHERE id = ? AND is_active = TRUE")
-                .bind(reward_id)
-                .fetch_optional(&self.pool)
-                .await?;
-
-        let Some(reward) = reward else {
-            return Ok(false); // Reward not found or inactive
-        };
-
-        // Calculate user's weekly EXP
-        let week_end = week_start
-            .checked_add_signed(TimeDelta::days(6))
-            .ok_or_else(|| sqlx::Error::Protocol("Date overflow in week_end".into()))?;
-        let weekly_exp = self.calculate_weekly_exp(week_start, week_end).await?;
-
-        // Check if user has enough EXP
-        if weekly_exp < reward.required_exp {
-            return Ok(false);
-        }
-
-        // Check if reward already claimed this week
-        let existing_claim: (i64,) = sqlx::query_as(
-            "SELECT COUNT(*) FROM reward_claims
-             WHERE reward_id = ? AND claimed_date >= ? AND claimed_date <= ?",
-        )
-        .bind(reward_id)
-        .bind(week_start)
-        .bind(week_end)
-        .fetch_one(&self.pool)
-        .await?;
-
-        if existing_claim.0 > 0 {
-            return Ok(false); // Already claimed this week
-        }
-
-        // Claim the reward
-        let claimed_date = week_start
-            .checked_add_signed(TimeDelta::days(6))
-            .ok_or_else(|| sqlx::Error::Protocol("Date overflow in claimed_date".into()))?; // End of the week being claimed
-        sqlx::query("INSERT INTO reward_claims (reward_id, claimed_date) VALUES (?, ?)")
-            .bind(reward_id)
-            .bind(claimed_date)
-            .execute(&self.pool)
-            .await?;
-
-        Ok(true)
-    }
-
     #[instrument(name = "🎁 get_weekly_reward_status", skip(self))]
     /// Get the status of all rewards for a specific week
     ///
@@ -1526,26 +1466,6 @@ impl Database {
     ///
     /// # Arguments
     ///
-    /// * `week_start` - Start date of the week
-    ///
-    /// # Returns
-    ///
-    /// The weekly champion record if found, None if not found
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if the database query fails
-    pub async fn get_weekly_champion(
-        &self,
-        week_start: NaiveDate,
-    ) -> Result<Option<WeeklyChampion>, sqlx::Error> {
-        tracing::trace!(week_start = %week_start, "🏆 Fetching weekly champion");
-        sqlx::query_as::<_, WeeklyChampion>("SELECT * FROM weekly_champions WHERE week_start = ?")
-            .bind(week_start)
-            .fetch_optional(&self.pool)
-            .await
-    }
-
     /// Get all weekly champion records
     ///
     /// # Returns
@@ -1590,6 +1510,58 @@ impl Database {
         .bind(now)
         .fetch_one(&self.pool)
         .await
+    }
+
+    /// Claim a reward for a specific week (test-only version without Sunday check)
+    #[cfg(test)]
+    pub async fn claim_reward(
+        &self,
+        reward_id: i64,
+        week_start: NaiveDate,
+    ) -> Result<bool, sqlx::Error> {
+        let reward =
+            sqlx::query_as::<_, Reward>("SELECT * FROM rewards WHERE id = ? AND is_active = TRUE")
+                .bind(reward_id)
+                .fetch_optional(&self.pool)
+                .await?;
+
+        let Some(reward) = reward else {
+            return Ok(false);
+        };
+
+        let week_end = week_start
+            .checked_add_signed(TimeDelta::days(6))
+            .ok_or_else(|| sqlx::Error::Protocol("Date overflow in week_end".into()))?;
+        let weekly_exp = self.calculate_weekly_exp(week_start, week_end).await?;
+
+        if weekly_exp < reward.required_exp {
+            return Ok(false);
+        }
+
+        let existing_claim: (i64,) = sqlx::query_as(
+            "SELECT COUNT(*) FROM reward_claims
+             WHERE reward_id = ? AND claimed_date >= ? AND claimed_date <= ?",
+        )
+        .bind(reward_id)
+        .bind(week_start)
+        .bind(week_end)
+        .fetch_one(&self.pool)
+        .await?;
+
+        if existing_claim.0 > 0 {
+            return Ok(false);
+        }
+
+        let claimed_date = week_start
+            .checked_add_signed(TimeDelta::days(6))
+            .ok_or_else(|| sqlx::Error::Protocol("Date overflow in claimed_date".into()))?;
+        sqlx::query("INSERT INTO reward_claims (reward_id, claimed_date) VALUES (?, ?)")
+            .bind(reward_id)
+            .bind(claimed_date)
+            .execute(&self.pool)
+            .await?;
+
+        Ok(true)
     }
 }
 

@@ -17,6 +17,7 @@ use serde::Deserialize;
 use std::fmt::Write;
 
 use crate::auth;
+use crate::database::SetOrRemove;
 use crate::handlers::AppError;
 use crate::models::{
     CreateQuestRequest, CreateRewardRequest, Settings, UpdateQuestRequest, UpdateRewardRequest,
@@ -522,19 +523,57 @@ pub async fn get_quests_handler(
 /// # Errors
 ///
 /// Returns an error if session validation, database operation, or quest not found
+///
+/// # Panics
+///
+/// Panics if multipart form data is invalid
 pub async fn update_quest_handler(
     State(state): State<AppState>,
     headers: HeaderMap,
     Path(id): Path<i64>,
-    Form(request): Form<UpdateQuestRequest>,
+    mut multipart: Multipart,
 ) -> Result<Sse<impl Stream<Item = Result<Event, std::convert::Infallible>>>, AppError> {
     // Validate session
     extract_and_validate_session(&headers, &state).await?;
 
-    let quest = state.db.update_quest(id, request).await.map_err(|e| {
-        error!(error = %e, quest_id = id, "Failed to update quest");
-        AppError::Database(e)
-    })?;
+    // Process multipart form data
+    let (title, description, exp_value, day_of_week, image_data, image_content_type) =
+        process_multipart_quest_fields(&mut multipart).await?;
+
+    let is_active: Option<bool> = Some(true);
+
+    let quest = if let Some(img_data) = image_data {
+        let img_content_type = image_content_type.unwrap_or_default();
+        state
+            .db
+            .update_quest_with_image(
+                id,
+                Some(title),
+                description,
+                exp_value,
+                Some(day_of_week),
+                is_active,
+                SetOrRemove::set(img_data),
+                SetOrRemove::set(img_content_type),
+            )
+            .await
+            .map_err(|e| {
+                error!(error = %e, quest_id = id, "Failed to update quest with image");
+                AppError::Database(e)
+            })?
+    } else {
+        let req = UpdateQuestRequest {
+            day_of_week: Some(day_of_week),
+            description,
+            exp_value,
+            is_active,
+            title: Some(title),
+        };
+        state.db.update_quest(id, req).await.map_err(|e| {
+            error!(error = %e, quest_id = id, "Failed to update quest");
+            AppError::Database(e)
+        })?
+    };
 
     if quest.is_none() {
         warn!(quest_id = id, "Quest not found for update");
@@ -733,19 +772,103 @@ pub async fn get_rewards_handler(
 /// # Errors
 ///
 /// Returns an error if session validation, database operation, or reward not found
+///
+/// # Panics
+///
+/// Panics if multipart form data is invalid
 pub async fn update_reward_handler(
     State(state): State<AppState>,
     headers: HeaderMap,
     Path(id): Path<i64>,
-    Form(request): Form<UpdateRewardRequest>,
+    mut multipart: Multipart,
 ) -> Result<Sse<impl Stream<Item = Result<Event, std::convert::Infallible>>>, AppError> {
     // Validate session
     extract_and_validate_session(&headers, &state).await?;
 
-    let reward = state.db.update_reward(id, request).await.map_err(|e| {
-        error!(error = %e, reward_id = id, "Failed to update reward");
-        AppError::Database(e)
-    })?;
+    // Process multipart form data
+    let mut title: Option<String> = None;
+    let mut description: Option<String> = None;
+    let mut required_exp: Option<i32> = None;
+    let mut is_active: Option<bool> = None;
+    let mut image_data: Option<Vec<u8>> = None;
+    let mut image_content_type: Option<String> = None;
+
+    while let Some(field) = multipart
+        .next_field()
+        .await
+        .map_err(|_| AppError::ValidationError("Validation failed".to_string()))?
+    {
+        let name = field.name().unwrap_or("").to_string();
+        match name.as_str() {
+            "title" => {
+                title = Some(
+                    field
+                        .text()
+                        .await
+                        .map_err(|_| AppError::ValidationError("Validation failed".to_string()))?,
+                );
+            }
+            "description" => {
+                description = Some(
+                    field
+                        .text()
+                        .await
+                        .map_err(|_| AppError::ValidationError("Validation failed".to_string()))?,
+                );
+            }
+            "required_exp" => {
+                if let Ok(text) = field.text().await {
+                    required_exp = text.parse().ok();
+                }
+            }
+            "is_active" => {
+                if let Ok(text) = field.text().await {
+                    is_active = text.parse().ok();
+                }
+            }
+            "image" => {
+                let content_type = field.content_type().map(ToString::to_string);
+                if let Ok(data) = field.bytes().await
+                    && !data.is_empty()
+                {
+                    image_data = Some(data.to_vec());
+                    image_content_type = content_type;
+                }
+            }
+            _ => {}
+        }
+    }
+
+    let reward = if let Some(img_data) = image_data {
+        let img_content_type = image_content_type.unwrap_or_default();
+        state
+            .db
+            .update_reward_with_image(
+                id,
+                title,
+                description,
+                required_exp,
+                is_active,
+                SetOrRemove::set(img_data),
+                SetOrRemove::set(img_content_type),
+            )
+            .await
+            .map_err(|e| {
+                error!(error = %e, reward_id = id, "Failed to update reward with image");
+                AppError::Database(e)
+            })?
+    } else {
+        let req = UpdateRewardRequest {
+            description,
+            is_active,
+            required_exp,
+            title,
+        };
+        state.db.update_reward(id, req).await.map_err(|e| {
+            error!(error = %e, reward_id = id, "Failed to update reward");
+            AppError::Database(e)
+        })?
+    };
 
     if reward.is_none() {
         warn!(reward_id = id, "Reward not found for update");
