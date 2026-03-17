@@ -8,9 +8,9 @@ directly. All build/deploy/maintenance commands MUST run through `cargo x`.
 Direct `cargo`, `rustc`, or other tool commands are forbidden. If a command is
 missing from `x/src/main.rs`, add it there instead.
 
-Keep comments accurate, descriptive, and up-to-date.
-Update comments when modifying code.
-Accurate comments aid comprehension; inaccurate or outdated comments hinder it.
+Keep comments accurate, descriptive, and up-to-date. Update comments when
+modifying code. Accurate comments aid comprehension; inaccurate or outdated
+comments hinder it.
 
 ## VERBOTEN
 
@@ -29,6 +29,10 @@ Settings endpoints │ └── stats.rs # Highscore endpoints ├── auth.r
 Authentication ├── state.rs # App state management ├── time.rs # Time utilities
 ├── systemd.rs # Systemd integration └── ui/ # UI fragments └── fragments/ #
 HTML components
+
+### Build tool
+
+x/ # Custom CLI for development tasks (cargo x ...)
 
 ### Test files
 
@@ -116,9 +120,8 @@ Setup:
 
 ## External References
 
-For architecture details: @ARCHITECTURE.md For user manual:
-@documentation/user_manual/EDITOR.md For ADRs: @documentation/adrs/ For project
-overview: @README.md
+For architecture details: @ARCHITECTURE.md For ADRs: @documentation/adrs/ For
+project overview: @README.md
 
 ## Commit Guidelines
 
