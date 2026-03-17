@@ -3,12 +3,11 @@
 //! Provides HTTP handlers for the editor page, authentication, and CRUD operations.
 
 use axum::{
-    body::Body,
     extract::Multipart,
     extract::{Form, Path, State},
-    http::{HeaderMap, StatusCode, header::SET_COOKIE},
+    http::{HeaderMap, header::SET_COOKIE},
     response::sse::{Event, Sse},
-    response::{Html, IntoResponse, Response},
+    response::{Html, IntoResponse},
 };
 use chrono::Utc;
 use datastar::patch_elements::PatchElements;
@@ -1000,15 +999,6 @@ fn render_quests_table(quests: &[crate::models::Quest]) -> String {
     html
 }
 
-/// Editor-specific errors
-#[derive(Debug, Clone, Copy)]
-pub enum EditorError {
-    Database,
-    NotFound,
-    Unauthorized,
-    Validation,
-}
-
 fn render_rewards_table(rewards: &[crate::models::Reward]) -> String {
     let mut html = String::new();
 
@@ -1040,24 +1030,4 @@ fn render_rewards_table(rewards: &[crate::models::Reward]) -> String {
 
     html.push_str("</tbody></table>");
     html
-}
-
-impl IntoResponse for EditorError {
-    fn into_response(self) -> Response<Body> {
-        let message = match self {
-            EditorError::Database => "Database error",
-            EditorError::NotFound => "Not found",
-            EditorError::Unauthorized => "Unauthorized",
-            EditorError::Validation => "Invalid request",
-        };
-
-        let status = match self {
-            EditorError::Database => StatusCode::INTERNAL_SERVER_ERROR,
-            EditorError::NotFound => StatusCode::NOT_FOUND,
-            EditorError::Unauthorized => StatusCode::UNAUTHORIZED,
-            EditorError::Validation => StatusCode::BAD_REQUEST,
-        };
-
-        (status, Html(message)).into_response()
-    }
 }

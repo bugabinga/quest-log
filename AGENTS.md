@@ -12,6 +12,12 @@ Keep comments accurate, descriptive, and up-to-date.
 Update comments when modifying code.
 Accurate comments aid comprehension; inaccurate or outdated comments hinder it.
 
+## VERBOTEN
+
+Do not do these things:
+
+- never use `#[allow]` without human approval
+
 ## Project Structure
 
 ### Source code

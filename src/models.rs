@@ -26,12 +26,6 @@ pub struct QuestCompletion {
     pub quest_id: i64,
 }
 
-pub enum UpdateField<T> {
-    NoChange,
-    Clear,
-    Set(T),
-}
-
 // Reward model
 #[derive(Debug, Clone, FromRow, Serialize, Deserialize)]
 pub struct Reward {
