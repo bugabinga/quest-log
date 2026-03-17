@@ -1,6 +1,7 @@
 use super::toggle::QuestDisplay;
 use maud::html;
 
+#[must_use]
 pub fn quest_list(quests: &[QuestDisplay], _is_today: bool) -> maud::Markup {
     html! {
         @if !quests.is_empty() {

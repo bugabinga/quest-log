@@ -20,6 +20,7 @@ thread_local! {
 /// - Specific date: `QUEST_LOG_TODAY=2024-01-15`
 /// - Weekday number: `QUEST_LOG_TODAY=1` (0=Sunday, 1=Monday, etc.)
 /// - Weekday name: `QUEST_LOG_TODAY=Monday`
+#[must_use]
 pub fn today() -> NaiveDate {
     if let Some(date) = FAKE_TODAY.with(|m| *m.borrow()) {
         return date;
@@ -43,8 +44,8 @@ fn parse_today_override(val: &str) -> NaiveDate {
     {
         let today = today();
         let current_weekday = today.weekday().num_days_from_sunday();
-        let target = num as u32;
-        let offset = current_weekday as i64 - target as i64;
+        let target = u32::from(num);
+        let offset = i64::from(current_weekday) - i64::from(target);
         return today - chrono::Duration::days(offset);
     }
 
@@ -61,8 +62,8 @@ fn parse_today_override(val: &str) -> NaiveDate {
     };
     if let Some(weekday) = weekday {
         let today = today();
-        let current_weekday = today.weekday().num_days_from_sunday() as i64;
-        let target = weekday.num_days_from_sunday() as i64;
+        let current_weekday = i64::from(today.weekday().num_days_from_sunday());
+        let target = i64::from(weekday.num_days_from_sunday());
         return today - chrono::Duration::days(current_weekday - target);
     }
 
@@ -93,7 +94,7 @@ fn parse_today_override(val: &str) -> NaiveDate {
 /// 4. **Immediate Effect**: Setting a thread-local takes effect immediately,
 ///    whereas environment variables need process restart.
 ///
-/// # Alternative: QUEST_LOG_TODAY Environment Variable
+/// # Alternative: `QUEST_LOG_TODAY` Environment Variable
 ///
 /// For manual testing, you can set the `QUEST_LOG_TODAY` environment variable
 /// (only works in debug builds):
@@ -130,33 +131,41 @@ pub fn reset_today() {
     FAKE_TODAY.with(|m| *m.borrow_mut() = None);
 }
 
+#[must_use]
 pub fn get_week_bounds(date: NaiveDate) -> (NaiveDate, NaiveDate) {
-    let week_start = date - chrono::Duration::days(date.weekday().num_days_from_monday() as i64);
+    let week_start =
+        date - chrono::Duration::days(i64::from(date.weekday().num_days_from_monday()));
     let week_end = week_start + chrono::Duration::days(6);
     (week_start, week_end)
 }
 
+#[must_use]
 pub fn end_of_week(date: NaiveDate) -> NaiveDate {
-    date - chrono::Duration::days(date.weekday().num_days_from_monday() as i64)
+    date - chrono::Duration::days(i64::from(date.weekday().num_days_from_monday()))
         + chrono::Duration::days(6)
 }
 
+#[must_use]
 pub fn format_date_iso(date: NaiveDate) -> String {
     date.format("%Y-%m-%d").to_string()
 }
 
+#[must_use]
 pub fn format_date_display(date: NaiveDate) -> String {
     date.format("%B %-d").to_string()
 }
 
+#[must_use]
 pub fn prev_day(date: NaiveDate) -> NaiveDate {
     date - chrono::Duration::days(1)
 }
 
+#[must_use]
 pub fn next_day(date: NaiveDate) -> NaiveDate {
     date + chrono::Duration::days(1)
 }
 
+#[must_use]
 pub fn parse_date(date_str: &str) -> Option<NaiveDate> {
     NaiveDate::parse_from_str(date_str, "%Y-%m-%d").ok()
 }

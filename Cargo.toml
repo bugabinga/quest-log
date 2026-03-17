@@ -20,21 +20,21 @@ categories = ["gamification", "productivity", "web-applications"]
 doctest = false
 
 [dependencies]
-axum = { version = "0", features = ["multipart"] }
-datastar = { version = "0", features = ["axum"] }
-maud = "0"
-sqlx = { version = "0", features = [
+axum = { version = "*", features = ["multipart"] }
+datastar = { version = "*", features = ["axum"] }
+maud = "*"
+sqlx = { version = "*", features = [
   "runtime-tokio",
   "sqlite",
   "chrono",
   "macros",
   "migrate",
 ] }
-dotenvy = "0"
-thiserror = "2"
-serde = { version = "1", features = ["derive"] }
-serde_json = "1"
-tokio = { version = "1", features = [
+dotenvy = "*"
+thiserror = "*"
+serde = { version = "*", features = ["derive"] }
+serde_json = "*"
+tokio = { version = "*", features = [
   "rt",
   "rt-multi-thread",
   "sync",
@@ -43,32 +43,32 @@ tokio = { version = "1", features = [
   "net",
   "macros",
 ] }
-tokio-stream = { version = "0", features = ["sync"] }
-static-serve = "0"
-chrono = { version = "0", features = ["serde"] }
-tracing = "0"
-tracing-subscriber = { version = "0", features = ["env-filter"] }
-tracing-error = "0"
-clap = { version = "4", features = ["derive"] }
-futures = "0"
-async-stream = "0"
-crossterm = "0"
-tower = "0"
-tower-sessions = "0"
-argon2 = { version = "0" }
-axum-extra = { version = "0", features = ["cookie", "multipart"] }
-rand_core = { version = "0", features = ["getrandom"] }
-rpassword = "7"
+tokio-stream = { version = "*", features = ["sync"] }
+static-serve = "*"
+chrono = { version = "*", features = ["serde"] }
+tracing = "*"
+tracing-subscriber = { version = "*", features = ["env-filter"] }
+tracing-error = "*"
+clap = { version = "*", features = ["derive"] }
+futures = "*"
+async-stream = "*"
+crossterm = "*"
+tower = "*"
+tower-sessions = "*"
+argon2 = "*"
+axum-extra = { version = "*", features = ["cookie", "multipart"] }
+rand_core = { version = "*", features = ["getrandom"] }
+rpassword = "*"
 
 [dev-dependencies]
-reqwest = { version = "0", features = ["json", "stream"] }
-tokio-test = "0"
-proptest = "1"
-tempfile = "3"
-insta = { version = "1", features = ["yaml"] }
-pretty_assertions = "1"
-nix = { version = "0" }
-libc = { version = "0" }
+reqwest = { version = "*", features = ["json", "stream"] }
+tokio-test = "*"
+proptest = "*"
+tempfile = "*"
+insta = { version = "*", features = ["yaml"] }
+pretty_assertions = "*"
+nix = { version = "*" }
+libc = { version = "*" }
 
 [build-dependencies]
 
@@ -85,7 +85,7 @@ panic = 'abort'
 strip = true
 
 [target.'cfg(target_os = "linux")'.dependencies]
-sd-notify = "0"
+sd-notify = "*"
 
 [features]
 test-utils = []
@@ -101,12 +101,14 @@ perf = { level = "warn", priority = -1 }
 style = { level = "warn", priority = -1 }
 cargo = { level = "warn", priority = -1 }
 
-arithmetic_side_effects = "warn"
+too_many_lines = "allow"
+too_many_arguments = "allow"
+multiple_crate_versions = "allow"
+
 expect_used = { level = "warn" }
 should_panic_without_expect = "warn"
 unused_result_ok = "warn"
 unwrap_used = "warn"
-arbitrary_source_item_ordering = "warn"
 pub_use = "warn"
 todo = "warn"
 

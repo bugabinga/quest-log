@@ -1,10 +1,10 @@
 use maud::{Markup, PreEscaped, html};
 
 pub fn today_button(is_today: bool) -> Markup {
-    let onclick: Option<String> = if !is_today {
-        Some("@get('/navigate/today')".to_string())
-    } else {
+    let onclick: Option<String> = if is_today {
         None
+    } else {
+        Some("@get('/navigate/today')".to_string())
     };
 
     html! {

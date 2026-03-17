@@ -3,6 +3,7 @@ use crate::ui::base::{PageData, base_page};
 use crate::ui::fragments::weekly_rewards::weekly_rewards;
 use maud::html;
 
+#[must_use]
 pub fn bounty_page(
     week_exp: i32,
     rewards: &[WeeklyRewardDisplay],
@@ -30,7 +31,7 @@ pub fn bounty_page(
         }
     };
 
-    base_page(PageData {
+    let page_data = PageData {
         title: "Bounty Board".to_string(),
         body_content,
         weekday: None,
@@ -39,5 +40,7 @@ pub fn bounty_page(
         show_nav: true,
         active_route: Some("/bounty".to_string()),
         extra_scripts: None,
-    })
+    };
+
+    base_page(&page_data)
 }

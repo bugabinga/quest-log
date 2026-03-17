@@ -18,8 +18,7 @@ pub fn nav_buttons(class: &str, can_navigate: bool, target_date: &str) -> Markup
     };
     let onclick = if can_navigate {
         Some(format!(
-            "@get('/navigate/{}', {{ headers: {{ 'X-Navigate-Dir': '{}' }} }})",
-            target_date, dir
+            "@get('/navigate/{target_date}', {{ headers: {{ 'X-Navigate-Dir': '{dir}' }} }})"
         ))
     } else {
         None

@@ -15,6 +15,7 @@ pub struct QuestDisplay {
 }
 
 impl QuestDisplay {
+    #[must_use]
     pub fn from_quest(
         quest: Quest,
         completed_today: bool,
@@ -33,6 +34,7 @@ impl QuestDisplay {
     }
 }
 
+#[must_use]
 pub fn toggle(quest: &QuestDisplay) -> Markup {
     let onclick = format!(
         "@post('/quests/toggle', {{ payload: {{ quest_id: {} }} }})",

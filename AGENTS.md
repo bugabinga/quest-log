@@ -8,6 +8,10 @@ directly. All build/deploy/maintenance commands MUST run through `cargo x`.
 Direct `cargo`, `rustc`, or other tool commands are forbidden. If a command is
 missing from `x/src/main.rs`, add it there instead.
 
+Keep comments accurate, descriptive, and up-to-date.
+Update comments when modifying code.
+Accurate comments aid comprehension; inaccurate or outdated comments hinder it.
+
 ## Project Structure
 
 ### Source code

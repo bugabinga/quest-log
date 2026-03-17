@@ -28,6 +28,11 @@ pub struct HighscoreData {
     pub completions_by_date: Vec<(NaiveDate, i32)>,
 }
 
+/// Get highscore statistics
+///
+/// # Errors
+///
+/// Returns an error if database queries fail
 pub async fn highscore(State(state): State<AppState>) -> Result<impl IntoResponse, AppError> {
     let db = &state.db;
 
@@ -60,14 +65,15 @@ pub async fn highscore(State(state): State<AppState>) -> Result<impl IntoRespons
     // Group completions by date
     let mut completions_map: HashMap<NaiveDate, i32> = HashMap::new();
     for completion in &all_completions {
-        *completions_map
+        let count = completions_map
             .entry(completion.completed_date)
-            .or_insert(0) += 1;
+            .or_insert(0);
+        *count = count.saturating_add(1);
     }
 
     // Convert to sorted vector (most recent first)
     let mut completions_by_date: Vec<(NaiveDate, i32)> = completions_map.into_iter().collect();
-    completions_by_date.sort_by(|a, b| b.0.cmp(&a.0));
+    completions_by_date.sort_by_key(|b| std::cmp::Reverse(b.0));
 
     // Limit to last 30 days for MVP
     completions_by_date.truncate(30);
@@ -76,10 +82,10 @@ pub async fn highscore(State(state): State<AppState>) -> Result<impl IntoRespons
         total_exp,
         quests_completed,
         rewards_claimed,
-        weekly_champions: weekly_champions.len() as i32,
+        weekly_champions: i32::try_from(weekly_champions.len()).unwrap_or(i32::MAX),
         completions_by_date,
     };
 
-    let html = ui::highscore::highscore_page(data);
+    let html = ui::highscore::highscore_page(&data);
     Ok(Html(html.into_string()).into_response())
 }

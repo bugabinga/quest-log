@@ -1,6 +1,7 @@
 use crate::models::{ClaimState, WeeklyRewardDisplay};
 use maud::{PreEscaped, html};
 
+#[must_use]
 pub fn weekly_rewards(
     week_exp: i32,
     rewards: &[WeeklyRewardDisplay],
@@ -43,7 +44,8 @@ pub fn weekly_rewards(
                         }
                         div class="reward-progress" {
                             div class="progress-bar reward-progress-bar" {
-                                div class="progress-fill" style=(format!("width: {}%", (reward.weekly_exp * 100) / reward.required_exp.max(1))) {}
+                                @let percentage = reward.weekly_exp.checked_mul(100).and_then(|v| v.checked_div(reward.required_exp.max(1))).unwrap_or(100);
+                                div class="progress-fill" style=(format!("width: {}%", percentage)) {}
                             }
                             span class="progress-text" { (reward.weekly_exp) " / " (reward.required_exp) }
                         }

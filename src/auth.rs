@@ -8,7 +8,7 @@ mod hex {
     const HEX_CHARS: &[u8; 16] = b"0123456789abcdef";
 
     pub fn encode(bytes: &[u8]) -> String {
-        let mut s = String::with_capacity(bytes.len() * 2);
+        let mut s = String::with_capacity(bytes.len().checked_mul(2).unwrap_or(0));
         for &b in bytes {
             s.push(HEX_CHARS[(b >> 4) as usize] as char);
             s.push(HEX_CHARS[(b & 0xf) as usize] as char);
@@ -19,13 +19,26 @@ mod hex {
 
 use argon2::{
     Argon2, PasswordHash, PasswordHasher, PasswordVerifier,
-    password_hash::{SaltString, rand_core::OsRng, rand_core::RngCore},
+    password_hash::{Error as PasswordHashError, SaltString, rand_core::OsRng, rand_core::RngCore},
 };
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
+use thiserror::Error;
 use tokio::sync::RwLock;
 use tracing::{debug, warn};
+
+#[derive(Debug, Error)]
+pub enum AuthError {
+    #[error("Password hashing failed: {0}")]
+    HashingFailed(String),
+}
+
+impl From<PasswordHashError> for AuthError {
+    fn from(err: PasswordHashError) -> Self {
+        AuthError::HashingFailed(err.to_string())
+    }
+}
 
 /// Default session duration in hours
 pub const SESSION_DURATION_HOURS: u64 = 24;
@@ -140,10 +153,13 @@ pub fn get_password_hash_or_default() -> String {
     } else {
         tracing::warn!("Using default dev password 'dev' - DO NOT USE IN PRODUCTION!");
         DEV_HASH
-            // SAFETY: This should never panic - hashing "dev" is deterministic and
-            // the OS RNG should always be available for salt generation.
-            // If this fails, there's a fundamental system issue.
-            .get_or_init(|| hash_password("dev").expect("Failed to hash dev password"))
+            .get_or_init(|| match hash_password("dev") {
+                Ok(hash) => hash,
+                Err(e) => {
+                    tracing::error!("Failed to hash dev password: {}", e);
+                    panic!("Failed to hash dev password: {e}");
+                }
+            })
             .clone()
     }
 }
@@ -166,7 +182,7 @@ pub fn get_password_hash_or_default() -> String {
 /// Returns an error if the password cannot be hashed due to:
 /// - Cryptographic random number generator failure
 /// - Invalid password encoding
-pub fn hash_password(password: &str) -> Result<String, argon2::password_hash::Error> {
+pub fn hash_password(password: &str) -> Result<String, AuthError> {
     let salt = SaltString::generate(&mut OsRng);
     let argon2 = Argon2::default();
     let password_hash = argon2.hash_password(password.as_bytes(), &salt)?;

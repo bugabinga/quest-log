@@ -1,6 +1,7 @@
 use crate::ui::base::{PageData, base_page};
 use maud::html;
 
+#[must_use]
 pub fn error_page(title: &str, heading: &str, message: &str) -> maud::Markup {
     let body_content = html! {
         div class="error-message" {
@@ -10,7 +11,7 @@ pub fn error_page(title: &str, heading: &str, message: &str) -> maud::Markup {
         }
     };
 
-    base_page(PageData {
+    let page_data = PageData {
         title: title.to_string(),
         body_content,
         weekday: None,
@@ -19,5 +20,7 @@ pub fn error_page(title: &str, heading: &str, message: &str) -> maud::Markup {
         show_nav: false,
         active_route: None,
         extra_scripts: None,
-    })
+    };
+
+    base_page(&page_data)
 }

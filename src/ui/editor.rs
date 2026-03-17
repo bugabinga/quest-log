@@ -17,6 +17,7 @@ const DAY_NAMES: &[&str] = &[
 ];
 
 /// Generate the full editor page HTML
+#[must_use]
 pub fn editor_page(
     is_authenticated: bool,
     active_tab: &str,
@@ -24,7 +25,7 @@ pub fn editor_page(
     rewards: &[Reward],
     settings: &Settings,
 ) -> Markup {
-    let signals = format!("{{_activeTab: '{}'}}", active_tab);
+    let signals = format!("{{_activeTab: '{active_tab}'}}");
 
     let body_content = html! {
         div class="editor-wrapper" {
@@ -82,7 +83,7 @@ pub fn editor_page(
         div id="toast-container" class="toast-container" {}
     };
 
-    base_page(PageData {
+    let page_data = PageData {
         title: "Quest Log Editor 🗝️".to_string(),
         body_content,
         weekday: None,
@@ -91,7 +92,9 @@ pub fn editor_page(
         show_nav: true,
         active_route: Some("/editor".to_string()),
         extra_scripts: None,
-    })
+    };
+
+    base_page(&page_data)
 }
 
 /// Quests panel for the editor
@@ -192,10 +195,10 @@ fn editor_quests_panel(quests: &[Quest]) -> Markup {
                 }
                 tbody {
                     @for quest in quests {
-                        tr class=(if !quest.is_active { "inactive-row" } else { "" }) {
+                        tr class=(if quest.is_active { "" } else { "inactive-row" }) {
                             td { (quest.title) }
                             td { (quest.exp_value) }
-                            td { (DAY_NAMES[quest.day_of_week as usize]) }
+                            td { (DAY_NAMES[usize::try_from(quest.day_of_week).unwrap_or(0)]) }
                             td {
                                 @if quest.is_active {
                                     span class="status-badge status-badge--active" { "Active" }
@@ -321,7 +324,7 @@ fn editor_rewards_panel(rewards: &[Reward]) -> Markup {
                 }
                 tbody {
                     @for reward in rewards {
-                        tr class=(if !reward.is_active { "inactive-row" } else { "" }) {
+                        tr class=(if reward.is_active { "" } else { "inactive-row" }) {
                             td { (reward.title) }
                             td { (reward.required_exp) }
                             td {
