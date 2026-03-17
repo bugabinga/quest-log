@@ -61,7 +61,7 @@ async fn main() {
     setup_logging();
 
     #[cfg(debug_assertions)]
-    dotenvy::dotenv().ok();
+    let _ = dotenvy::dotenv();
 
     tracing::info!("✨ Quest Log starting up...");
 
@@ -69,7 +69,7 @@ async fn main() {
     let should_run_server = match cli::run_cli().await {
         Ok(should_run) => should_run,
         Err(e) => {
-            eprintln!("❌ CLI error: {}", e);
+            eprintln!("❌ CLI error: {e}");
             std::process::exit(1);
         }
     };
@@ -85,9 +85,14 @@ async fn main() {
     tracing::debug!(port = %port, "🔌 Port configured");
 
     tracing::info!("🗄️  Initializing database...");
-    let db = Database::new()
-        .await
-        .expect("💥 Failed to connect to database");
+    let db = match Database::new().await {
+        Ok(db) => db,
+        Err(e) => {
+            tracing::error!(error = %e, "💥 Failed to connect to database");
+            eprintln!("❌ Failed to connect to database: {e}");
+            std::process::exit(1);
+        }
+    };
     tracing::info!("✅ Database ready! (灬♥ω♥灬)");
 
     let (bcast_tx, _rx) = broadcast::channel::<ServerMessage>(128);
@@ -166,7 +171,14 @@ async fn main() {
     // so both routers expect `AppState` as their missing state.
     let app = router.merge(static_router::<AppState>());
 
-    let port: u16 = port.parse().expect("💢 PORT must be a number");
+    let port: u16 = match port.parse() {
+        Ok(port) => port,
+        Err(e) => {
+            tracing::error!(error = %e, "💢 PORT must be a number");
+            eprintln!("❌ Invalid PORT: {e}");
+            std::process::exit(1);
+        }
+    };
     let addr = SocketAddr::from(([127, 0, 0, 1], port));
 
     tracing::info!(port, "🚀 Starting HTTP server...");
@@ -286,8 +298,13 @@ async fn main() {
             #[cfg(unix)]
             {
                 use tokio::signal::unix::{signal, SignalKind};
-                let mut sigterm = signal(SignalKind::terminate()).expect("Failed to install SIGTERM");
-                sigterm.recv().await
+                match signal(SignalKind::terminate()) {
+                    Ok(mut sigterm) => sigterm.recv().await,
+                    Err(e) => {
+                        tracing::error!(error = %e, "Failed to install SIGTERM");
+                        None
+                    }
+                }
             }
             #[cfg(not(unix))]
             {

@@ -1,6 +1,7 @@
 use crate::models::{ClaimState, WeeklyRewardDisplay};
 use maud::{PreEscaped, html};
 
+#[must_use]
 pub fn weekly_rewards(
     week_exp: i32,
     rewards: &[WeeklyRewardDisplay],

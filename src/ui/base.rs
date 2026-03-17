@@ -23,6 +23,7 @@ pub struct PageData {
     pub extra_scripts: Option<String>,
 }
 
+#[must_use]
 pub fn base_page(data: PageData) -> maud::Markup {
     html! {
         (DOCTYPE)

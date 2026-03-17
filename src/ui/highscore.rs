@@ -4,6 +4,7 @@ use crate::handlers::stats::HighscoreData;
 use crate::ui::base::{PageData, base_page};
 use maud::html;
 
+#[must_use]
 pub fn highscore_page(data: HighscoreData) -> maud::Markup {
     let body_content = html! {
         h1 class="rainbow-text" { "🏆 Highscore 🏆" }
@@ -91,5 +92,5 @@ fn format_date(date: NaiveDate) -> String {
         _ => "?",
     };
     let year = date.year();
-    format!("{} {} {}", day, month, year)
+    format!("{day} {month} {year}")
 }

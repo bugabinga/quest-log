@@ -1,5 +1,6 @@
 use maud::html;
 
+#[must_use]
 pub fn day_header(day_name: &str, selected_date: &str) -> maud::Markup {
     html! {
         div class="day-info" id="day-info" {

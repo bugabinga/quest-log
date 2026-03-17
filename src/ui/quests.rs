@@ -3,6 +3,7 @@ use crate::ui::base::{PageData, base_page};
 use crate::ui::fragments::toggle::QuestDisplay;
 use maud::{PreEscaped, html};
 
+#[must_use]
 pub fn quests_page(
     quests: &[QuestDisplay],
     error_message: &str,
@@ -34,8 +35,7 @@ pub fn quests_page(
 
     let nav_left_onclick = if can_navigate_left {
         Some(PreEscaped(format!(
-            "@get('/navigate/{}', {{ headers: {{ 'X-Navigate-Dir': 'prev' }} }})",
-            prev_date
+            "@get('/navigate/{prev_date}', {{ headers: {{ 'X-Navigate-Dir': 'prev' }} }})"
         )))
     } else {
         None
@@ -43,17 +43,16 @@ pub fn quests_page(
 
     let nav_right_onclick = if can_navigate_right {
         Some(PreEscaped(format!(
-            "@get('/navigate/{}', {{ headers: {{ 'X-Navigate-Dir': 'next' }} }})",
-            next_date
+            "@get('/navigate/{next_date}', {{ headers: {{ 'X-Navigate-Dir': 'next' }} }})"
         )))
     } else {
         None
     };
 
-    let today_onclick = if !is_today {
-        Some(PreEscaped("@get('/navigate/today')".to_string()))
-    } else {
+    let today_onclick = if is_today {
         None
+    } else {
+        Some(PreEscaped("@get('/navigate/today')".to_string()))
     };
 
     let body_content = html! {

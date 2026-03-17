@@ -33,50 +33,65 @@ pub enum ServerMessage {
     Signals(String, Option<String>),
 }
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, thiserror::Error)]
 pub enum AppError {
-    Database,
+    #[error("Database error: {0}")]
+    Database(#[from] sqlx::Error),
+    #[error("Not found")]
     NotFound,
-    ValidationError,
+    #[error("Validation error: {0}")]
+    ValidationError(String),
+    #[error("Authentication error: {0}")]
+    Authentication(String),
+    #[error("Internal error: {0}")]
+    Internal(String),
 }
 
 impl AppError {
     fn heading(&self) -> &'static str {
         match self {
-            Self::Database => "Something went wrong",
+            Self::Database(_) => "Something went wrong",
             Self::NotFound => "Gone.",
-            Self::ValidationError => "Wrong Day!",
+            Self::ValidationError(_) => "Wrong Day!",
+            Self::Authentication(_) => "Access Denied",
+            Self::Internal(_) => "Internal Error",
         }
     }
 
-    fn message(&self) -> &'static str {
+    fn message(&self) -> String {
         match self {
-            Self::Database => "Something went wrong on our end. Please try again later!",
-            Self::NotFound => "Like your motivation. Or your quests.",
-            Self::ValidationError => "You can only complete quests on their assigned day.",
+            Self::Database(e) => format!("Database error: {e}"),
+            Self::NotFound => "Like your motivation. Or your quests.".to_string(),
+            Self::ValidationError(msg) | Self::Authentication(msg) | Self::Internal(msg) => {
+                msg.clone()
+            }
         }
     }
 
     fn status_code(&self) -> StatusCode {
         match self {
-            Self::Database => StatusCode::INTERNAL_SERVER_ERROR,
+            Self::Database(_) | Self::Internal(_) => StatusCode::INTERNAL_SERVER_ERROR,
             Self::NotFound => StatusCode::NOT_FOUND,
-            Self::ValidationError => StatusCode::BAD_REQUEST,
+            Self::ValidationError(_) => StatusCode::BAD_REQUEST,
+            Self::Authentication(_) => StatusCode::UNAUTHORIZED,
         }
     }
 
     fn title(&self) -> &'static str {
         match self {
-            Self::Database => "Oops!",
+            Self::Database(_) => "Oops!",
             Self::NotFound => "Nothing Here",
-            Self::ValidationError => "Can't Do That",
+            Self::ValidationError(_) => "Can't Do That",
+            Self::Authentication(_) => "Access Denied",
+            Self::Internal(_) => "Internal Error",
         }
     }
 }
 
 impl IntoResponse for AppError {
     fn into_response(self) -> Response<Body> {
-        let html = ui::error::error_page(self.title(), self.heading(), self.message());
+        let message = self.message();
+        let html = ui::error::error_page(self.title(), self.heading(), &message);
         (self.status_code(), Html(html.into_string())).into_response()
     }
 }
@@ -89,6 +104,7 @@ pub enum QuestId {
 }
 
 impl QuestId {
+    #[must_use]
     pub fn as_i64(&self) -> i64 {
         match self {
             QuestId::I64(v) => *v,
@@ -122,6 +138,11 @@ fn get_fantasy_day_name(weekday: Weekday) -> &'static str {
 }
 
 #[instrument(name = "📜 GET /", skip(state, query), fields(date = ?query.date))]
+/// Get quests for the current day
+///
+/// # Errors
+///
+/// Returns an error if database query fails
 pub async fn quests(
     State(state): State<AppState>,
     Query(query): Query<QuestsQuery>,
@@ -131,6 +152,11 @@ pub async fn quests(
 }
 
 #[instrument(name = "📜 GET /day/:date", skip(state), fields(date = %date_str))]
+/// Get quests for a specific day
+///
+/// # Errors
+///
+/// Returns an error if database query fails
 pub async fn quests_with_date(
     State(state): State<AppState>,
     Path(date_str): Path<String>,
@@ -152,13 +178,16 @@ async fn quests_handler(
     let today = time::today();
 
     let selected_date = match &date_str {
-        Some(date_str) => match time::parse_date(date_str) {
-            Some(date) => date,
-            None => {
+        Some(date_str) => {
+            if let Some(date) = time::parse_date(date_str) {
+                date
+            } else {
                 tracing::warn!(date_str = %date_str, "⚠️  Invalid date format - rejecting");
-                return Err(AppError::ValidationError);
+                return Err(AppError::ValidationError(
+                    "Quest not available today - wrong day".to_string(),
+                ));
             }
-        },
+        }
         None => today,
     };
 
@@ -168,7 +197,9 @@ async fn quests_handler(
     let (week_start, week_end) = time::get_week_bounds(today);
     if selected_date < week_start || selected_date > week_end {
         tracing::warn!(date = %selected_date, week_start = %week_start, week_end = %week_end, "⚠️ Date outside current week - rejecting");
-        return Err(AppError::ValidationError);
+        return Err(AppError::ValidationError(
+            "Date outside current week".to_string(),
+        ));
     }
 
     let day_of_week = selected_date.weekday().num_days_from_sunday().cast_signed();
@@ -184,7 +215,7 @@ async fn quests_handler(
         }
         Err(e) => {
             tracing::error!(error = %e, "💥 Failed to load quests from database");
-            return Err(AppError::Database);
+            return Err(AppError::Database(e));
         }
     };
 
@@ -196,7 +227,7 @@ async fn quests_handler(
         Ok(status) => status,
         Err(e) => {
             tracing::error!(error = %e, "💥 Failed to load completion status");
-            return Err(AppError::Database);
+            return Err(AppError::Database(e));
         }
     };
 
@@ -272,6 +303,11 @@ async fn quests_handler(
 }
 
 #[instrument(name = "✨ toggle_quest", skip(state, request), fields(quest_id = request.quest_id.as_i64()))]
+/// Toggle quest completion status
+///
+/// # Errors
+///
+/// Returns an error if database operation fails
 pub async fn toggle_quest(
     State(state): State<AppState>,
     ReadSignals(request): ReadSignals<ToggleQuestRequest>,
@@ -286,7 +322,7 @@ pub async fn toggle_quest(
     // Check if quest exists first
     let quest = db.get_quest_by_id(quest_id).await.map_err(|e| {
         tracing::error!(error = %e, quest_id, "💥 Database error looking up quest");
-        AppError::Database
+        AppError::Database(e)
     })?;
 
     let Some(quest) = quest else {
@@ -303,7 +339,9 @@ pub async fn toggle_quest(
             today_day,
             "⚠️  Quest not available today - wrong day"
         );
-        return Err(AppError::ValidationError);
+        return Err(AppError::ValidationError(
+            "Quest not available today - wrong day".to_string(),
+        ));
     }
 
     tracing::debug!(quest_id, title = %quest.title, "Toggling quest completion");
@@ -311,7 +349,7 @@ pub async fn toggle_quest(
         .await
         .map_err(|e| {
             tracing::error!(error = %e, quest_id, "💥 Database error toggling quest");
-            AppError::Database
+            AppError::Database(e)
         })?;
 
     let completed_today = db
@@ -392,6 +430,11 @@ pub struct ClaimRewardRequest {
 }
 
 #[instrument(name = "🧭 navigate", skip(state, path, headers))]
+/// Navigate to a different date
+///
+/// # Errors
+///
+/// Returns an error if database operation fails
 pub async fn navigate(
     State(state): State<AppState>,
     Path(path): Path<NavigatePath>,
@@ -429,7 +472,7 @@ pub async fn navigate(
     let quests = db
         .get_quests_for_day(day_of_week)
         .await
-        .map_err(|_| AppError::Database)?;
+        .map_err(AppError::Database)?;
 
     let mut quests_display = Vec::new();
     for quest in quests {
@@ -512,11 +555,10 @@ pub async fn navigate(
     let url_path = if is_today {
         "/".to_string()
     } else {
-        format!("/day/{}", date_iso)
+        format!("/day/{date_iso}")
     };
     let history_script = format!(
-        "window.history.pushState({{date:'{}'}}, '', '{}'); document.body.setAttribute('data-weekday', '{}');",
-        date_iso, url_path, weekday_num
+        "window.history.pushState({{date:'{date_iso}'}}, '', '{url_path}'); document.body.setAttribute('data-weekday', '{weekday_num}');"
     );
 
     let signals_json = serde_json::json!({
@@ -531,8 +573,7 @@ pub async fn navigate(
     });
 
     let combined_html = format!(
-        "{}\n{}\n{}\n{}\n{}",
-        day_header_html, today_btn_html, nav_left_html, nav_right_html, quest_list_html
+        "{day_header_html}\n{today_btn_html}\n{nav_left_html}\n{nav_right_html}\n{quest_list_html}"
     );
 
     let events: Vec<Event> = vec![
@@ -587,6 +628,11 @@ pub async fn events(
 }
 
 #[instrument(name = "🏆 claim_reward", skip(state, request))]
+/// Claim a reward
+///
+/// # Errors
+///
+/// Returns an error if database operation fails
 pub async fn claim_reward(
     State(state): State<AppState>,
     ReadSignals(request): ReadSignals<ClaimRewardRequest>,
@@ -603,12 +649,16 @@ pub async fn claim_reward(
     let is_sunday = today.weekday().num_days_from_sunday() == 0;
     if !is_sunday {
         tracing::warn!(reward_id, "Claim attempted on non-Sunday");
-        return Err(AppError::ValidationError);
+        return Err(AppError::ValidationError(
+            "Claim attempted on non-Sunday".to_string(),
+        ));
     }
 
     if today < week_start || today > week_end {
         tracing::warn!(reward_id, "Claim attempted outside current week");
-        return Err(AppError::ValidationError);
+        return Err(AppError::ValidationError(
+            "Claim attempted outside current week".to_string(),
+        ));
     }
 
     let claim_result = db
@@ -616,7 +666,7 @@ pub async fn claim_reward(
         .await
         .map_err(|e| {
             tracing::error!(error = %e, reward_id, "💥 Database error claiming reward");
-            AppError::Database
+            AppError::Database(e)
         })?;
 
     if !claim_result {
@@ -624,7 +674,9 @@ pub async fn claim_reward(
             reward_id,
             "Reward claim failed - either insufficient EXP or already claimed"
         );
-        return Err(AppError::ValidationError);
+        return Err(AppError::ValidationError(
+            "Reward claim failed - either insufficient EXP or already claimed".to_string(),
+        ));
     }
 
     let rewards = db
@@ -674,6 +726,11 @@ pub async fn claim_reward(
 }
 
 #[instrument(name = "🏴‍☠️ GET /bounty", skip(state))]
+/// Get bounty page
+///
+/// # Errors
+///
+/// Returns an error if database query fails
 pub async fn bounty(State(state): State<AppState>) -> Result<impl IntoResponse, AppError> {
     tracing::debug!("🏴‍☠️ GET /bounty request received");
     bounty_handler(state).await
@@ -697,7 +754,7 @@ async fn bounty_handler(state: AppState) -> Result<impl IntoResponse, AppError> 
         .await
         .unwrap_or_else(|e| {
             tracing::warn!(error = %e, "⚠️ Failed to get reward status");
-            Default::default()
+            Vec::default()
         });
 
     let all_rewards_claimed =

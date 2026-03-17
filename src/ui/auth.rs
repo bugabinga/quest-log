@@ -3,6 +3,7 @@
 use maud::{Markup, html};
 
 /// Generate the auth modal HTML with the login form
+#[must_use]
 pub fn auth_modal() -> Markup {
     html! {
         div id="auth-modal" class="auth-modal" data-init="loginError = null; isRateLimited = false; _password = ''" {

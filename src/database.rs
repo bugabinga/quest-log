@@ -1,4 +1,4 @@
-use chrono::{Datelike, NaiveDate, Utc};
+use chrono::{Datelike, NaiveDate, TimeDelta, Utc};
 use sqlx::{Row, SqlitePool};
 use std::env;
 use std::path::Path;
@@ -25,35 +25,37 @@ impl Database {
     ///
     /// # Panics
     ///
-    /// Panics if the current directory cannot be determined and QUEST_LOG_DATA_DIR is not set.
+    /// Panics if the current directory cannot be determined and `QUEST_LOG_DATA_DIR` is not set.
     pub async fn new() -> Result<Self, sqlx::Error> {
-        let data_dir = env::var("QUEST_LOG_DATA_DIR")
-            .unwrap_or_else(|_| {
-                env::current_dir()
-                    .expect("❌ Failed to get current directory. Please ensure you have permission to access the current working directory.")
-                    .to_string_lossy()
-                    .to_string()
-            });
+        let data_dir = if let Ok(val) = env::var("QUEST_LOG_DATA_DIR") {
+            val
+        } else {
+            let current_dir = env::current_dir()
+                .map_err(|e| sqlx::Error::Configuration(
+                    format!("❌ Failed to get current directory: {e}. Please ensure you have permission to access the current working directory.").into()
+                ))?;
+            current_dir.to_string_lossy().to_string()
+        };
 
         // Validate absolute path
         let data_dir_path = Path::new(&data_dir);
         if !data_dir_path.is_absolute() {
             return Err(sqlx::Error::Configuration(
-                format!("❌ QUEST_LOG_DATA_DIR must be an absolute path: '{}'. Current working directory would be: '{}'",
-                    data_dir,
-                    env::current_dir().unwrap_or_default().display()
-                ).into()
-            ));
+                 format!("❌ QUEST_LOG_DATA_DIR must be an absolute path: '{data_dir}'. Current working directory would be: '{}'",
+                     env::current_dir().unwrap_or_default().display()
+                 ).into()
+             ));
         }
 
         // Create directory if it doesn't exist
         if !data_dir_path.exists() {
             tracing::debug!(path = %data_dir_path.display(), "Creating data directory");
             std::fs::create_dir_all(data_dir_path)
-                .map_err(|e| sqlx::Error::Configuration(
-                    format!("❌ Failed to create database directory '{}': {}. Please check permissions.",
-                        data_dir_path.display(), e).into()
-                ))?;
+                 .map_err(|e| sqlx::Error::Configuration(
+                     format!("❌ Failed to create database directory '{data_dir_path_display}': {e}. Please check permissions.",
+                         data_dir_path_display = data_dir_path.display()
+                     ).into()
+                 ))?;
         }
 
         let database_path = data_dir_path
@@ -69,10 +71,9 @@ impl Database {
                 // Create an empty file to ensure SQLite can connect
                 std::fs::File::create(&database_path).map_err(|e| {
                     sqlx::Error::Configuration(
-                        format!(
-                            "❌ Failed to create database file '{}': {}. Please check permissions.",
-                            database_path, e
-                        )
+                 format!(
+                     "❌ Failed to create database file '{database_path}': {e}. Please check permissions.",
+                 )
                         .into(),
                     )
                 })?;
@@ -101,16 +102,22 @@ impl Database {
     }
 
     /// Create a new database instance with an existing pool (for testing)
+    #[must_use]
     pub fn with_pool(pool: SqlitePool) -> Self {
         Self { pool }
     }
 
     /// Get the underlying pool (for handlers that need direct access)
+    #[must_use]
     pub fn pool(&self) -> &SqlitePool {
         &self.pool
     }
 
     /// Run database migrations
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the migration fails to apply.
     pub async fn migrate(&self) -> Result<(), sqlx::Error> {
         tracing::info!("🔧 Running database migrations...");
         sqlx::migrate!("./migrations").run(&self.pool).await?;
@@ -179,10 +186,10 @@ impl Database {
 
         for (title, description, exp_value, day_of_week) in sample_quests {
             let req = CreateQuestRequest {
-                title: title.to_string(),
-                description: description.map(|s| s.to_string()),
-                exp_value: Some(exp_value),
                 day_of_week,
+                description: description.map(ToString::to_string),
+                exp_value: Some(exp_value),
+                title: title.to_string(),
             };
             self.create_quest(req).await?;
         }
@@ -204,9 +211,9 @@ impl Database {
 
         for (title, description, required_exp) in sample_rewards {
             let req = CreateRewardRequest {
-                title: title.to_string(),
-                description: description.map(|s| s.to_string()),
+                description: description.map(ToString::to_string),
                 required_exp,
+                title: title.to_string(),
             };
             self.create_reward(req).await?;
         }
@@ -216,6 +223,19 @@ impl Database {
 
     // Quest operations
     #[instrument(name = "📋 get_quests_for_day", skip(self))]
+    /// Get all active quests for a specific day of the week
+    ///
+    /// # Arguments
+    ///
+    /// * `day_of_week` - Day of week (0-6, where 0 is Sunday)
+    ///
+    /// # Returns
+    ///
+    /// Vector of active quests for the specified day
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the database query fails
     pub async fn get_quests_for_day(&self, day_of_week: i32) -> Result<Vec<Quest>, sqlx::Error> {
         tracing::trace!(day_of_week, "📋 Fetching quests for day");
         let quests = sqlx::query_as::<_, Quest>(
@@ -234,6 +254,19 @@ impl Database {
         Ok(quests)
     }
 
+    /// Get a quest by its ID
+    ///
+    /// # Arguments
+    ///
+    /// * `id` - The quest ID to look up
+    ///
+    /// # Returns
+    ///
+    /// The quest if found, None if not found
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the database query fails
     pub async fn get_quest_by_id(&self, id: i64) -> Result<Option<Quest>, sqlx::Error> {
         tracing::trace!(quest_id = id, "🔍 Looking up quest by ID");
         sqlx::query_as::<_, Quest>("SELECT * FROM quests WHERE id = ?")
@@ -242,6 +275,19 @@ impl Database {
             .await
     }
 
+    /// Create a new quest
+    ///
+    /// # Arguments
+    ///
+    /// * `req` - The quest creation request containing title, description, `exp_value`, and `day_of_week`
+    ///
+    /// # Returns
+    ///
+    /// The created quest
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the database insert fails
     pub async fn create_quest(&self, req: CreateQuestRequest) -> Result<Quest, sqlx::Error> {
         tracing::debug!(title = %req.title, day = req.day_of_week, exp = req.exp_value.unwrap_or(10), "📝 Creating new quest");
         let now = Utc::now();
@@ -262,6 +308,20 @@ impl Database {
         Ok(quest)
     }
 
+    /// Update a quest by its ID
+    ///
+    /// # Arguments
+    ///
+    /// * `id` - The quest ID to update
+    /// * `req` - The update request containing optional fields to update
+    ///
+    /// # Returns
+    ///
+    /// The updated quest if found and updated, None if not found
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the database update fails
     pub async fn update_quest(
         &self,
         id: i64,
@@ -325,6 +385,19 @@ impl Database {
         Ok(result)
     }
 
+    /// Delete a quest by its ID
+    ///
+    /// # Arguments
+    ///
+    /// * `id` - The quest ID to delete
+    ///
+    /// # Returns
+    ///
+    /// True if the quest was deleted, false if not found
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the database operation fails
     pub async fn delete_quest(&self, id: i64) -> Result<bool, sqlx::Error> {
         tracing::debug!(quest_id = id, "🗑️  Deleting quest");
         let result = sqlx::query("DELETE FROM quests WHERE id = ?")
@@ -340,6 +413,19 @@ impl Database {
     }
 
     // Quest completion operations
+    /// Get all quest completions for a specific date
+    ///
+    /// # Arguments
+    ///
+    /// * `date` - The date to fetch completions for
+    ///
+    /// # Returns
+    ///
+    /// Vector of quest completions for the specified date
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the database query fails
     pub async fn get_completions_for_date(
         &self,
         date: NaiveDate,
@@ -353,6 +439,20 @@ impl Database {
         .await
     }
 
+    /// Check if a quest is completed today
+    ///
+    /// # Arguments
+    ///
+    /// * `quest_id` - The ID of the quest to check
+    /// * `today` - The date to check against
+    ///
+    /// # Returns
+    ///
+    /// True if the quest is completed today, false otherwise
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the database query fails
     pub async fn is_quest_completed_today(
         &self,
         quest_id: i64,
@@ -371,6 +471,20 @@ impl Database {
     }
 
     #[instrument(name = "📋 get_quests_completion_status", skip(self, quest_ids))]
+    /// Get completion status for multiple quests on a specific date
+    ///
+    /// # Arguments
+    ///
+    /// * `quest_ids` - Slice of quest IDs to check
+    /// * `date` - The date to check completion status for
+    ///
+    /// # Returns
+    ///
+    /// `HashMap` mapping quest IDs to their completion status (true if completed)
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the database query fails
     pub async fn get_quests_completion_status(
         &self,
         quest_ids: &[i64],
@@ -408,14 +522,32 @@ impl Database {
         Ok(result)
     }
 
+    /// Get the total number of quest completions
+    ///
+    /// # Returns
+    ///
+    /// Total count of quest completions
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the database query fails
     pub async fn get_total_completions_count(&self) -> Result<i32, sqlx::Error> {
         tracing::trace!("📋 Fetching total completions count");
         let result: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM quest_completions")
             .fetch_one(&self.pool)
             .await?;
-        Ok(result.0 as i32)
+        Ok(i32::try_from(result.0).unwrap_or(i32::MAX))
     }
 
+    /// Get all quest completions
+    ///
+    /// # Returns
+    ///
+    /// Vector of all quest completions, ordered by date descending
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the database query fails
     pub async fn get_all_completions(&self) -> Result<Vec<QuestCompletion>, sqlx::Error> {
         tracing::trace!("📋 Fetching all completions");
         sqlx::query_as::<_, QuestCompletion>(
@@ -426,6 +558,20 @@ impl Database {
     }
 
     #[instrument(name = "🎯 toggle_quest_completion", skip(self))]
+    /// Toggle the completion status of a quest for a specific date
+    ///
+    /// # Arguments
+    ///
+    /// * `quest_id` - The ID of the quest to toggle
+    /// * `date` - The date to toggle completion for
+    ///
+    /// # Returns
+    ///
+    /// `ToggleResult` indicating whether the quest is now completed or not
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the database operation fails
     pub async fn toggle_quest_completion(
         &self,
         quest_id: i64,
@@ -483,6 +629,15 @@ impl Database {
     }
 
     // Settings operations
+    /// Get the application settings
+    ///
+    /// # Returns
+    ///
+    /// The application settings
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the database query fails
     pub async fn get_settings(&self) -> Result<Settings, sqlx::Error> {
         tracing::debug!("⚙️ Fetching settings");
         sqlx::query_as::<_, Settings>("SELECT * FROM settings WHERE id = 1")
@@ -490,6 +645,19 @@ impl Database {
             .await
     }
 
+    /// Update application settings
+    ///
+    /// # Arguments
+    ///
+    /// * `req` - The settings update request containing fields to update
+    ///
+    /// # Returns
+    ///
+    /// The updated settings
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the database update fails
     pub async fn update_settings(
         &self,
         req: UpdateSettingsRequest,
@@ -509,6 +677,15 @@ impl Database {
     }
 
     // Reward operations
+    /// Get all active rewards ordered by required experience
+    ///
+    /// # Returns
+    ///
+    /// Vector of active rewards sorted by required EXP ascending
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the database query fails
     pub async fn get_available_rewards(&self) -> Result<Vec<Reward>, sqlx::Error> {
         tracing::trace!("🎁 Fetching available rewards");
         sqlx::query_as::<_, Reward>(
@@ -518,6 +695,19 @@ impl Database {
         .await
     }
 
+    /// Create a new reward
+    ///
+    /// # Arguments
+    ///
+    /// * `req` - The reward creation request containing title, description, and `required_exp`
+    ///
+    /// # Returns
+    ///
+    /// The created reward
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the database insert fails
     pub async fn create_reward(&self, req: CreateRewardRequest) -> Result<Reward, sqlx::Error> {
         tracing::debug!(title = %req.title, exp = req.required_exp, "🎁 Creating new reward");
         let now = Utc::now();
@@ -538,6 +728,14 @@ impl Database {
     }
 
     /// Get all quests (including inactive) for the editor
+    ///
+    /// # Returns
+    ///
+    /// Vector of all quests ordered by day of week and creation date
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the database query fails
     pub async fn get_all_quests(&self) -> Result<Vec<Quest>, sqlx::Error> {
         tracing::debug!("📋 Fetching all quests for editor");
         sqlx::query_as::<_, Quest>("SELECT * FROM quests ORDER BY day_of_week, created_at")
@@ -546,6 +744,14 @@ impl Database {
     }
 
     /// Get all rewards (including inactive) for the editor
+    ///
+    /// # Returns
+    ///
+    /// Vector of all rewards ordered by required EXP and creation date
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the database query fails
     pub async fn get_all_rewards(&self) -> Result<Vec<Reward>, sqlx::Error> {
         tracing::debug!("🎁 Fetching all rewards for editor");
         sqlx::query_as::<_, Reward>("SELECT * FROM rewards ORDER BY required_exp, created_at")
@@ -554,6 +760,18 @@ impl Database {
     }
 
     /// Get a reward by ID
+    ///
+    /// # Arguments
+    ///
+    /// * `id` - The reward ID to look up
+    ///
+    /// # Returns
+    ///
+    /// The reward if found, None if not found
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the database query fails
     pub async fn get_reward_by_id(&self, id: i64) -> Result<Option<Reward>, sqlx::Error> {
         tracing::trace!(reward_id = id, "🔍 Looking up reward by ID");
         sqlx::query_as::<_, Reward>("SELECT * FROM rewards WHERE id = ?")
@@ -562,7 +780,20 @@ impl Database {
             .await
     }
 
-    /// Update a reward
+    /// Update a reward by its ID
+    ///
+    /// # Arguments
+    ///
+    /// * `id` - The reward ID to update
+    /// * `req` - The update request containing optional fields to update
+    ///
+    /// # Returns
+    ///
+    /// The updated reward if found and updated, None if not found
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the database update fails
     pub async fn update_reward(
         &self,
         id: i64,
@@ -614,7 +845,19 @@ impl Database {
         Ok(result)
     }
 
-    /// Delete a reward
+    /// Delete a reward by its ID
+    ///
+    /// # Arguments
+    ///
+    /// * `id` - The reward ID to delete
+    ///
+    /// # Returns
+    ///
+    /// True if the reward was deleted, false if not found
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the database operation fails
     pub async fn delete_reward(&self, id: i64) -> Result<bool, sqlx::Error> {
         tracing::debug!(reward_id = id, "🗑️  Deleting reward");
         let result = sqlx::query("DELETE FROM rewards WHERE id = ?")
@@ -630,6 +873,23 @@ impl Database {
     }
 
     /// Create a quest with optional image
+    ///
+    /// # Arguments
+    ///
+    /// * `title` - The quest title
+    /// * `description` - Optional quest description
+    /// * `exp_value` - Optional experience value (defaults to 10 if not provided)
+    /// * `day_of_week` - Day of week (0-6, where 0 is Sunday)
+    /// * `image_data` - Optional image data as bytes
+    /// * `image_content_type` - Optional image content type (MIME type)
+    ///
+    /// # Returns
+    ///
+    /// The created quest
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the database insert fails
     pub async fn create_quest_with_image(
         &self,
         title: String,
@@ -661,6 +921,25 @@ impl Database {
     }
 
     /// Update a quest with optional image
+    ///
+    /// # Arguments
+    ///
+    /// * `id` - The quest ID to update
+    /// * `title` - Optional new title
+    /// * `description` - Optional new description
+    /// * `exp_value` - Optional new experience value
+    /// * `day_of_week` - Optional new day of week (0-6, where 0 is Sunday)
+    /// * `is_active` - Optional new active status
+    /// * `image_data` - Optional new image data as bytes
+    /// * `image_content_type` - Optional new image content type (MIME type)
+    ///
+    /// # Returns
+    ///
+    /// The updated quest if found and updated, None if not found
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the database update fails
     pub async fn update_quest_with_image(
         &self,
         id: i64,
@@ -739,6 +1018,22 @@ impl Database {
     }
 
     /// Create a reward with optional image
+    ///
+    /// # Arguments
+    ///
+    /// * `title` - The reward title
+    /// * `description` - Optional reward description
+    /// * `required_exp` - The required experience to claim the reward
+    /// * `image_data` - Optional image data as bytes
+    /// * `image_content_type` - Optional image content type (MIME type)
+    ///
+    /// # Returns
+    ///
+    /// The created reward
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the database insert fails
     pub async fn create_reward_with_image(
         &self,
         title: String,
@@ -768,6 +1063,24 @@ impl Database {
     }
 
     /// Update a reward with optional image
+    ///
+    /// # Arguments
+    ///
+    /// * `id` - The reward ID to update
+    /// * `title` - Optional new title
+    /// * `description` - Optional new description
+    /// * `required_exp` - Optional new required experience
+    /// * `is_active` - Optional new active status
+    /// * `image_data` - Optional new image data as bytes
+    /// * `image_content_type` - Optional new image content type (MIME type)
+    ///
+    /// # Returns
+    ///
+    /// The updated reward if found and updated, None if not found
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the database update fails
     pub async fn update_reward_with_image(
         &self,
         id: i64,
@@ -837,6 +1150,20 @@ impl Database {
 
     // Statistics and calculations
     #[instrument(name = "🧮 calculate_weekly_exp", skip(self))]
+    /// Calculate total experience earned in a week
+    ///
+    /// # Arguments
+    ///
+    /// * `week_start` - Start date of the week (inclusive)
+    /// * `week_end` - End date of the week (inclusive)
+    ///
+    /// # Returns
+    ///
+    /// Total experience earned in the specified week
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the database query fails
     pub async fn calculate_weekly_exp(
         &self,
         week_start: NaiveDate,
@@ -858,6 +1185,21 @@ impl Database {
     }
 
     #[instrument(name = "📊 get_week_stats", skip(self))]
+    /// Get statistics for a week
+    ///
+    /// # Arguments
+    ///
+    /// * `today` - Today's date
+    /// * `week_start` - Start date of the week (inclusive)
+    /// * `week_end` - End date of the week (inclusive)
+    ///
+    /// # Returns
+    ///
+    /// Weekly statistics including completed quests and experience
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if any of the database queries fail
     pub async fn get_week_stats(
         &self,
         today: NaiveDate,
@@ -865,19 +1207,23 @@ impl Database {
         week_end: NaiveDate,
     ) -> Result<crate::models::QuestStats, sqlx::Error> {
         tracing::debug!(today = %today, week_start = %week_start, week_end = %week_end, "📊 Getting week stats");
-        let day_of_week = today.weekday().num_days_from_sunday() as i32;
+        let day_of_week = today.weekday().num_days_from_sunday().cast_signed();
 
         // Today's quests and completed EXP
         let today_quests = self.get_quests_for_day(day_of_week).await?;
         let exp_today_max: i32 = today_quests.iter().map(|q| q.exp_value).sum();
-        let quests_total = today_quests.len() as i32;
+        let quests_total = i32::try_from(today_quests.len()).unwrap_or(i32::MAX);
 
         let mut exp_today = 0i32;
         let mut quests_completed = 0i32;
         for quest in &today_quests {
             if self.is_quest_completed_today(quest.id, today).await? {
-                exp_today += quest.exp_value;
-                quests_completed += 1;
+                exp_today = exp_today
+                    .checked_add(quest.exp_value)
+                    .ok_or_else(|| sqlx::Error::Protocol("Integer overflow in exp_today".into()))?;
+                quests_completed = quests_completed.checked_add(1).ok_or_else(|| {
+                    sqlx::Error::Protocol("Integer overflow in quests_completed".into())
+                })?;
             }
         }
 
@@ -888,19 +1234,31 @@ impl Database {
         let mut week_exp_max = 0i32;
         for dow in 0..7 {
             let quests = self.get_quests_for_day(dow).await?;
-            week_exp_max += quests.iter().map(|q| q.exp_value).sum::<i32>();
+            let day_exp: i32 = quests.iter().map(|q| q.exp_value).sum();
+            week_exp_max = week_exp_max
+                .checked_add(day_exp)
+                .ok_or_else(|| sqlx::Error::Protocol("Integer overflow in week_exp_max".into()))?;
         }
 
         Ok(crate::models::QuestStats {
             exp_today,
             exp_today_max,
-            week_exp,
-            week_exp_max,
             quests_completed,
             quests_total,
+            week_exp,
+            week_exp_max,
         })
     }
 
+    /// Get the total experience earned from all completed quests
+    ///
+    /// # Returns
+    ///
+    /// Total experience earned from all completed quests
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the database query fails
     pub async fn get_total_exp_earned(&self) -> Result<i32, sqlx::Error> {
         tracing::trace!("💎 Fetching total EXP");
         let result: (i32,) = sqlx::query_as(
@@ -914,16 +1272,39 @@ impl Database {
         Ok(result.0)
     }
 
+    /// Get the total number of rewards claimed
+    ///
+    /// # Returns
+    ///
+    /// Total count of rewards claimed
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the database query fails
     pub async fn get_rewards_claimed_count(&self) -> Result<i32, sqlx::Error> {
         tracing::trace!("🏆 Fetching claimed rewards count");
         let result: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM reward_claims")
             .fetch_one(&self.pool)
             .await?;
 
-        Ok(result.0 as i32)
+        Ok(i32::try_from(result.0).unwrap_or(i32::MAX))
     }
 
     // Reward claiming logic
+    /// Claim a reward for a specific week
+    ///
+    /// # Arguments
+    ///
+    /// * `reward_id` - The ID of the reward to claim
+    /// * `week_start` - The start date of the week for which to claim the reward
+    ///
+    /// # Returns
+    ///
+    /// True if the reward was successfully claimed, false if the reward was not found, not active, or already claimed
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the database query fails
     pub async fn claim_reward(
         &self,
         reward_id: i64,
@@ -937,13 +1318,14 @@ impl Database {
                 .fetch_optional(&self.pool)
                 .await?;
 
-        let reward = match reward {
-            Some(r) => r,
-            None => return Ok(false), // Reward not found or inactive
+        let Some(reward) = reward else {
+            return Ok(false); // Reward not found or inactive
         };
 
         // Calculate user's weekly EXP
-        let week_end = week_start + chrono::Duration::days(6);
+        let week_end = week_start
+            .checked_add_signed(TimeDelta::days(6))
+            .ok_or_else(|| sqlx::Error::Protocol("Date overflow in week_end".into()))?;
         let weekly_exp = self.calculate_weekly_exp(week_start, week_end).await?;
 
         // Check if user has enough EXP
@@ -967,7 +1349,9 @@ impl Database {
         }
 
         // Claim the reward
-        let claimed_date = week_start + chrono::Duration::days(6); // End of the week being claimed
+        let claimed_date = week_start
+            .checked_add_signed(TimeDelta::days(6))
+            .ok_or_else(|| sqlx::Error::Protocol("Date overflow in claimed_date".into()))?; // End of the week being claimed
         sqlx::query("INSERT INTO reward_claims (reward_id, claimed_date) VALUES (?, ?)")
             .bind(reward_id)
             .bind(claimed_date)
@@ -978,13 +1362,29 @@ impl Database {
     }
 
     #[instrument(name = "🎁 get_weekly_reward_status", skip(self))]
+    /// Get the status of all rewards for a specific week
+    ///
+    /// # Arguments
+    ///
+    /// * `week_start` - Start date of the week (inclusive)
+    /// * `today` - Today's date
+    ///
+    /// # Returns
+    ///
+    /// Vector of weekly reward display objects showing claim status
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if any of the database queries fail
     pub async fn get_weekly_reward_status(
         &self,
         week_start: NaiveDate,
         today: NaiveDate,
     ) -> Result<Vec<WeeklyRewardDisplay>, sqlx::Error> {
         tracing::trace!(week_start = %week_start, today = %today, "🎁 Fetching reward status");
-        let week_end = week_start + chrono::Duration::days(6);
+        let week_end = week_start
+            .checked_add_signed(TimeDelta::days(6))
+            .ok_or_else(|| sqlx::Error::Protocol("Date overflow in week_end".into()))?;
         let weekly_exp = self.calculate_weekly_exp(week_start, week_end).await?;
 
         let is_sunday = today.weekday().num_days_from_sunday() == 0;
@@ -1030,6 +1430,20 @@ impl Database {
     }
 
     #[instrument(name = "🏆 claim_reward_for_week", skip(self))]
+    /// Claim a reward for a specific week (only on Sunday)
+    ///
+    /// # Arguments
+    ///
+    /// * `reward_id` - The ID of the reward to claim
+    /// * `week_start` - The start date of the week (Monday) for which to claim the reward
+    ///
+    /// # Returns
+    ///
+    /// True if the reward was successfully claimed, false if not eligible (wrong day, already claimed, etc.)
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the database query fails
     pub async fn claim_reward_for_week(
         &self,
         reward_id: i64,
@@ -1050,9 +1464,8 @@ impl Database {
                 .fetch_optional(&self.pool)
                 .await?;
 
-        let reward = match reward {
-            Some(r) => r,
-            None => return Ok(false),
+        let Some(reward) = reward else {
+            return Ok(false);
         };
 
         let weekly_exp = self.calculate_weekly_exp(week_start, week_end).await?;
@@ -1103,6 +1516,19 @@ impl Database {
         Ok(true)
     }
 
+    /// Get a weekly champion record for a specific week
+    ///
+    /// # Arguments
+    ///
+    /// * `week_start` - Start date of the week
+    ///
+    /// # Returns
+    ///
+    /// The weekly champion record if found, None if not found
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the database query fails
     pub async fn get_weekly_champion(
         &self,
         week_start: NaiveDate,
@@ -1114,6 +1540,15 @@ impl Database {
             .await
     }
 
+    /// Get all weekly champion records
+    ///
+    /// # Returns
+    ///
+    /// Vector of all weekly champions ordered by week start date descending
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the database query fails
     pub async fn get_all_weekly_champions(&self) -> Result<Vec<WeeklyChampion>, sqlx::Error> {
         tracing::trace!("🏆 Fetching all weekly champions");
         sqlx::query_as::<_, WeeklyChampion>(
@@ -1123,6 +1558,19 @@ impl Database {
         .await
     }
 
+    /// Create a new weekly champion record
+    ///
+    /// # Arguments
+    ///
+    /// * `week_start` - Start date of the week
+    ///
+    /// # Returns
+    ///
+    /// The created weekly champion record
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the database insert fails
     pub async fn create_weekly_champion(
         &self,
         week_start: NaiveDate,
@@ -1161,10 +1609,10 @@ mod tests {
         let db = setup_test_db().await;
 
         let req = CreateQuestRequest {
-            title: "Test Quest".to_string(),
+            day_of_week: 1,
             description: Some("A test quest".to_string()),
             exp_value: Some(20),
-            day_of_week: 1,
+            title: "Test Quest".to_string(),
         };
 
         let quest = db.create_quest(req).await.unwrap();
@@ -1182,16 +1630,16 @@ mod tests {
 
         // Create quests for different days
         let req1 = CreateQuestRequest {
-            title: "Monday Quest".to_string(),
+            day_of_week: 1,
             description: None,
             exp_value: Some(10),
-            day_of_week: 1,
+            title: "Monday Quest".to_string(),
         };
         let req2 = CreateQuestRequest {
-            title: "Tuesday Quest".to_string(),
+            day_of_week: 2,
             description: None,
             exp_value: Some(15),
-            day_of_week: 2,
+            title: "Tuesday Quest".to_string(),
         };
 
         db.create_quest(req1).await.unwrap();
@@ -1211,10 +1659,10 @@ mod tests {
         let db = setup_test_db().await;
 
         let req = CreateQuestRequest {
-            title: "Original Quest".to_string(),
+            day_of_week: 1,
             description: None,
             exp_value: Some(10),
-            day_of_week: 1,
+            title: "Original Quest".to_string(),
         };
 
         let quest = db.create_quest(req).await.unwrap();
@@ -1242,10 +1690,10 @@ mod tests {
         let db = setup_test_db().await;
 
         let req = CreateQuestRequest {
-            title: "Quest to Delete".to_string(),
+            day_of_week: 1,
             description: None,
             exp_value: Some(10),
-            day_of_week: 1,
+            title: "Quest to Delete".to_string(),
         };
 
         let quest = db.create_quest(req).await.unwrap();
@@ -1262,10 +1710,10 @@ mod tests {
         let db = setup_test_db().await;
 
         let req = CreateQuestRequest {
-            title: "Completable Quest".to_string(),
+            day_of_week: 1,
             description: None,
             exp_value: Some(10),
-            day_of_week: 1,
+            title: "Completable Quest".to_string(),
         };
 
         let quest = db.create_quest(req).await.unwrap();
@@ -1293,10 +1741,10 @@ mod tests {
 
         // Create quest
         let req = CreateQuestRequest {
-            title: "EXP Quest".to_string(),
+            day_of_week: 1,
             description: None,
             exp_value: Some(15),
-            day_of_week: 1,
+            title: "EXP Quest".to_string(),
         };
 
         let quest = db.create_quest(req).await.unwrap();
@@ -1345,9 +1793,9 @@ mod tests {
         let db = setup_test_db().await;
 
         let req = CreateRewardRequest {
-            title: "Test Reward".to_string(),
             description: Some("A test reward".to_string()),
             required_exp: 50,
+            title: "Test Reward".to_string(),
         };
 
         let reward = db.create_reward(req).await.unwrap();
@@ -1365,18 +1813,18 @@ mod tests {
 
         // Create reward requiring 30 EXP
         let reward_req = CreateRewardRequest {
-            title: "Test Reward".to_string(),
             description: None,
             required_exp: 30,
+            title: "Test Reward".to_string(),
         };
         let reward = db.create_reward(reward_req).await.unwrap();
 
         // Create quest worth 20 EXP
         let quest_req = CreateQuestRequest {
-            title: "Test Quest".to_string(),
+            day_of_week: 1,
             description: None,
             exp_value: Some(20),
-            day_of_week: 1,
+            title: "Test Quest".to_string(),
         };
         let quest = db.create_quest(quest_req).await.unwrap();
 
@@ -1397,10 +1845,10 @@ mod tests {
 
         // Create another quest and complete it
         let quest2_req = CreateQuestRequest {
-            title: "Test Quest 2".to_string(),
+            day_of_week: 2,
             description: None,
             exp_value: Some(15),
-            day_of_week: 2,
+            title: "Test Quest 2".to_string(),
         };
         let quest2 = db.create_quest(quest2_req).await.unwrap();
         db.toggle_quest_completion(quest2.id, today).await.unwrap();
@@ -1475,10 +1923,10 @@ mod tests {
         let db = setup_test_db().await;
 
         let req = CreateQuestRequest {
-            title: "".to_string(),
+            day_of_week: 1,
             description: None,
             exp_value: Some(10),
-            day_of_week: 1,
+            title: "".to_string(),
         };
 
         // Empty title should still work (database doesn't enforce this constraint)
@@ -1557,10 +2005,10 @@ mod tests {
 
         for attempt in injection_attempts {
             let req = CreateQuestRequest {
-                title: attempt.to_string(),
+                day_of_week: 1,
                 description: Some("Injection attempt".to_string()),
                 exp_value: Some(10),
-                day_of_week: 1,
+                title: attempt.to_string(),
             };
 
             // Should succeed (data is properly escaped by sqlx)
@@ -1587,10 +2035,10 @@ mod tests {
 
         for attempt in xss_attempts {
             let req = CreateQuestRequest {
-                title: attempt.to_string(),
+                day_of_week: 1,
                 description: Some("XSS attempt".to_string()),
                 exp_value: Some(10),
-                day_of_week: 1,
+                title: attempt.to_string(),
             };
 
             // Should succeed (data is properly escaped by sqlx)
@@ -1610,10 +2058,10 @@ mod tests {
         let db = setup_test_db().await;
 
         let req = CreateQuestRequest {
-            title: "Zero EXP Quest".to_string(),
+            day_of_week: 1,
             description: None,
             exp_value: Some(0),
-            day_of_week: 1,
+            title: "Zero EXP Quest".to_string(),
         };
 
         let quest = db.create_quest(req).await.unwrap();
@@ -1637,10 +2085,10 @@ mod tests {
 
         // Database might allow negative EXP values, but let's test the behavior
         let req = CreateQuestRequest {
-            title: "Negative EXP Quest".to_string(),
+            day_of_week: 1,
             description: None,
             exp_value: Some(-10),
-            day_of_week: 1,
+            title: "Negative EXP Quest".to_string(),
         };
 
         let quest = db.create_quest(req).await.unwrap();
@@ -1664,10 +2112,10 @@ mod tests {
 
         // Test with very large EXP values
         let req = CreateQuestRequest {
-            title: "Max EXP Quest".to_string(),
+            day_of_week: 1,
             description: None,
             exp_value: Some(i32::MAX),
-            day_of_week: 1,
+            title: "Max EXP Quest".to_string(),
         };
 
         let quest = db.create_quest(req).await.unwrap();
@@ -1721,9 +2169,9 @@ mod tests {
 
         // Create reward requiring exactly 0 EXP
         let reward_req = CreateRewardRequest {
-            title: "Free Reward".to_string(),
             description: None,
             required_exp: 0,
+            title: "Free Reward".to_string(),
         };
         let reward = db.create_reward(reward_req).await.unwrap();
 
@@ -1734,18 +2182,18 @@ mod tests {
 
         // Create reward requiring exact EXP match
         let reward_req2 = CreateRewardRequest {
-            title: "Exact Match Reward".to_string(),
             description: None,
             required_exp: 25,
+            title: "Exact Match Reward".to_string(),
         };
         let reward2 = db.create_reward(reward_req2).await.unwrap();
 
         // Create quest worth exactly 25 EXP
         let quest_req = CreateQuestRequest {
-            title: "Exact EXP Quest".to_string(),
+            day_of_week: 1,
             description: None,
             exp_value: Some(25),
-            day_of_week: 1,
+            title: "Exact EXP Quest".to_string(),
         };
         let quest = db.create_quest(quest_req).await.unwrap();
 
@@ -1778,10 +2226,10 @@ mod tests {
 
         // Create a quest
         let req = CreateQuestRequest {
-            title: "Concurrent Quest".to_string(),
+            day_of_week: 1,
             description: None,
             exp_value: Some(10),
-            day_of_week: 1,
+            title: "Concurrent Quest".to_string(),
         };
         let quest = db.create_quest(req).await.unwrap();
 
@@ -1829,18 +2277,18 @@ mod tests {
 
         // Create reward requiring 10 EXP
         let reward_req = CreateRewardRequest {
-            title: "Concurrent Reward".to_string(),
             description: None,
             required_exp: 10,
+            title: "Concurrent Reward".to_string(),
         };
         let reward = db.create_reward(reward_req).await.unwrap();
 
         // Create quest and complete it to get EXP
         let quest_req = CreateQuestRequest {
-            title: "EXP Quest".to_string(),
+            day_of_week: 1,
             description: None,
             exp_value: Some(20),
-            day_of_week: 1,
+            title: "EXP Quest".to_string(),
         };
         let quest = db.create_quest(quest_req).await.unwrap();
 

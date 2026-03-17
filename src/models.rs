@@ -26,19 +26,6 @@ pub struct QuestCompletion {
     pub quest_id: i64,
 }
 
-/// Enum for updating optional fields in database operations.
-///
-/// Used to distinguish between:
-/// - NoChange: Don't update this field
-/// - Clear: Set field to NULL/None
-/// - Set(value): Set field to new value
-#[derive(Debug, Clone)]
-pub enum UpdateField<T> {
-    NoChange,
-    Clear,
-    Set(T),
-}
-
 // Reward model
 #[derive(Debug, Clone, FromRow, Serialize, Deserialize)]
 pub struct Reward {

@@ -3,6 +3,7 @@ use crate::ui::base::{PageData, base_page};
 use crate::ui::fragments::weekly_rewards::weekly_rewards;
 use maud::html;
 
+#[must_use]
 pub fn bounty_page(
     week_exp: i32,
     rewards: &[WeeklyRewardDisplay],
