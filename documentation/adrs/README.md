@@ -10,6 +10,13 @@ This directory contains ADRs documenting significant architectural decisions.
 | 002 | Vendor All Web Resources in `static/` Directory      | Accepted |
 | 003 | Use Tracing for Structured Logging and Observability | Accepted |
 | 004 | Bounty Board Feature - Weekly Rewards Page           | Accepted |
+| 005 | Core Technology Stack                                | Accepted |
+| 006 | Server-Sent Events for Real-Time Updates             | Accepted |
+| 007 | Server-Driven UI with Datastar                       | Accepted |
+| 008 | Cargo xtask Pattern for Development CLI              | Accepted |
+| 009 | Editor Authentication Strategy                       | Accepted |
+| 010 | Graceful Shutdown Pattern (Death Screen)             | Accepted |
+| 011 | Systemd Integration for Linux Deployments            | Accepted |
 
 ## What is an ADR?
 
