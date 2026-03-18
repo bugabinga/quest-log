@@ -232,12 +232,14 @@ pub async fn login_handler(
     });
 
     let combined_html = format!(
-        r#"<div class="editor-wrapper">{}</div>"#,
+        r#"<div class="editor-wrapper" style="view-transition-name: editor-page;">{}</div>"#,
         html.into_string()
     );
 
     let events: Vec<Event> = vec![
-        PatchElements::new(combined_html).into(),
+        PatchElements::new(combined_html)
+            .use_view_transition(true)
+            .into(),
         PatchSignals::new(signals.to_string()).into(),
     ];
 
@@ -281,9 +283,15 @@ pub async fn logout_handler(
         updated_at: Utc::now(),
     };
     let html = ui::editor::editor_page(false, "quests", &[], &[], &settings);
+    let wrapped_html = format!(
+        r#"<div class="editor-wrapper" style="view-transition-name: editor-page;">{}</div>"#,
+        html.into_string()
+    );
 
     let events: Vec<Event> = vec![
-        PatchElements::new(html.into_string()).into(),
+        PatchElements::new(wrapped_html)
+            .use_view_transition(true)
+            .into(),
         PatchSignals::new(signals.to_string()).into(),
     ];
 

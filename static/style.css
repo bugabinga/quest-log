@@ -700,6 +700,84 @@
   view-transition-name: exp-counter;
 }
 
+/* Editor row morph - steampunk scale/fade with blur */
+::view-transition-old(editor-row) {
+  animation: 200ms var(--ease-out) both editor-row-out;
+}
+
+::view-transition-new(editor-row) {
+  animation: 280ms var(--ease-out) 40ms both editor-row-in;
+}
+
+@keyframes editor-row-out {
+  from {
+    opacity: 1;
+    transform: scale(1);
+    filter: blur(0);
+  }
+  to {
+    opacity: 0;
+    transform: scale(0.92);
+    filter: blur(4px);
+  }
+}
+
+@keyframes editor-row-in {
+  from {
+    opacity: 0;
+    transform: scale(1.04);
+    filter: blur(4px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+    filter: blur(0);
+  }
+}
+
+/* Editor wrapper transition - full page morph on login/logout */
+::view-transition-old(editor-page) {
+  animation: 350ms var(--ease-out) both editor-page-out;
+}
+
+::view-transition-new(editor-page) {
+  animation: 400ms var(--ease-out) 50ms both editor-page-in;
+}
+
+@keyframes editor-page-out {
+  from {
+    opacity: 1;
+    transform: scale(1);
+    filter: blur(0);
+  }
+  to {
+    opacity: 0;
+    transform: scale(0.95) rotateY(-5deg);
+    filter: blur(6px);
+  }
+}
+
+@keyframes editor-page-in {
+  from {
+    opacity: 0;
+    transform: scale(0.95) rotateY(5deg);
+    filter: blur(6px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) rotateY(0);
+    filter: blur(0);
+  }
+}
+
+.editor-table tbody tr {
+  view-transition-name: editor-row;
+}
+
+.editor-wrapper {
+  view-transition-name: editor-page;
+}
+
 .stats-panel {
   margin: var(--space-xl) 0;
   padding: var(--space-lg);

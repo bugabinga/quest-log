@@ -3,20 +3,20 @@
 use std::fmt::Write;
 
 use axum::{
-    extract::Multipart,
     extract::Path,
     extract::State,
     http::HeaderMap,
     response::IntoResponse,
     response::sse::{Event, Sse},
 };
+use datastar::axum::ReadSignals;
 use datastar::patch_elements::PatchElements;
 use datastar::patch_signals::PatchSignals;
 use futures::stream::{self, Stream};
 
 use crate::database::SetOrRemove;
 use crate::handlers::AppError;
-use crate::models::{CreateRewardRequest, UpdateRewardRequest};
+use crate::models::{CreateRewardRequest, FileUpload, RewardJsonRequest, UpdateRewardRequest};
 use crate::state::AppState;
 
 use super::auth::extract_and_validate_session;
@@ -44,7 +44,8 @@ fn render_rewards_table(rewards: &[crate::models::Reward]) -> String {
 
         let _ = write!(
             &mut html,
-            r#"<tr class="{}"><td>{}</td><td>{}</td><td>{}</td><td><div class="action-buttons"><button class="editor-btn editor-btn--small" data-on:click="@get('/editor/rewards/{}/edit')">Edit</button><button class="editor-btn editor-btn--danger" data-on:click="@delete('/editor/rewards/{}')">Delete</button></div></td></tr>"#,
+            r#"<tr id="reward-row-{}" class="{}" style="view-transition-name: editor-row;"><td>{}</td><td>{}</td><td>{}</td><td><div class="action-buttons"><button class="editor-btn editor-btn--small" data-on:click="@get('/editor/rewards/{}/edit')">Edit</button><button class="editor-btn editor-btn--danger" data-on:click="@delete('/editor/rewards/{}')">Delete</button></div></td></tr>"#,
+            reward.id,
             row_class,
             escape_html(&reward.title),
             reward.required_exp,
@@ -62,76 +63,67 @@ fn render_rewards_table(rewards: &[crate::models::Reward]) -> String {
     html
 }
 
+struct RewardData {
+    title: String,
+    description: Option<String>,
+    required_exp: i32,
+    image_data: Option<Vec<u8>>,
+    image_content_type: Option<String>,
+}
+
+fn extract_reward_from_request(req: RewardJsonRequest) -> Result<RewardData, AppError> {
+    let title = req.reward_title.trim();
+    if title.is_empty() {
+        return Err(AppError::ValidationError("Title is required".into()));
+    }
+
+    if let Some(file) = req.reward_image.first() {
+        if file.is_too_large() {
+            return Err(AppError::ValidationError(
+                "Image file is too large (max 5MB)".into(),
+            ));
+        }
+        tracing::debug!(filename = %file.filename(), mime = %file.mime, "Uploading image file");
+    }
+
+    let (image_data, image_content_type) = req
+        .reward_image
+        .first()
+        .and_then(FileUpload::decode)
+        .unzip();
+
+    Ok(RewardData {
+        title: title.to_string(),
+        description: req.reward_description,
+        required_exp: req.reward_required_exp,
+        image_data,
+        image_content_type,
+    })
+}
+
 /// Create a new reward
 ///
 /// # Errors
 ///
-/// Returns an error if session validation, database operation, or multipart form processing fails
+/// Returns an error if session validation, database operation, or JSON processing fails
 pub async fn create_reward_handler(
     State(state): State<AppState>,
     headers: HeaderMap,
-    mut multipart: Multipart,
+    ReadSignals(req): ReadSignals<RewardJsonRequest>,
 ) -> Result<Sse<impl Stream<Item = Result<Event, std::convert::Infallible>>>, AppError> {
     extract_and_validate_session(&headers, &state).await?;
 
-    let mut title = String::new();
-    let mut description: Option<String> = None;
-    let mut required_exp: i32 = 50;
-    let mut image_data: Option<Vec<u8>> = None;
-    let mut image_content_type: Option<String> = None;
+    let data = extract_reward_from_request(req)?;
 
-    while let Some(field) = multipart
-        .next_field()
-        .await
-        .map_err(|_| AppError::ValidationError("Validation failed".to_string()))?
-    {
-        let name = field.name().unwrap_or("").to_string();
-        match name.as_str() {
-            "title" => {
-                title = field
-                    .text()
-                    .await
-                    .map_err(|_| AppError::ValidationError("Validation failed".to_string()))?;
-            }
-            "description" => {
-                description = Some(
-                    field
-                        .text()
-                        .await
-                        .map_err(|_| AppError::ValidationError("Validation failed".to_string()))?,
-                );
-            }
-            "required_exp" => {
-                if let Ok(text) = field.text().await {
-                    required_exp = text.parse().unwrap_or(50);
-                }
-            }
-            "image" => {
-                let content_type = field.content_type().map(ToString::to_string);
-                if let Ok(data) = field.bytes().await
-                    && !data.is_empty()
-                {
-                    image_data = Some(data.to_vec());
-                    image_content_type = content_type;
-                }
-            }
-            _ => {}
-        }
-    }
-
-    if title.is_empty() {
-        return Err(AppError::ValidationError("Validation failed".to_string()));
-    }
-
-    let reward = if image_data.is_some() {
+    let reward = if data.image_data.is_some() {
         state
             .db
             .create_reward_with_image(
-                title,
-                description,
-                required_exp,
-                image_data,
-                image_content_type,
+                data.title,
+                data.description,
+                data.required_exp,
+                data.image_data,
+                data.image_content_type,
             )
             .await
             .map_err(|e| {
@@ -140,9 +132,9 @@ pub async fn create_reward_handler(
             })?
     } else {
         let req = CreateRewardRequest {
-            description,
-            required_exp,
-            title,
+            description: data.description,
+            required_exp: data.required_exp,
+            title: data.title,
         };
         state.db.create_reward(req).await.map_err(|e| {
             tracing::error!(error = %e, "Failed to create reward");
@@ -159,14 +151,11 @@ pub async fn create_reward_handler(
         .map_err(AppError::Database)?;
     let html = render_rewards_table(&rewards);
 
-    let signals = serde_json::json!({
-        "showRewardForm": false,
-        "rewardSaved": true
-    });
+    let signals = r#"{"_showRewardForm": false, "_rewardTitle": "", "_rewardDescription": "", "_rewardRequiredExp": 50, "_rewardImage": []}"#;
 
     let events: Vec<Event> = vec![
-        PatchElements::new(html).into(),
-        PatchSignals::new(signals.to_string()).into(),
+        PatchElements::new(html).use_view_transition(true).into(),
+        PatchSignals::new(signals).into(),
     ];
 
     Ok(Sse::new(stream::iter(events.into_iter().map(Ok))))
@@ -208,7 +197,7 @@ pub async fn delete_reward_handler(
     });
 
     let events: Vec<Event> = vec![
-        PatchElements::new(html).into(),
+        PatchElements::new(html).use_view_transition(true).into(),
         PatchSignals::new(signals.to_string()).into(),
     ];
 
@@ -231,6 +220,41 @@ pub async fn get_rewards_handler(
     Ok(axum::Json(rewards))
 }
 
+/// Populate form for editing a reward
+///
+/// # Errors
+///
+/// Returns an error if session validation, database operation, or reward not found
+pub async fn edit_reward_handler(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(id): Path<i64>,
+) -> Result<Sse<impl Stream<Item = Result<Event, std::convert::Infallible>>>, AppError> {
+    extract_and_validate_session(&headers, &state).await?;
+
+    let reward = state
+        .db
+        .get_reward_by_id(id)
+        .await
+        .map_err(|e| {
+            tracing::error!(error = %e, reward_id = id, "Failed to load reward for edit");
+            AppError::Database(e)
+        })?
+        .ok_or(AppError::NotFound)?;
+
+    let signals = serde_json::json!({
+        "_showRewardForm": true,
+        "_editingRewardId": id,
+        "_rewardTitle": reward.title,
+        "_rewardDescription": reward.description,
+        "_rewardRequiredExp": reward.required_exp,
+        "_rewardImage": []
+    });
+
+    let events: Vec<Event> = vec![PatchSignals::new(signals.to_string()).into()];
+    Ok(Sse::new(stream::iter(events.into_iter().map(Ok))))
+}
+
 /// Update a reward
 ///
 /// # Errors
@@ -240,72 +264,23 @@ pub async fn update_reward_handler(
     State(state): State<AppState>,
     headers: HeaderMap,
     Path(id): Path<i64>,
-    mut multipart: Multipart,
+    ReadSignals(req): ReadSignals<RewardJsonRequest>,
 ) -> Result<Sse<impl Stream<Item = Result<Event, std::convert::Infallible>>>, AppError> {
     extract_and_validate_session(&headers, &state).await?;
 
-    let mut title: Option<String> = None;
-    let mut description: Option<String> = None;
-    let mut required_exp: Option<i32> = None;
-    let mut is_active: Option<bool> = None;
-    let mut image_data: Option<Vec<u8>> = None;
-    let mut image_content_type: Option<String> = None;
+    let data = extract_reward_from_request(req)?;
 
-    while let Some(field) = multipart
-        .next_field()
-        .await
-        .map_err(|_| AppError::ValidationError("Validation failed".to_string()))?
-    {
-        let name = field.name().unwrap_or("").to_string();
-        match name.as_str() {
-            "title" => {
-                title = Some(
-                    field
-                        .text()
-                        .await
-                        .map_err(|_| AppError::ValidationError("Validation failed".to_string()))?,
-                );
-            }
-            "description" => {
-                description = Some(
-                    field
-                        .text()
-                        .await
-                        .map_err(|_| AppError::ValidationError("Validation failed".to_string()))?,
-                );
-            }
-            "required_exp" => {
-                if let Ok(text) = field.text().await {
-                    required_exp = text.parse().ok();
-                }
-            }
-            "is_active" => {
-                if let Ok(text) = field.text().await {
-                    is_active = text.parse().ok();
-                }
-            }
-            "image" => {
-                let content_type = field.content_type().map(ToString::to_string);
-                if let Ok(data) = field.bytes().await
-                    && !data.is_empty()
-                {
-                    image_data = Some(data.to_vec());
-                    image_content_type = content_type;
-                }
-            }
-            _ => {}
-        }
-    }
+    let is_active: Option<bool> = Some(true);
 
-    let reward = if let Some(img_data) = image_data {
-        let img_content_type = image_content_type.unwrap_or_default();
+    let reward = if let Some(img_data) = data.image_data {
+        let img_content_type = data.image_content_type.unwrap_or_default();
         state
             .db
             .update_reward_with_image(
                 id,
-                title,
-                description,
-                required_exp,
+                Some(data.title),
+                data.description,
+                Some(data.required_exp),
                 is_active,
                 SetOrRemove::set(img_data),
                 SetOrRemove::set(img_content_type),
@@ -317,10 +292,10 @@ pub async fn update_reward_handler(
             })?
     } else {
         let req = UpdateRewardRequest {
-            description,
+            description: data.description,
             is_active,
-            required_exp,
-            title,
+            required_exp: Some(data.required_exp),
+            title: Some(data.title),
         };
         state.db.update_reward(id, req).await.map_err(|e| {
             tracing::error!(error = %e, reward_id = id, "Failed to update reward");
@@ -342,7 +317,12 @@ pub async fn update_reward_handler(
         .map_err(AppError::Database)?;
     let html = render_rewards_table(&rewards);
 
-    let events: Vec<Event> = vec![PatchElements::new(html).into()];
+    let signals = r#"{"_showRewardForm": false, "_editingRewardId": null, "_rewardTitle": "", "_rewardDescription": "", "_rewardRequiredExp": 50, "_rewardImage": []}"#;
+
+    let events: Vec<Event> = vec![
+        PatchElements::new(html).use_view_transition(true).into(),
+        PatchSignals::new(signals).into(),
+    ];
 
     Ok(Sse::new(stream::iter(events.into_iter().map(Ok))))
 }
