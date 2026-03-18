@@ -1,5 +1,8 @@
+//! Quest Log - A habit tracking application with weekly rewards and gamification.
+
 mod auth;
 mod cli;
+mod config;
 mod database;
 mod handlers;
 mod models;
@@ -8,6 +11,7 @@ mod systemd;
 mod time;
 mod ui;
 
+use crate::config::{data_dir, port};
 use crate::database::Database;
 use crate::handlers::ServerMessage;
 use crate::state::AppState;
@@ -15,15 +19,20 @@ use axum::{
     Router,
     routing::{delete, get, post, put},
 };
-// static assets are embedded via `static-serve` in normal builds. The
-// embed macro must be imported so the macro is in scope when used below.
-use static_serve::embed_assets;
+// static assets are embedded via `static-serve` in normal builds.
 use std::net::SocketAddr;
 use tokio::sync::broadcast;
 use tracing_error::ErrorLayer;
 use tracing_subscriber::{EnvFilter, fmt, layer::SubscriberExt, util::SubscriberInitExt};
 
-embed_assets!("static", compress = true);
+mod static_assets {
+    #![allow(
+        missing_docs,
+        reason = "Macro from static-serve crate generates undocumented function"
+    )]
+
+    static_serve::embed_assets!("static", compress = true);
+}
 
 fn setup_logging() {
     let filter = EnvFilter::try_from_default_env()
@@ -57,11 +66,12 @@ async fn health() -> &'static str {
 }
 
 #[tokio::main]
+/// Starts the Quest Log server with the configured state and routes.
 async fn main() {
     setup_logging();
 
     #[cfg(debug_assertions)]
-    let _ = dotenvy::dotenv();
+    let _unused = dotenvy::dotenv();
 
     tracing::info!("✨ Quest Log starting up...");
 
@@ -78,10 +88,22 @@ async fn main() {
         return;
     }
 
-    let data_dir = std::env::var("QUEST_LOG_DATA_DIR").unwrap_or_else(|_| ".".to_string());
+    let data_dir = match data_dir() {
+        Ok(dir) => dir,
+        Err(e) => {
+            eprintln!("❌ Configuration error: {e}");
+            std::process::exit(1);
+        }
+    };
     tracing::info!(data_dir = %data_dir, "📂 Data directory set");
 
-    let port = std::env::var("PORT").unwrap_or_else(|_| "3000".to_string());
+    let port = match port() {
+        Ok(p) => p,
+        Err(e) => {
+            eprintln!("❌ Configuration error: {e}");
+            std::process::exit(1);
+        }
+    };
     tracing::debug!(port = %port, "🔌 Port configured");
 
     tracing::info!("🗄️  Initializing database...");
@@ -100,7 +122,7 @@ async fn main() {
     let app_state = AppState::new(db, bcast_tx);
 
     tracing::debug!("🏗️  Building router...");
-    let mut router = Router::new()
+    let router = Router::new()
         .route("/", get(handlers::quests))
         .route("/bounty", get(handlers::bounty))
         .route("/highscore", get(handlers::stats::highscore))
@@ -151,34 +173,28 @@ async fn main() {
             "/editor/settings",
             put(handlers::editor::update_settings_handler),
         )
-        .fallback(|_req: axum::extract::State<AppState>| async {
+        .fallback(async |_req: axum::extract::State<AppState>| {
             Err::<axum::response::Html<String>, handlers::AppError>(handlers::AppError::NotFound)
         });
 
     // Test-only endpoints are enabled via ENABLE_TEST_ENDPOINTS=1 at runtime.
+    // Only available with `test-utils` feature flag.
     // This avoids exposing test routes in normal production runs.
-    if std::env::var("ENABLE_TEST_ENDPOINTS").unwrap_or_default() == "1" {
+    #[cfg(feature = "test-utils")]
+    let router = if config::test_endpoints_enabled() {
         tracing::debug!("🔧 Test endpoints enabled");
-        router = router.route("/test/slow", get(handlers::slow));
-    }
+        router.route("/test/slow", get(handlers::slow))
+    } else {
+        router
+    };
 
-    // Attach embedded static assets router. The `embed_assets!` macro above
-    // generates a `static_router()` function in this module scope which
+    // Attach embedded static assets router. The `embed_assets!` macro in the
+    // `static_assets` module generates a `static_router()` function which
     // returns an `axum::Router` configured to serve the embedded files.
     // We merge it into our application router so static files are served
     // with the same application state type (`AppState`).
-    // Merge the generated static router for the same application state type
-    // so both routers expect `AppState` as their missing state.
-    let app = router.merge(static_router::<AppState>());
+    let app = router.merge(static_assets::static_router::<AppState>());
 
-    let port: u16 = match port.parse() {
-        Ok(port) => port,
-        Err(e) => {
-            tracing::error!(error = %e, "💢 PORT must be a number");
-            eprintln!("❌ Invalid PORT: {e}");
-            std::process::exit(1);
-        }
-    };
     let addr = SocketAddr::from(([127, 0, 0, 1], port));
 
     tracing::info!(port, "🚀 Starting HTTP server...");
@@ -283,7 +299,7 @@ async fn main() {
         if let Some(handle) = watchdog {
             // spawn a task that awaits the handle so it keeps running until the handle is aborted
             tokio::spawn(async move {
-                let _ = handle.await;
+                let _unused = handle.await;
             });
         }
     }

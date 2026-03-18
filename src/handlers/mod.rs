@@ -27,20 +27,28 @@ use crate::ui;
 use crate::ui::fragments::toggle::QuestDisplay;
 use tracing::instrument;
 
+/// Server message sent to connected clients via SSE
 #[derive(Clone, Debug)]
 pub enum ServerMessage {
+    /// HTML elements to patch into the DOM
     Elements(String, Option<String>),
+    /// Signals to update client-side state
     Signals(String, Option<String>),
 }
 
+/// Application errors that can occur during request handling
 #[derive(Debug, thiserror::Error)]
 pub enum AppError {
+    /// Database operation failed
     #[error("Something went wrong")]
     Database(#[from] sqlx::Error),
+    /// Resource not found
     #[error("Not found")]
     NotFound,
+    /// Validation failed
     #[error("Validation error: {0}")]
     ValidationError(String),
+    /// Authentication failed
     #[error("Authentication error: {0}")]
     Authentication(String),
 }
@@ -90,15 +98,19 @@ impl IntoResponse for AppError {
     }
 }
 
+/// Quest identifier that can be either a numeric ID or string
 #[derive(Deserialize)]
 #[serde(untagged)]
 pub enum QuestId {
+    /// Numeric quest ID
     I64(i64),
+    /// String-encoded quest ID
     String(String),
 }
 
 impl QuestId {
     #[must_use]
+    /// Convert the quest ID to a 64-bit integer
     pub fn as_i64(&self) -> i64 {
         match self {
             QuestId::I64(v) => *v,
@@ -107,15 +119,20 @@ impl QuestId {
     }
 }
 
+/// Query parameters for the quests endpoint
 #[derive(Deserialize)]
 pub struct QuestsQuery {
+    /// Optional date filter in YYYY-MM-DD format
     pub date: Option<String>,
 }
 
+/// Request to toggle a quest's completion status
 #[derive(Deserialize)]
 pub struct ToggleQuestRequest {
+    /// Client identifier for SSE targeting
     #[serde(default)]
     pub client_id: Option<String>,
+    /// The quest to toggle
     pub quest_id: QuestId,
 }
 
@@ -159,8 +176,10 @@ pub async fn quests_with_date(
     quests_handler(state, Some(date_str)).await
 }
 
+/// Path parameters for navigation
 #[derive(Deserialize)]
 pub struct NavigatePath {
+    /// Target date in YYYY-MM-DD format
     pub date: String,
 }
 
@@ -417,10 +436,13 @@ pub async fn toggle_quest(
     Ok(Sse::new(stream))
 }
 
+/// Request to claim a weekly reward
 #[derive(Deserialize)]
 pub struct ClaimRewardRequest {
+    /// Client identifier for SSE targeting
     #[serde(default)]
     pub client_id: Option<String>,
+    /// The reward to claim
     pub reward_id: i64,
 }
 
@@ -593,6 +615,7 @@ pub async fn navigate(
     Ok(Sse::new(stream))
 }
 
+/// Server-sent events endpoint for real-time updates
 #[instrument(name = "📡 events", skip(state))]
 pub async fn events(
     State(state): State<AppState>,
@@ -701,8 +724,8 @@ pub async fn claim_reward(
         ui::fragments::weekly_rewards::weekly_rewards(week_exp, &rewards, all_rewards_claimed)
             .into_string();
 
-    if all_rewards_claimed {
-        let _ = db.create_weekly_champion(week_start).await;
+    if all_rewards_claimed && let Err(e) = db.create_weekly_champion(week_start).await {
+        tracing::warn!(error = %e, "Failed to create weekly champion");
     }
 
     let signals_json = serde_json::json!({
@@ -713,11 +736,15 @@ pub async fn claim_reward(
     });
 
     let origin = request.client_id.clone();
-    let _ = bcast.send(ServerMessage::Elements(
+    if let Err(e) = bcast.send(ServerMessage::Elements(
         rewards_html.clone(),
         origin.clone(),
-    ));
-    let _ = bcast.send(ServerMessage::Signals(signals_json.to_string(), origin));
+    )) {
+        tracing::warn!(error = %e, "Failed to broadcast elements");
+    }
+    if let Err(e) = bcast.send(ServerMessage::Signals(signals_json.to_string(), origin)) {
+        tracing::warn!(error = %e, "Failed to broadcast signals");
+    }
 
     let events: Vec<Event> = vec![
         PatchElements::new(rewards_html)
@@ -770,8 +797,8 @@ async fn bounty_handler(state: AppState) -> Result<impl IntoResponse, AppError> 
     Ok(Html(html.into_string()).into_response())
 }
 
-// Test-only slow endpoint used by integration tests to simulate long-running requests.
-// This intentionally sleeps for a few seconds before responding.
+/// Test endpoint that delays response for testing long-running requests
+#[cfg(feature = "test-utils")]
 #[instrument(name = "🐢 slow")]
 pub async fn slow() -> &'static str {
     tracing::debug!("🐢 Slow endpoint called");
@@ -782,7 +809,6 @@ pub async fn slow() -> &'static str {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use chrono::Weekday;
 
     #[test]
     fn test_get_fantasy_day_name_monday() {
