@@ -1,7 +1,7 @@
 //! Optional systemd integration (enabled via `features = ["systemd"]`).
 //! Compiles only on Linux when the `systemd` feature is enabled.
 
-use sd_notify::{self, NotifyState};
+use sd_notify::NotifyState;
 use std::os::unix::io::RawFd;
 use std::time::Duration;
 use tokio::task::JoinHandle;
@@ -9,9 +9,9 @@ use tokio::task::JoinHandle;
 /// Send a READY=1 notification to systemd with an optional STATUS message.
 pub fn notify_ready(status: Option<&str>) {
     if let Some(s) = status {
-        let _ = sd_notify::notify(&[NotifyState::Status(s)]);
+        let _unused = sd_notify::notify(&[NotifyState::Status(s)]);
     }
-    let _ = sd_notify::notify(&[NotifyState::Ready]);
+    let _unused = sd_notify::notify(&[NotifyState::Ready]);
 }
 
 /// Attempt to start a watchdog heartbeat task if WATCHDOG is enabled.
@@ -31,7 +31,7 @@ pub fn start_watchdog() -> Option<JoinHandle<()>> {
 
     Some(tokio::spawn(async move {
         loop {
-            let _ = sd_notify::notify(&[NotifyState::Watchdog]);
+            let _unused = sd_notify::notify(&[NotifyState::Watchdog]);
             tokio::time::sleep(interval).await;
         }
     }))

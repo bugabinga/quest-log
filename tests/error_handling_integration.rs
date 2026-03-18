@@ -1,5 +1,8 @@
-//! Comprehensive error handling integration tests
-//! Tests system behavior under various error conditions
+//! Integration tests for error handling: timeouts, malformed requests, resource exhaustion.
+#![allow(
+    clippy::tests_outside_test_module,
+    reason = "Integration tests in tests/ are only compiled during cargo test"
+)]
 
 use axum::{
     Router,
@@ -8,7 +11,7 @@ use axum::{
     routing::{get, post},
 };
 use quest_log::database::Database;
-use quest_log::handlers::{quests, toggle_quest};
+use quest_log::handlers::quests::{quests, toggle_quest};
 use quest_log::state::AppState;
 use sqlx::SqlitePool;
 use std::time::Duration;
@@ -41,14 +44,17 @@ async fn test_timeout_handling() {
     let result = timeout(Duration::from_millis(10), app.oneshot(request)).await;
 
     match result {
-        Ok(response_result) => {
+        Ok(Ok(response)) => {
             // Request completed within timeout - this is expected for fast operations
-            let response = response_result.unwrap();
             assert_eq!(response.status(), StatusCode::OK);
         }
-        Err(_) => {
+        Ok(Err(e)) => {
+            // Request failed but didn't timeout - this is acceptable
+            panic!("Request failed: {e:?}");
+        }
+        Err(elapsed) => {
             // Request timed out - this indicates a performance issue that should be addressed
-            panic!("Request timed out - indicates performance issue");
+            panic!("Request timed out after {elapsed:?} - indicates performance issue");
         }
     }
 
@@ -81,39 +87,20 @@ async fn test_malformed_http_requests() {
         .body(Body::empty())
         .unwrap();
     let result = app.clone().oneshot(request).await;
-    match result {
-        Ok(response) => {
-            let status = response.status();
-            assert!(status.is_success() || status.is_client_error() || status.is_server_error());
-        }
-        Err(_) => {
-            // Request was rejected at the HTTP level - this is also acceptable
-        }
-    }
-
-    // Test invalid URI - this may fail at request creation level
+    let response = result.unwrap();
+    let status = response.status();
+    assert!(status.is_success() || status.is_client_error() || status.is_server_error());
     let request_result = Request::builder()
         .uri("http://invalid uri with spaces")
         .body(Body::empty());
 
-    match request_result {
-        Ok(request) => {
-            let result = app.clone().oneshot(request).await;
-            match result {
-                Ok(response) => {
-                    let status = response.status();
-                    assert!(
-                        status.is_success() || status.is_client_error() || status.is_server_error()
-                    );
-                }
-                Err(_) => {
-                    // Request was rejected at the HTTP level - this is also acceptable
-                }
-            }
-        }
-        Err(_) => {
-            // Request creation itself failed - this is acceptable for malformed URIs
-        }
+    if let Ok(request) = request_result {
+        let result = app.clone().oneshot(request).await;
+        let response = result.unwrap();
+        let status = response.status();
+        assert!(status.is_success() || status.is_client_error() || status.is_server_error());
+    } else {
+        // Request creation itself failed - this is acceptable for malformed URIs
     }
 
     // Test oversized headers (simulate)
@@ -123,15 +110,9 @@ async fn test_malformed_http_requests() {
         .body(Body::empty())
         .unwrap();
     let result = app.clone().oneshot(request).await;
-    match result {
-        Ok(response) => {
-            let status = response.status();
-            assert!(status.is_success() || status.is_client_error() || status.is_server_error());
-        }
-        Err(_) => {
-            // Request was rejected at the HTTP level - this is also acceptable
-        }
-    }
+    let response = result.unwrap();
+    let status = response.status();
+    assert!(status.is_success() || status.is_client_error() || status.is_server_error());
 
     println!("Malformed HTTP requests test completed successfully");
 }
@@ -166,21 +147,17 @@ async fn test_resource_exhaustion_protection() {
 
     let result = timeout(Duration::from_secs(5), app.oneshot(request)).await;
 
-    match result {
-        Ok(response_result) => {
-            let response = response_result.unwrap();
-            // Should either succeed (if body is processed) or return error
-            let status = response.status();
-            assert!(
-                status.is_success() || status.is_client_error(),
-                "Large request should be handled gracefully, got status {}",
-                status
-            );
-        }
-        Err(_) => {
-            // Timeout is acceptable for very large requests
-            // Indicates the server doesn't hang indefinitely
-        }
+    if let Ok(response_result) = result {
+        let response = response_result.unwrap();
+        // Should either succeed (if body is processed) or return error
+        let status = response.status();
+        assert!(
+            status.is_success() || status.is_client_error(),
+            "Large request should be handled gracefully, got status {status}"
+        );
+    } else {
+        // Timeout is acceptable for very large requests
+        // Indicates the server doesn't hang indefinitely
     }
 
     println!("Resource exhaustion protection test completed successfully");
@@ -305,8 +282,7 @@ async fn test_no_database_details_leaked_in_errors() {
     for pattern in &sensitive_patterns {
         assert!(
             !html_lower.contains(pattern),
-            "Error page should not contain '{}' - potential info leak",
-            pattern
+            "Error page should not contain '{pattern}' - potential info leak"
         );
     }
 }

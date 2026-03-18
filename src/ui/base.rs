@@ -12,17 +12,27 @@ fn nav_link_class(active_route: Option<&str>, route: &str) -> &'static str {
     }
 }
 
+/// Data required to render a page.
 pub struct PageData {
+    /// Page title.
     pub title: String,
+    /// Main HTML content.
     pub body_content: maud::Markup,
+    /// Current weekday for styling.
     pub weekday: Option<u8>,
+    /// Datastar signals JSON.
     pub signals: Option<String>,
+    /// Datastar computed signals JSON.
     pub computed: Option<String>,
+    /// Whether to show navigation.
     pub show_nav: bool,
+    /// Currently active route for nav highlighting.
     pub active_route: Option<String>,
+    /// Additional scripts to include.
     pub extra_scripts: Option<String>,
 }
 
+/// Renders the base HTML page with navigation and Datastar integration.
 #[must_use]
 pub fn base_page(data: &PageData) -> maud::Markup {
     html! {

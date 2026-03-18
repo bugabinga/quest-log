@@ -1,4 +1,5 @@
+//! Adds build options, that Cargo.toml cannot
 fn main() {
-    println!("cargo:rerun-if-changed=templates/");
-    println!("cargo:rustc-env=ASKAMA_TEMPLATE_DIR=templates");
+    // Add static/ to watched dirs in cargo watch
+    println!("cargo:rerun-if-changed=static/");
 }

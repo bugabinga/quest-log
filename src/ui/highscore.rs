@@ -4,6 +4,7 @@ use crate::handlers::stats::HighscoreData;
 use crate::ui::base::{PageData, base_page};
 use maud::html;
 
+/// Renders the highscore page showing user statistics and quest history.
 #[must_use]
 pub fn highscore_page(data: &HighscoreData) -> maud::Markup {
     let body_content = html! {

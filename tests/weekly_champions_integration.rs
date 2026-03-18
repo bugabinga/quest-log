@@ -1,3 +1,8 @@
+//! Integration tests for weekly champions tracking and all-rewards-claimed signal.
+#![allow(
+    clippy::tests_outside_test_module,
+    reason = "Integration tests in tests/ directory are only compiled during cargo test, making #[cfg(test)] redundant"
+)]
 //! Tests for the Weekly Champions achievement tracking feature.
 //!
 //! This test verifies that when a user claims ALL rewards in a week,
@@ -5,7 +10,7 @@
 //!
 //! The test follows TDD approach - it defines the expected behavior
 //! that should be implemented:
-//! 1. An `allRewardsClaimed` signal returned from the claim_reward handler
+//! 1. An `allRewardsClaimed` signal returned from the `claim_reward` handler
 //! 2. A database table `weekly_champions` to track when user completes all weekly rewards
 //!
 //! Run these tests to verify the feature is implemented correctly.
@@ -14,7 +19,7 @@ use chrono::NaiveDate;
 use quest_log::{database::Database, models::*, time};
 use sqlx::SqlitePool;
 
-/// Test that the claim_reward handler should return allRewardsClaimed: true when all rewards are claimed
+/// Test that the `claim_reward` handler should return allRewardsClaimed: true when all rewards are claimed
 ///
 /// This test verifies the "Weekly Champions" achievement tracking feature:
 ///
@@ -23,7 +28,7 @@ use sqlx::SqlitePool;
 /// 3. Claims all rewards on Sunday (when claiming is allowed)
 /// 4. Verifies the handler should return signals including `allRewardsClaimed: true`
 ///
-/// The claim_reward handler should return signals like:
+/// The `claim_reward` handler should return signals like:
 /// {
 ///   "rewardClaimed": <id>,
 ///   "rewards": [...],
@@ -102,8 +107,7 @@ async fn test_claim_reward_handler_returns_all_rewards_claimed_signal() {
     // so the implementation needs to add it.
     assert!(
         all_rewards_claimed,
-        "When all {}/{} rewards are claimed, handler should set allRewardsClaimed: true in response",
-        claimed_count, total
+        "When all {claimed_count}/{total} rewards are claimed, handler should set allRewardsClaimed: true in response"
     );
 
     time::reset_today();
@@ -180,22 +184,19 @@ async fn test_partial_claim_should_not_return_all_rewards_claimed() {
 
     assert!(
         !all_rewards_claimed,
-        "When only {}/{} rewards are claimed, handler should NOT set allRewardsClaimed to true",
-        claimed_count, total_rewards
+        "When only {claimed_count}/{total_rewards} rewards are claimed, handler should NOT set allRewardsClaimed to true"
     );
 
     time::reset_today();
 }
 
-/// Test that weekly_champions table should track when all rewards are claimed
+/// Test that `weekly_champions` table tracks when all rewards are claimed
 ///
-/// This test verifies the database layer requirement:
-/// - A `weekly_champions` table should exist to track when a user
+/// This test verifies the database layer:
+/// - A `weekly_champions` table exists to track when a user
 ///   completes all weekly rewards
 ///
-/// Currently FAILS because:
-/// - The weekly_champions table doesn't exist in migrations
-/// - The get_weekly_champion method doesn't exist in Database
+/// This test verifies the `get_all_weekly_champions` method works correctly.
 #[tokio::test]
 async fn test_weekly_champions_table_should_track_completion() {
     let pool = SqlitePool::connect("sqlite::memory:")

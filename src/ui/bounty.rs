@@ -3,6 +3,7 @@ use crate::ui::base::{PageData, base_page};
 use crate::ui::fragments::weekly_rewards::weekly_rewards;
 use maud::html;
 
+/// Renders the bounty board page showing weekly rewards and EXP progress.
 #[must_use]
 pub fn bounty_page(
     week_exp: i32,

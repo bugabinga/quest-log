@@ -1,3 +1,8 @@
+//! Integration tests for systemd socket activation and notify protocol.
+#![allow(
+    clippy::tests_outside_test_module,
+    reason = "Integration tests in tests/ are only compiled during cargo test"
+)]
 #![cfg(target_os = "linux")]
 
 use sd_notify::NotifyState;
@@ -6,8 +11,12 @@ use sd_notify::NotifyState;
 fn systemd_watchdog_and_notify_smoke() {
     // Simulate systemd setting WATCHDOG_USEC and LISTEN_PID for the current PID.
     // The test ensures the sd-notify crate is available and the basic APIs behave.
+    // SAFETY: Test-only manipulation of env vars, restored automatically when test ends
     unsafe {
         std::env::set_var("WATCHDOG_USEC", "30000000");
+    }
+    // SAFETY: Test-only manipulation of env vars, restored automatically when test ends
+    unsafe {
         std::env::set_var("WATCHDOG_PID", std::process::id().to_string());
     }
 
@@ -22,6 +31,6 @@ fn systemd_watchdog_and_notify_smoke() {
 
     // Call notify READY/STATUS and ensure it doesn't panic. We cannot assert systemd received it
     // because runners typically don't have NOTIFY_SOCKET, but the call should be safe.
-    let _ = sd_notify::notify(&[NotifyState::Status("test")]);
-    let _ = sd_notify::notify(&[NotifyState::Ready]);
+    let _unused = sd_notify::notify(&[NotifyState::Status("test")]);
+    let _unused = sd_notify::notify(&[NotifyState::Ready]);
 }

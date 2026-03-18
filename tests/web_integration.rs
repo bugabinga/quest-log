@@ -1,3 +1,9 @@
+//! Integration tests for web endpoints: quest CRUD, toggle, XSS prevention, and weekly rewards.
+#![allow(
+    clippy::tests_outside_test_module,
+    reason = "Integration tests in tests/ are only compiled during cargo test"
+)]
+
 use axum::{
     Router,
     body::Body,
@@ -25,7 +31,7 @@ async fn test_quest_listing_integration() {
 
     // Add test data - create some quests for today
     let today = Utc::now().date_naive();
-    let day_of_week = today.weekday().num_days_from_sunday() as i32;
+    let day_of_week = today.weekday().num_days_from_sunday().cast_signed();
 
     let quest_req = CreateQuestRequest {
         title: "Integration Test Quest".to_string(),
@@ -91,7 +97,7 @@ async fn test_invalid_date_returns_error() {
     let (bcast_tx, _) = broadcast::channel(128);
     let app_state = AppState::new(db, bcast_tx);
     let app = Router::new()
-        .route("/", get(handlers::quests))
+        .route("/", get(handlers::quests::quests))
         .with_state(app_state);
 
     // Test invalid date format - should return error, not silently use today
@@ -116,8 +122,7 @@ async fn test_invalid_date_returns_error() {
     // Should contain styled error page content
     assert!(
         body_str.contains("Wrong Day!"),
-        "Expected styled error page, got: {}",
-        body_str
+        "Expected styled error page, got: {body_str}"
     );
 
     time::reset_today();
@@ -151,7 +156,7 @@ async fn test_quest_listing_on_sunday() {
 
     // Test using time::today() which now returns our fake Sunday
     let today = time::today();
-    let day_of_week = today.weekday().num_days_from_sunday() as i32;
+    let day_of_week = today.weekday().num_days_from_sunday().cast_signed();
 
     // Verify we're on Sunday
     assert_eq!(day_of_week, 0, "Should be Sunday (0)");
@@ -190,7 +195,7 @@ async fn test_quest_toggle_integration() {
 
     // Create test quest
     let today = Utc::now().date_naive();
-    let day_of_week = today.weekday().num_days_from_sunday() as i32;
+    let day_of_week = today.weekday().num_days_from_sunday().cast_signed();
 
     let quest_req = CreateQuestRequest {
         title: "Toggle Test Quest".to_string(),
@@ -207,9 +212,9 @@ async fn test_quest_toggle_integration() {
     let (bcast_tx, _) = broadcast::channel(128);
     let app_state = AppState::new(db, bcast_tx);
     let app = Router::new()
-        .route("/", get(handlers::quests))
-        .route("/quests/toggle", post(handlers::toggle_quest))
-        .route("/events", get(handlers::events))
+        .route("/", get(handlers::quests::quests))
+        .route("/quests/toggle", post(handlers::quests::toggle_quest))
+        .route("/events", get(handlers::events::events))
         .with_state(app_state);
 
     // Test initial quest page load
@@ -296,7 +301,7 @@ async fn test_multiple_quests_toggle_integration() {
 
     // Create multiple test quests
     let today = Utc::now().date_naive();
-    let day_of_week = today.weekday().num_days_from_sunday() as i32;
+    let day_of_week = today.weekday().num_days_from_sunday().cast_signed();
 
     let quest1_req = CreateQuestRequest {
         title: "Quest One".to_string(),
@@ -324,9 +329,9 @@ async fn test_multiple_quests_toggle_integration() {
     let (bcast_tx, _) = broadcast::channel(128);
     let app_state = AppState::new(db, bcast_tx);
     let app = Router::new()
-        .route("/", get(handlers::quests))
-        .route("/quests/toggle", post(handlers::toggle_quest))
-        .route("/events", get(handlers::events))
+        .route("/", get(handlers::quests::quests))
+        .route("/quests/toggle", post(handlers::quests::toggle_quest))
+        .route("/events", get(handlers::events::events))
         .with_state(app_state);
 
     // Complete first quest
@@ -409,9 +414,9 @@ async fn test_invalid_form_data() {
     let (bcast_tx, _) = broadcast::channel(128);
     let app_state = AppState::new(db, bcast_tx);
     let app = Router::new()
-        .route("/", get(handlers::quests))
-        .route("/quests/toggle", post(handlers::toggle_quest))
-        .route("/events", get(handlers::events))
+        .route("/", get(handlers::quests::quests))
+        .route("/quests/toggle", post(handlers::quests::toggle_quest))
+        .route("/events", get(handlers::events::events))
         .with_state(app_state);
 
     // Test invalid quest_id (non-numeric)
@@ -433,8 +438,7 @@ async fn test_invalid_form_data() {
     let status = response.status();
     assert!(
         status.is_client_error() || status.is_success(),
-        "Should handle invalid quest_id gracefully, got status: {}",
-        status
+        "Should handle invalid quest_id gracefully, got status: {status}"
     );
 
     // Test missing quest_id parameter
@@ -455,8 +459,7 @@ async fn test_invalid_form_data() {
     let status = response.status();
     assert!(
         status.is_client_error() || status.is_success(),
-        "Should handle missing quest_id gracefully, got status: {}",
-        status
+        "Should handle missing quest_id gracefully, got status: {status}"
     );
 
     // Test empty form data
@@ -476,8 +479,7 @@ async fn test_invalid_form_data() {
     let status = response.status();
     assert!(
         status.is_client_error() || status.is_success(),
-        "Should handle empty form data gracefully, got status: {}",
-        status
+        "Should handle empty form data gracefully, got status: {status}"
     );
 
     println!("Invalid form data integration test completed successfully");
@@ -496,9 +498,9 @@ async fn test_quest_toggle_error_handling() {
     let (bcast_tx, _) = broadcast::channel(128);
     let app_state = AppState::new(db, bcast_tx);
     let app = Router::new()
-        .route("/", get(handlers::quests))
-        .route("/quests/toggle", post(handlers::toggle_quest))
-        .route("/events", get(handlers::events))
+        .route("/", get(handlers::quests::quests))
+        .route("/quests/toggle", post(handlers::quests::toggle_quest))
+        .route("/events", get(handlers::events::events))
         .with_state(app_state);
 
     // Test toggling non-existent quest
@@ -548,8 +550,7 @@ async fn test_quest_toggle_error_handling() {
         assert_eq!(
             response.status(),
             StatusCode::NOT_FOUND,
-            "Rapid toggle {} should return 404 for non-existent quest",
-            i
+            "Rapid toggle {i} should return 404 for non-existent quest"
         );
     }
 
@@ -571,15 +572,15 @@ async fn test_xss_prevention_in_web_interface() {
     let (bcast_tx, _) = broadcast::channel::<ServerMessage>(128);
     let app_state = AppState::new(db.clone(), bcast_tx);
     let app = Router::new()
-        .route("/", get(handlers::quests))
-        .route("/quests/toggle", post(handlers::toggle_quest))
+        .route("/", get(handlers::quests::quests))
+        .route("/quests/toggle", post(handlers::quests::toggle_quest))
         .with_state(app_state.clone());
 
     // Create quest with XSS payload in title
     let today = Utc::now().date_naive();
-    let day_of_week = today.weekday().num_days_from_sunday() as i32;
+    let day_of_week = today.weekday().num_days_from_sunday().cast_signed();
 
-    let xss_payloads = vec![
+    let xss_payloads = [
         "<script>alert('xss')</script>",
         "<img src=x onerror=alert('xss')>",
         "javascript:alert('xss')",
@@ -589,7 +590,7 @@ async fn test_xss_prevention_in_web_interface() {
     for (i, payload) in xss_payloads.iter().enumerate() {
         let quest_req = CreateQuestRequest {
             title: payload.to_string(),
-            description: Some(format!("XSS test {}", i)),
+            description: Some(format!("XSS test {i}")),
             exp_value: Some(10),
             day_of_week,
         };
@@ -648,20 +649,20 @@ async fn test_large_quest_list_performance() {
     let (bcast_tx, _) = broadcast::channel::<ServerMessage>(128);
     let app_state = AppState::new(db.clone(), bcast_tx);
     let app = Router::new()
-        .route("/", get(handlers::quests))
-        .route("/quests/toggle", post(handlers::toggle_quest))
+        .route("/", get(handlers::quests::quests))
+        .route("/quests/toggle", post(handlers::quests::toggle_quest))
         .with_state(app_state.clone());
 
     // Create many quests (100+ to test performance)
     let today = Utc::now().date_naive();
-    let day_of_week = today.weekday().num_days_from_sunday() as i32;
+    let day_of_week = today.weekday().num_days_from_sunday().cast_signed();
 
     let start_time = std::time::Instant::now();
 
     for i in 0..150 {
         let quest_req = CreateQuestRequest {
-            title: format!("Performance Quest {}", i),
-            description: Some(format!("Description for quest {}", i)),
+            title: format!("Performance Quest {i}"),
+            description: Some(format!("Description for quest {i}")),
             exp_value: Some((i % 50) + 1), // Vary EXP values
             day_of_week,
         };
@@ -671,7 +672,7 @@ async fn test_large_quest_list_performance() {
     }
 
     let creation_time = start_time.elapsed();
-    println!("Created 150 quests in {:?}", creation_time);
+    println!("Created 150 quests in {creation_time:?}");
 
     // Test page load performance with large dataset
     let page_load_start = std::time::Instant::now();
@@ -685,8 +686,7 @@ async fn test_large_quest_list_performance() {
     assert_eq!(response.status(), StatusCode::OK);
     assert!(
         page_load_time < std::time::Duration::from_secs(2),
-        "Page load should be fast even with 150 quests, took {:?}",
-        page_load_time
+        "Page load should be fast even with 150 quests, took {page_load_time:?}"
     );
 
     let body = axum::body::to_bytes(response.into_body(), usize::MAX)
@@ -697,9 +697,8 @@ async fn test_large_quest_list_performance() {
     // Verify all quests are displayed
     for i in 0..150 {
         assert!(
-            body_str.contains(&format!("Performance Quest {}", i)),
-            "Quest {} should be displayed",
-            i
+            body_str.contains(&format!("Performance Quest {i}")),
+            "Quest {i} should be displayed"
         );
     }
 
@@ -726,13 +725,11 @@ async fn test_large_quest_list_performance() {
     assert_eq!(response.status(), StatusCode::OK);
     assert!(
         toggle_time < std::time::Duration::from_millis(500),
-        "Quest toggle should be fast, took {:?}",
-        toggle_time
+        "Quest toggle should be fast, took {toggle_time:?}"
     );
 
     println!(
-        "Large quest list performance test completed successfully - creation: {:?}, page load: {:?}, toggle: {:?}",
-        creation_time, page_load_time, toggle_time
+        "Large quest list performance test completed successfully - creation: {creation_time:?}, page load: {page_load_time:?}, toggle: {toggle_time:?}"
     );
 }
 
@@ -749,12 +746,12 @@ async fn test_multiple_users_concurrent_toggles() {
 
     // Create multiple quests
     let today = Utc::now().date_naive();
-    let day_of_week = today.weekday().num_days_from_sunday() as i32;
+    let day_of_week = today.weekday().num_days_from_sunday().cast_signed();
 
     let mut quest_ids = vec![];
     for i in 0..5 {
         let quest_req = CreateQuestRequest {
-            title: format!("Concurrent Quest {}", i),
+            title: format!("Concurrent Quest {i}"),
             description: None,
             exp_value: Some(10),
             day_of_week,
@@ -772,20 +769,19 @@ async fn test_multiple_users_concurrent_toggles() {
         let db_clone = Database::with_pool(app_state.db.pool().clone());
         let bcast_clone = app_state.bcast.clone();
         let quest_ids_clone = quest_ids.clone();
-        let _day_of_week_clone = day_of_week;
 
         let handle = tokio::spawn(async move {
             let app_state_inner = AppState::new(db_clone, bcast_clone);
             let app = Router::new()
-                .route("/", get(handlers::quests))
-                .route("/quests/toggle", post(handlers::toggle_quest))
-                .route("/events", get(handlers::events))
+                .route("/", get(handlers::quests::quests))
+                .route("/quests/toggle", post(handlers::quests::toggle_quest))
+                .route("/events", get(handlers::events::events))
                 .with_state(app_state_inner);
 
             // Each "user" toggles a random quest
             let quest_index = user_id % quest_ids_clone.len();
             let quest_id = quest_ids_clone[quest_index];
-            let json_data = format!(r#"{{"quest_id":{}}}"#, quest_id);
+            let json_data = format!(r#"{{"quest_id":{quest_id}}}"#);
 
             let response = app
                 .oneshot(
@@ -866,7 +862,7 @@ async fn test_toggle_returns_proper_datastar_html() {
     db.migrate().await.expect("Failed to run migrations");
 
     let today = Utc::now().date_naive();
-    let day_of_week = today.weekday().num_days_from_sunday() as i32;
+    let day_of_week = today.weekday().num_days_from_sunday().cast_signed();
 
     let quest_req = CreateQuestRequest {
         title: "Datastar Toggle Test".to_string(),
@@ -882,9 +878,9 @@ async fn test_toggle_returns_proper_datastar_html() {
     let (bcast_tx, _) = broadcast::channel(128);
     let app_state = AppState::new(db, bcast_tx);
     let app = Router::new()
-        .route("/", get(handlers::quests))
-        .route("/quests/toggle", post(handlers::toggle_quest))
-        .route("/events", get(handlers::events))
+        .route("/", get(handlers::quests::quests))
+        .route("/quests/toggle", post(handlers::quests::toggle_quest))
+        .route("/events", get(handlers::events::events))
         .with_state(app_state);
 
     let json_data = format!(r#"{{"quest_id":{}}}"#, quest.id);
@@ -943,7 +939,7 @@ async fn test_toggle_with_wrong_content_type_returns_422() {
     db.migrate().await.expect("Failed to run migrations");
 
     let today = Utc::now().date_naive();
-    let day_of_week = today.weekday().num_days_from_sunday() as i32;
+    let day_of_week = today.weekday().num_days_from_sunday().cast_signed();
 
     let quest_req = CreateQuestRequest {
         title: "422 Test Quest".to_string(),
@@ -959,9 +955,9 @@ async fn test_toggle_with_wrong_content_type_returns_422() {
     let (bcast_tx, _) = broadcast::channel(128);
     let app_state = AppState::new(db, bcast_tx);
     let app = Router::new()
-        .route("/", get(handlers::quests))
-        .route("/quests/toggle", post(handlers::toggle_quest))
-        .route("/events", get(handlers::events))
+        .route("/", get(handlers::quests::quests))
+        .route("/quests/toggle", post(handlers::quests::toggle_quest))
+        .route("/events", get(handlers::events::events))
         .with_state(app_state);
 
     // Test 1: Wrong content type (form-urlencoded) should return 422 or 415
@@ -1020,7 +1016,7 @@ async fn test_toggle_accepts_datastar_json_format() {
     db.migrate().await.expect("Failed to run migrations");
 
     let today = Utc::now().date_naive();
-    let day_of_week = today.weekday().num_days_from_sunday() as i32;
+    let day_of_week = today.weekday().num_days_from_sunday().cast_signed();
 
     let quest_req = CreateQuestRequest {
         title: "JSON Format Test".to_string(),
@@ -1036,9 +1032,9 @@ async fn test_toggle_accepts_datastar_json_format() {
     let (bcast_tx, _) = broadcast::channel(128);
     let app_state = AppState::new(db, bcast_tx);
     let app = Router::new()
-        .route("/", get(handlers::quests))
-        .route("/quests/toggle", post(handlers::toggle_quest))
-        .route("/events", get(handlers::events))
+        .route("/", get(handlers::quests::quests))
+        .route("/quests/toggle", post(handlers::quests::toggle_quest))
+        .route("/events", get(handlers::events::events))
         .with_state(app_state);
 
     // Datastar sends signals as JSON body - test that format
@@ -1072,7 +1068,7 @@ async fn test_rendered_toggle_html_contains_actual_quest_id() {
     db.migrate().await.expect("Failed to run migrations");
 
     let today = Utc::now().date_naive();
-    let day_of_week = today.weekday().num_days_from_sunday() as i32;
+    let day_of_week = today.weekday().num_days_from_sunday().cast_signed();
 
     let quest_req = CreateQuestRequest {
         title: "Rendered Quest ID Test".to_string(),
@@ -1088,9 +1084,9 @@ async fn test_rendered_toggle_html_contains_actual_quest_id() {
     let (bcast_tx, _) = broadcast::channel(128);
     let app_state = AppState::new(db, bcast_tx);
     let app = Router::new()
-        .route("/", get(handlers::quests))
-        .route("/quests/toggle", post(handlers::toggle_quest))
-        .route("/events", get(handlers::events))
+        .route("/", get(handlers::quests::quests))
+        .route("/quests/toggle", post(handlers::quests::toggle_quest))
+        .route("/events", get(handlers::events::events))
         .with_state(app_state);
 
     // Call the actual handler to get rendered HTML
@@ -1112,7 +1108,7 @@ async fn test_rendered_toggle_html_contains_actual_quest_id() {
     // The rendered HTML should have something like: { quest_id: 1 }
     // NOT: { quest_id: {{ quest.id }} }
     assert!(
-        html.contains(&format!("quest_id: {}", expected_quest_id)),
+        html.contains(&format!("quest_id: {expected_quest_id}")),
         "Rendered HTML should contain 'quest_id: {}' (actual number), not template syntax. \
          Actual HTML snippet: {}",
         expected_quest_id,
@@ -1157,7 +1153,7 @@ async fn test_toggle_with_datastar_signal_format() {
     db.migrate().await.expect("Failed to run migrations");
 
     let today = Utc::now().date_naive();
-    let day_of_week = today.weekday().num_days_from_sunday() as i32;
+    let day_of_week = today.weekday().num_days_from_sunday().cast_signed();
 
     let quest_req = CreateQuestRequest {
         title: "Datastar Signal Format Test".to_string(),
@@ -1173,9 +1169,9 @@ async fn test_toggle_with_datastar_signal_format() {
     let (bcast_tx, _) = broadcast::channel(128);
     let app_state = AppState::new(db, bcast_tx);
     let app = Router::new()
-        .route("/", get(handlers::quests))
-        .route("/quests/toggle", post(handlers::toggle_quest))
-        .route("/events", get(handlers::events))
+        .route("/", get(handlers::quests::quests))
+        .route("/quests/toggle", post(handlers::quests::toggle_quest))
+        .route("/events", get(handlers::events::events))
         .with_state(app_state);
 
     // Test 1: Exact format Datastar sends when using { quest_id: value }
@@ -1222,7 +1218,7 @@ async fn test_toggle_with_datastar_signal_format() {
 
     // Test 3: Empty JSON body (if Datastar sends no signals) should fail gracefully
     // This will return 422 because quest_id is required
-    let empty_json = r#"{}"#;
+    let empty_json = r"{}";
     let response = app
         .oneshot(
             Request::builder()
@@ -1255,7 +1251,7 @@ async fn test_toggle_debug_422_scenarios() {
     db.migrate().await.expect("Failed to run migrations");
 
     let today = Utc::now().date_naive();
-    let day_of_week = today.weekday().num_days_from_sunday() as i32;
+    let day_of_week = today.weekday().num_days_from_sunday().cast_signed();
 
     let quest_req = CreateQuestRequest {
         title: "Debug 422 Test".to_string(),
@@ -1271,9 +1267,9 @@ async fn test_toggle_debug_422_scenarios() {
     let (bcast_tx, _) = broadcast::channel(128);
     let app_state = AppState::new(db, bcast_tx);
     let app = Router::new()
-        .route("/", get(handlers::quests))
-        .route("/quests/toggle", post(handlers::toggle_quest))
-        .route("/events", get(handlers::events))
+        .route("/", get(handlers::quests::quests))
+        .route("/quests/toggle", post(handlers::quests::toggle_quest))
+        .route("/events", get(handlers::events::events))
         .with_state(app_state);
 
     // Scenario: Missing content-type header (Datastar might not set it)
@@ -1348,7 +1344,7 @@ async fn test_toggle_quest_id_as_string() {
     db.migrate().await.expect("Failed to run migrations");
 
     let today = Utc::now().date_naive();
-    let day_of_week = today.weekday().num_days_from_sunday() as i32;
+    let day_of_week = today.weekday().num_days_from_sunday().cast_signed();
 
     let quest_req = CreateQuestRequest {
         title: "String Quest ID Test".to_string(),
@@ -1364,9 +1360,9 @@ async fn test_toggle_quest_id_as_string() {
     let (bcast_tx, _) = broadcast::channel(128);
     let app_state = AppState::new(db, bcast_tx);
     let app = Router::new()
-        .route("/", get(handlers::quests))
-        .route("/quests/toggle", post(handlers::toggle_quest))
-        .route("/events", get(handlers::events))
+        .route("/", get(handlers::quests::quests))
+        .route("/quests/toggle", post(handlers::quests::toggle_quest))
+        .route("/events", get(handlers::events::events))
         .with_state(app_state);
 
     // Datastar might serialize quest_id as a string: {"quest_id": "1"}
@@ -1409,7 +1405,7 @@ async fn test_toggle_button_exact_html_structure() {
     db.migrate().await.expect("Failed to run migrations");
 
     let today = Utc::now().date_naive();
-    let day_of_week = today.weekday().num_days_from_sunday() as i32;
+    let day_of_week = today.weekday().num_days_from_sunday().cast_signed();
 
     let quest_req = CreateQuestRequest {
         title: "Test Quest".to_string(),
@@ -1425,9 +1421,9 @@ async fn test_toggle_button_exact_html_structure() {
     let (bcast_tx, _) = broadcast::channel(128);
     let app_state = AppState::new(db, bcast_tx);
     let app = Router::new()
-        .route("/", get(handlers::quests))
-        .route("/quests/toggle", post(handlers::toggle_quest))
-        .route("/events", get(handlers::events))
+        .route("/", get(handlers::quests::quests))
+        .route("/quests/toggle", post(handlers::quests::toggle_quest))
+        .route("/events", get(handlers::events::events))
         .with_state(app_state);
 
     let response = app
@@ -1442,10 +1438,7 @@ async fn test_toggle_button_exact_html_structure() {
     let html = String::from_utf8(body.to_vec()).unwrap();
 
     // Look for the toggle button specifically (may span multiple lines)
-    let html_normalized = html
-        .replace("\n", " ")
-        .replace("\r", " ")
-        .replace("  ", " ");
+    let html_normalized = html.replace(['\n', '\r'], " ").replace("  ", " ");
 
     // Find the toggle button section (look for class="toggle-btn")
     let toggle_button_start = html_normalized
@@ -1457,7 +1450,7 @@ async fn test_toggle_button_exact_html_structure() {
         .expect("Should find button end");
     let toggle_button_html = &toggle_button_section[..toggle_button_end + 9];
 
-    println!("Toggle button HTML: {}", toggle_button_html);
+    println!("Toggle button HTML: {toggle_button_html}");
 
     // Verify the button has type="button"
     assert!(
@@ -1500,7 +1493,7 @@ async fn test_no_js_errors_in_toggle_html() {
     db.migrate().await.expect("Failed to run migrations");
 
     let today = Utc::now().date_naive();
-    let day_of_week = today.weekday().num_days_from_sunday() as i32;
+    let day_of_week = today.weekday().num_days_from_sunday().cast_signed();
 
     let quest_req = CreateQuestRequest {
         title: "JS Error Test".to_string(),
@@ -1516,9 +1509,9 @@ async fn test_no_js_errors_in_toggle_html() {
     let (bcast_tx, _) = broadcast::channel(128);
     let app_state = AppState::new(db, bcast_tx);
     let app = Router::new()
-        .route("/", get(handlers::quests))
-        .route("/quests/toggle", post(handlers::toggle_quest))
-        .route("/events", get(handlers::events))
+        .route("/", get(handlers::quests::quests))
+        .route("/quests/toggle", post(handlers::quests::toggle_quest))
+        .route("/events", get(handlers::events::events))
         .with_state(app_state);
 
     let response = app
@@ -1546,9 +1539,7 @@ async fn test_no_js_errors_in_toggle_html() {
     for (pattern, description) in &js_patterns {
         assert!(
             !html.to_lowercase().contains(pattern),
-            "HTML should not contain {}: {}",
-            description,
-            pattern
+            "HTML should not contain {description}: {pattern}"
         );
     }
 
@@ -1557,8 +1548,7 @@ async fn test_no_js_errors_in_toggle_html() {
     let script_closes = html.matches("</script>").count();
     assert_eq!(
         script_opens, script_closes,
-        "Script tags should be properly closed ({} opens, {} closes)",
-        script_opens, script_closes
+        "Script tags should be properly closed ({script_opens} opens, {script_closes} closes)"
     );
 
     // Verify all style tags are properly closed
@@ -1593,7 +1583,7 @@ async fn test_broadcast_channel_works() {
 
     let (tx, mut rx) = broadcast::channel::<String>(128);
 
-    let _ = tx.send("hello".to_string());
+    let _unused = tx.send("hello".to_string());
 
     let result = tokio::time::timeout(tokio::time::Duration::from_millis(100), rx.recv()).await;
 
@@ -1612,7 +1602,7 @@ async fn test_toggle_broadcasts_to_events_endpoint() {
     db.migrate().await.expect("Failed to run migrations");
 
     let today = Utc::now().date_naive();
-    let day_of_week = today.weekday().num_days_from_sunday() as i32;
+    let day_of_week = today.weekday().num_days_from_sunday().cast_signed();
 
     let quest_req = CreateQuestRequest {
         title: "Broadcast Test Quest".to_string(),
@@ -1628,9 +1618,9 @@ async fn test_toggle_broadcasts_to_events_endpoint() {
     let (bcast_tx, _) = broadcast::channel::<ServerMessage>(128);
     let app_state = AppState::new(db, bcast_tx);
     let app = Router::new()
-        .route("/", get(handlers::quests))
-        .route("/quests/toggle", post(handlers::toggle_quest))
-        .route("/events", get(handlers::events))
+        .route("/", get(handlers::quests::quests))
+        .route("/quests/toggle", post(handlers::quests::toggle_quest))
+        .route("/events", get(handlers::events::events))
         .with_state(app_state.clone());
 
     // Subscribe to the broadcast channel BEFORE making the request
@@ -1690,19 +1680,18 @@ async fn test_toggle_broadcasts_to_events_endpoint() {
                     // Note: weekly rewards are no longer broadcast from Quest page (moved to Bounty page)
                 }
                 ServerMessage::Signals(json, _) => {
-                    eprintln!("Received signals: {}", json);
+                    eprintln!("Received signals: {json}");
                     assert!(json.contains("expToday"), "Signals should contain expToday");
                 }
             },
-            Ok(Err(e)) => panic!("Broadcast error: {}", e),
+            Ok(Err(e)) => panic!("Broadcast error: {e}"),
             Err(_) => break, // Timeout - no more messages
         }
     }
 
     assert!(
         quest_received,
-        "Should receive quest elements (quest={})",
-        quest_received
+        "Should receive quest elements (quest={quest_received})"
     );
 
     println!("Toggle broadcast test completed successfully");
@@ -1719,9 +1708,9 @@ async fn test_events_endpoint_returns_sse_stream() {
     let (bcast_tx, _) = broadcast::channel::<ServerMessage>(128);
     let app_state = AppState::new(db, bcast_tx);
     let app = Router::new()
-        .route("/", get(handlers::quests))
-        .route("/quests/toggle", post(handlers::toggle_quest))
-        .route("/events", get(handlers::events))
+        .route("/", get(handlers::quests::quests))
+        .route("/quests/toggle", post(handlers::quests::toggle_quest))
+        .route("/events", get(handlers::events::events))
         .with_state(app_state);
 
     let response = app
@@ -1741,11 +1730,8 @@ async fn test_events_endpoint_returns_sse_stream() {
         .get("content-type")
         .map(|v| v.to_str().unwrap());
     assert!(
-        content_type
-            .map(|v| v.starts_with("text/event-stream"))
-            .unwrap_or(false),
-        "Content-type should be text/event-stream, got: {:?}",
-        content_type
+        content_type.is_some_and(|v| v.starts_with("text/event-stream")),
+        "Content-type should be text/event-stream, got: {content_type:?}"
     );
 
     println!("Events endpoint SSE stream test completed successfully");
@@ -1760,7 +1746,7 @@ async fn test_navigate_broadcasts_to_events_endpoint() {
     db.migrate().await.expect("Failed to run migrations");
 
     let today = Utc::now().date_naive();
-    let day_of_week = today.weekday().num_days_from_sunday() as i32;
+    let day_of_week = today.weekday().num_days_from_sunday().cast_signed();
 
     let quest_req = CreateQuestRequest {
         title: "Navigate Broadcast Test".to_string(),
@@ -1776,11 +1762,11 @@ async fn test_navigate_broadcasts_to_events_endpoint() {
     let (bcast_tx, _) = broadcast::channel::<ServerMessage>(128);
     let app_state = AppState::new(db, bcast_tx);
     let app = Router::new()
-        .route("/", get(handlers::quests))
-        .route("/day/{date}", get(handlers::quests))
-        .route("/navigate/{date}", get(handlers::navigate))
-        .route("/quests/toggle", post(handlers::toggle_quest))
-        .route("/events", get(handlers::events))
+        .route("/", get(handlers::quests::quests))
+        .route("/day/{date}", get(handlers::quests::quests))
+        .route("/navigate/{date}", get(handlers::navigate::navigate))
+        .route("/quests/toggle", post(handlers::quests::toggle_quest))
+        .route("/events", get(handlers::events::events))
         .with_state(app_state.clone());
 
     // Subscribe to the broadcast channel BEFORE making the request
@@ -1836,7 +1822,7 @@ async fn test_toggle_quest_does_not_include_weekly_rewards() {
 
     // Get today's day of week
     let today = Utc::now().date_naive();
-    let day_of_week = today.weekday().num_days_from_sunday() as i32;
+    let day_of_week = today.weekday().num_days_from_sunday().cast_signed();
 
     // Create a quest with 25 EXP for today
     let quest_req = CreateQuestRequest {
@@ -1864,9 +1850,9 @@ async fn test_toggle_quest_does_not_include_weekly_rewards() {
     let (bcast_tx, _) = broadcast::channel::<ServerMessage>(128);
     let app_state = AppState::new(db, bcast_tx);
     let app = Router::new()
-        .route("/", get(handlers::quests))
-        .route("/quests/toggle", post(handlers::toggle_quest))
-        .route("/events", get(handlers::events))
+        .route("/", get(handlers::quests::quests))
+        .route("/quests/toggle", post(handlers::quests::toggle_quest))
+        .route("/events", get(handlers::events::events))
         .with_state(app_state.clone());
 
     // Subscribe to the broadcast channel BEFORE making the request
@@ -1903,15 +1889,13 @@ async fn test_toggle_quest_does_not_include_weekly_rewards() {
     assert!(
         !body_str.contains("weekly-rewards") && !body_str.contains("id=\"weekly-rewards\""),
         "Response should NOT contain weekly-rewards element for Quest page. \
-         Weekly rewards are now only on the Bounty page. Got response: {}",
-        body_str
+         Weekly rewards are now only on the Bounty page. Got response: {body_str}"
     );
 
     // But it SHOULD contain the quest element
     assert!(
         body_str.contains("quest-item") || body_str.contains("datastar-patch-elements"),
-        "Response should contain quest element for UI update. Got response: {}",
-        body_str
+        "Response should contain quest element for UI update. Got response: {body_str}"
     );
 
     println!("Toggle does not include weekly rewards test passed - they are on Bounty page now");
@@ -1930,14 +1914,14 @@ async fn test_weekly_rewards_not_on_quest_page() {
     let (bcast_tx, _) = broadcast::channel::<ServerMessage>(128);
     let app_state = AppState::new(db.clone(), bcast_tx);
     let app = Router::new()
-        .route("/", get(handlers::quests))
-        .route("/quests/toggle", post(handlers::toggle_quest))
-        .route("/events", get(handlers::events))
+        .route("/", get(handlers::quests::quests))
+        .route("/quests/toggle", post(handlers::quests::toggle_quest))
+        .route("/events", get(handlers::events::events))
         .with_state(app_state.clone());
 
     // Create test quest to have something on the page
     let today = Utc::now().date_naive();
-    let day_of_week = today.weekday().num_days_from_sunday() as i32;
+    let day_of_week = today.weekday().num_days_from_sunday().cast_signed();
 
     let quest_req = CreateQuestRequest {
         title: "Test Quest".to_string(),
@@ -2004,12 +1988,12 @@ async fn test_day_change_detection_signals_and_logic() {
     let (bcast_tx, _) = broadcast::channel::<ServerMessage>(128);
     let app_state = AppState::new(db.clone(), bcast_tx);
     let app = Router::new()
-        .route("/", get(handlers::quests))
+        .route("/", get(handlers::quests::quests))
         .with_state(app_state.clone());
 
     // Create test quest
     let today = Utc::now().date_naive();
-    let day_of_week = today.weekday().num_days_from_sunday() as i32;
+    let day_of_week = today.weekday().num_days_from_sunday().cast_signed();
 
     let quest_req = CreateQuestRequest {
         title: "Test Quest".to_string(),
@@ -2083,7 +2067,7 @@ async fn test_navigation_includes_bounty_link() {
 
     // Create test quest so the page has content
     let today = Utc::now().date_naive();
-    let day_of_week = today.weekday().num_days_from_sunday() as i32;
+    let day_of_week = today.weekday().num_days_from_sunday().cast_signed();
 
     let quest_req = CreateQuestRequest {
         title: "Test Quest".to_string(),
@@ -2100,8 +2084,8 @@ async fn test_navigation_includes_bounty_link() {
     let (bcast_tx, _) = broadcast::channel::<ServerMessage>(128);
     let app_state = AppState::new(db, bcast_tx);
     let app = Router::new()
-        .route("/", get(handlers::quests))
-        .route("/bounty", get(handlers::bounty))
+        .route("/", get(handlers::quests::quests))
+        .route("/bounty", get(handlers::bounty::bounty))
         .with_state(app_state);
 
     // Make a request to the home page
@@ -2158,7 +2142,7 @@ async fn test_day_change_detector_uses_datastar_navigation() {
 
     // Create test quest so the page has content
     let today = Utc::now().date_naive();
-    let day_of_week = today.weekday().num_days_from_sunday() as i32;
+    let day_of_week = today.weekday().num_days_from_sunday().cast_signed();
 
     let quest_req = CreateQuestRequest {
         title: "Test Quest".to_string(),
@@ -2175,7 +2159,7 @@ async fn test_day_change_detector_uses_datastar_navigation() {
     let (bcast_tx, _) = broadcast::channel::<ServerMessage>(128);
     let app_state = AppState::new(db, bcast_tx);
     let app = Router::new()
-        .route("/", get(handlers::quests))
+        .route("/", get(handlers::quests::quests))
         .with_state(app_state);
 
     // Make a request to the home page

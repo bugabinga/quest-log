@@ -1,4 +1,5 @@
-use crate::auth::{LoginRateLimiter, SESSION_DURATION_HOURS};
+use crate::auth::LoginRateLimiter;
+use crate::config;
 use crate::database::Database;
 use crate::handlers::ServerMessage;
 use std::sync::Arc;
@@ -8,7 +9,9 @@ use tokio::sync::{RwLock, broadcast};
 /// Application state shared across all handlers
 #[derive(Clone)]
 pub struct AppState {
+    /// Database connection pool
     pub db: Database,
+    /// Broadcast channel for server-sent events
     pub bcast: broadcast::Sender<ServerMessage>,
     /// Editor session tokens mapped to their expiry time
     pub editor_sessions: Arc<RwLock<std::collections::HashMap<String, Instant>>>,
@@ -17,6 +20,7 @@ pub struct AppState {
 }
 
 impl AppState {
+    /// Creates a new application state.
     #[must_use]
     pub fn new(db: Database, bcast: broadcast::Sender<ServerMessage>) -> Self {
         Self {
@@ -30,10 +34,7 @@ impl AppState {
     /// Get the session duration from environment or use default
     #[must_use]
     pub fn session_duration() -> Duration {
-        let hours: u64 = std::env::var("QUEST_LOG_EDITOR_SESSION_DURATION_HOURS")
-            .ok()
-            .and_then(|s| s.parse().ok())
-            .unwrap_or(SESSION_DURATION_HOURS);
+        let hours = config::editor_session_duration_hours();
         Duration::from_secs(hours.saturating_mul(3600))
     }
 

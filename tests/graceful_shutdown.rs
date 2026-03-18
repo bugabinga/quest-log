@@ -1,4 +1,13 @@
-use libc;
+//! Integration tests for graceful shutdown behavior and signal handling.
+#![allow(
+    clippy::tests_outside_test_module,
+    reason = "Integration tests in tests/ are only compiled during cargo test"
+)]
+#![allow(
+    clippy::expect_used,
+    reason = "Expects are used for test setup that should not fail"
+)]
+
 use std::os::unix::process::ExitStatusExt;
 use std::process::Command;
 use std::time::{Duration, Instant};
@@ -32,14 +41,14 @@ async fn instant_shutdown_completes_within_300ms() {
         .timeout(Duration::from_secs(2))
         .build()
         .unwrap();
-    let addr = format!("127.0.0.1:{}", port);
+    let addr = format!("127.0.0.1:{port}");
     let mut ready = false;
     for _ in 0..100 {
-        if let Ok(resp) = client.get(format!("http://{}/health", addr)).send().await {
-            if resp.status().is_success() {
-                ready = true;
-                break;
-            }
+        if let Ok(resp) = client.get(format!("http://{addr}/health")).send().await
+            && resp.status().is_success()
+        {
+            ready = true;
+            break;
         }
         tokio::time::sleep(Duration::from_millis(100)).await;
     }
@@ -51,17 +60,19 @@ async fn instant_shutdown_completes_within_300ms() {
         .unwrap();
     let sse_handle = tokio::spawn(async move {
         let resp = client2
-            .get(format!("http://{}/events", addr))
+            .get(format!("http://{addr}/events"))
             .send()
             .await
             .expect("SSE request failed");
-        let _ = resp.bytes().await;
+        let _unused = resp.bytes().await;
     });
 
     tokio::time::sleep(Duration::from_millis(500)).await;
 
-    let pid = child.id() as libc::pid_t;
+    let pid = child.id().cast_signed();
     let start = Instant::now();
+    // SAFETY: kill is a POSIX function that sends a signal to a process.
+    // We use it here to send SIGTERM to the child process for testing shutdown.
     unsafe {
         libc::kill(pid, libc::SIGINT);
     }
@@ -77,12 +88,12 @@ async fn instant_shutdown_completes_within_300ms() {
                     elapsed.as_millis()
                 );
                 assert!(status.success() || status.signal().is_some());
-                let _ = sse_handle.await;
+                let _unused = sse_handle.await;
                 return;
             }
             Ok(None) => {
                 if start.elapsed() >= max_wait {
-                    let _ = child.kill();
+                    let _unused = child.kill();
                     panic!(
                         "Server did not exit within 300ms (took {:?})",
                         start.elapsed()
@@ -90,7 +101,7 @@ async fn instant_shutdown_completes_within_300ms() {
                 }
                 tokio::time::sleep(Duration::from_millis(10)).await;
             }
-            Err(e) => panic!("error waiting for child: {}", e),
+            Err(e) => panic!("error waiting for child: {e}"),
         }
     }
 }

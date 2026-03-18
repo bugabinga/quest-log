@@ -1,3 +1,9 @@
+//! Integration tests for database layer: migrations, CRUD operations, and queries.
+#![allow(
+    clippy::tests_outside_test_module,
+    reason = "Integration tests in tests/ are only compiled during cargo test"
+)]
+
 use quest_log::{database::Database, models::*};
 use sqlx::SqlitePool;
 

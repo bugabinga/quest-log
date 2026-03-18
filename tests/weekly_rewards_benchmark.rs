@@ -1,3 +1,20 @@
+//! Performance benchmarks for weekly rewards page load times and SSE response handling.
+#![allow(
+    clippy::tests_outside_test_module,
+    reason = "Benchmarks in tests/ are only compiled during cargo test"
+)]
+#![allow(
+    clippy::expect_used,
+    reason = "Benchmarks use expect for test setup clarity"
+)]
+#![allow(
+    clippy::cast_possible_truncation,
+    reason = "Weekday conversion truncation is safe"
+)]
+#![allow(
+    clippy::cast_precision_loss,
+    reason = "Weekday conversion precision loss is safe"
+)]
 //! Benchmark: Performance Impact of Removing Weekly Rewards from Quest Page
 //!
 //! This benchmark measures the performance improvement from moving weekly rewards
@@ -10,7 +27,7 @@
 //! 4. Bounty page HTML size
 //! 5. Toggle quest SSE response size (should NOT contain weekly rewards)
 //!
-//! Run with: cargo test --test weekly_rewards_benchmark -- --nocapture --test-threads=1
+//! Run with: cargo test --test `weekly_rewards_benchmark` -- --nocapture --test-threads=1
 
 use axum::{
     Router,
@@ -20,7 +37,10 @@ use axum::{
 };
 use chrono::{Datelike, Utc};
 use quest_log::database::Database;
-use quest_log::handlers::{bounty, quests, toggle_quest};
+use quest_log::handlers::{
+    bounty::bounty,
+    quests::{quests, toggle_quest},
+};
 use quest_log::models::{CreateQuestRequest, CreateRewardRequest};
 use quest_log::state::AppState;
 use sqlx::SqlitePool;
@@ -43,8 +63,8 @@ async fn setup_test_db() -> Database {
     for day in 0..7 {
         for i in 0..20 {
             let quest_req = CreateQuestRequest {
-                title: format!("Quest D{} Q{}", day, i),
-                description: Some(format!("Test quest {} on day {}", i, day)),
+                title: format!("Quest D{day} Q{i}"),
+                description: Some(format!("Test quest {i} on day {day}")),
                 exp_value: Some((i % 10 + 1) * 5),
                 day_of_week: day,
             };
@@ -57,8 +77,8 @@ async fn setup_test_db() -> Database {
     // Create weekly rewards
     for i in 0..5 {
         let reward_req = CreateRewardRequest {
-            title: format!("Reward {}", i),
-            description: Some(format!("Weekly reward {}", i)),
+            title: format!("Reward {i}"),
+            description: Some(format!("Weekly reward {i}")),
             required_exp: (i + 1) * 50,
         };
         db.create_reward(reward_req)
@@ -84,7 +104,7 @@ async fn bench_quest_page_load_time() {
 
     // Warmup
     for _ in 0..WARMUP_ITERATIONS {
-        let _ = app
+        let _unused = app
             .clone()
             .oneshot(Request::builder().uri("/").body(Body::empty()).unwrap())
             .await;
@@ -115,18 +135,17 @@ async fn bench_quest_page_load_time() {
     let p95 = times[ITERATIONS * 95 / 100];
 
     println!("\n=== Quest Page Load Time (NO weekly rewards query) ===");
-    println!("Iterations: {}", ITERATIONS);
-    println!("Average: {:?}", avg);
-    println!("Min: {:?}", min);
-    println!("Max: {:?}", max);
-    println!("P50: {:?}", p50);
-    println!("P95: {:?}", p95);
+    println!("Iterations: {ITERATIONS}");
+    println!("Average: {avg:?}");
+    println!("Min: {min:?}");
+    println!("Max: {max:?}");
+    println!("P50: {p50:?}");
+    println!("P95: {p95:?}");
 
     // Performance assertion: should be under 50ms average
     assert!(
         avg < Duration::from_millis(50),
-        "Quest page should load in under 50ms, took {:?}",
-        avg
+        "Quest page should load in under 50ms, took {avg:?}"
     );
 }
 
@@ -142,7 +161,7 @@ async fn bench_bounty_page_load_time() {
 
     // Warmup
     for _ in 0..WARMUP_ITERATIONS {
-        let _ = app
+        let _unused = app
             .clone()
             .oneshot(
                 Request::builder()
@@ -183,18 +202,17 @@ async fn bench_bounty_page_load_time() {
     let p95 = times[ITERATIONS * 95 / 100];
 
     println!("\n=== Bounty Page Load Time (WITH weekly rewards query) ===");
-    println!("Iterations: {}", ITERATIONS);
-    println!("Average: {:?}", avg);
-    println!("Min: {:?}", min);
-    println!("Max: {:?}", max);
-    println!("P50: {:?}", p50);
-    println!("P95: {:?}", p95);
+    println!("Iterations: {ITERATIONS}");
+    println!("Average: {avg:?}");
+    println!("Min: {min:?}");
+    println!("Max: {max:?}");
+    println!("P50: {p50:?}");
+    println!("P95: {p95:?}");
 
     // Performance assertion: should be under 100ms average
     assert!(
         avg < Duration::from_millis(100),
-        "Bounty page should load in under 100ms, took {:?}",
-        avg
+        "Bounty page should load in under 100ms, took {avg:?}"
     );
 }
 
@@ -233,7 +251,7 @@ async fn bench_quest_page_size() {
     );
 
     println!("\n=== Quest Page HTML Size (NO weekly rewards) ===");
-    println!("Size: {} bytes ({:.2} KB)", size_bytes, size_kb);
+    println!("Size: {size_bytes} bytes ({size_kb:.2} KB)");
     println!("Contains weekly-rewards: NO ✓");
 }
 
@@ -273,7 +291,7 @@ async fn bench_bounty_page_size() {
     );
 
     println!("\n=== Bounty Page HTML Size (WITH weekly rewards) ===");
-    println!("Size: {} bytes ({:.2} KB)", size_bytes, size_kb);
+    println!("Size: {size_bytes} bytes ({size_kb:.2} KB)");
     println!("Contains weekly-rewards: YES ✓");
 }
 
@@ -283,7 +301,7 @@ async fn bench_toggle_quest_sse_response() {
     let db = setup_test_db().await;
 
     let today = Utc::now().date_naive();
-    let day_of_week = today.weekday().num_days_from_sunday() as i32;
+    let day_of_week = today.weekday().num_days_from_sunday().cast_signed();
 
     // Create a quest for today
     let quest = db
@@ -306,7 +324,7 @@ async fn bench_toggle_quest_sse_response() {
     // Warmup
     for _ in 0..WARMUP_ITERATIONS {
         let json_data = format!(r#"{{"quest_id":{}}}"#, quest.id);
-        let _ = app
+        let _unused = app
             .clone()
             .oneshot(
                 Request::builder()
@@ -359,16 +377,16 @@ async fn bench_toggle_quest_sse_response() {
 
     // Calculate statistics
     times.sort();
-    sizes.sort();
+    sizes.sort_unstable();
 
     let total_time: Duration = times.iter().sum();
     let avg_time = total_time / ITERATIONS as u32;
     let avg_size: usize = sizes.iter().sum::<usize>() / ITERATIONS;
 
     println!("\n=== Toggle Quest SSE Response (NO weekly rewards) ===");
-    println!("Iterations: {}", ITERATIONS);
-    println!("Average response time: {:?}", avg_time);
-    println!("Average SSE size: {} bytes", avg_size);
+    println!("Iterations: {ITERATIONS}");
+    println!("Average response time: {avg_time:?}");
+    println!("Average SSE size: {avg_size} bytes");
     println!("Min size: {} bytes", sizes[0]);
     println!("Max size: {} bytes", sizes[ITERATIONS - 1]);
     println!("Contains weekly-rewards: NO ✓");
@@ -376,8 +394,7 @@ async fn bench_toggle_quest_sse_response() {
     // Performance assertion: should be under 30ms average
     assert!(
         avg_time < Duration::from_millis(30),
-        "Toggle should complete in under 30ms, took {:?}",
-        avg_time
+        "Toggle should complete in under 30ms, took {avg_time:?}"
     );
 }
 
@@ -396,11 +413,11 @@ async fn bench_quest_vs_bounty_comparison() {
 
     // Warmup both pages
     for _ in 0..WARMUP_ITERATIONS {
-        let _ = app
+        let _unused = app
             .clone()
             .oneshot(Request::builder().uri("/").body(Body::empty()).unwrap())
             .await;
-        let _ = app
+        let _unused = app
             .clone()
             .oneshot(
                 Request::builder()
@@ -415,7 +432,7 @@ async fn bench_quest_vs_bounty_comparison() {
     let mut quest_times = Vec::with_capacity(ITERATIONS);
     for _ in 0..ITERATIONS {
         let start = Instant::now();
-        let _ = app
+        let _unused = app
             .clone()
             .oneshot(Request::builder().uri("/").body(Body::empty()).unwrap())
             .await;
@@ -426,7 +443,7 @@ async fn bench_quest_vs_bounty_comparison() {
     let mut bounty_times = Vec::with_capacity(ITERATIONS);
     for _ in 0..ITERATIONS {
         let start = Instant::now();
-        let _ = app
+        let _unused = app
             .clone()
             .oneshot(
                 Request::builder()
@@ -445,19 +462,13 @@ async fn bench_quest_vs_bounty_comparison() {
     let bounty_avg: Duration = bounty_times.iter().sum::<Duration>() / ITERATIONS as u32;
 
     println!("\n=== Quest vs Bounty Page Load Time Comparison ===");
-    println!("Quest page avg (NO weekly rewards query): {:?}", quest_avg);
-    println!(
-        "Bounty page avg (WITH weekly rewards query): {:?}",
-        bounty_avg
-    );
+    println!("Quest page avg (NO weekly rewards query): {quest_avg:?}");
+    println!("Bounty page avg (WITH weekly rewards query): {bounty_avg:?}");
 
     if bounty_avg > quest_avg {
-        let overhead = bounty_avg - quest_avg;
+        let overhead = bounty_avg.checked_sub(quest_avg).unwrap();
         let overhead_percent = (overhead.as_micros() as f64 / quest_avg.as_micros() as f64) * 100.0;
-        println!(
-            "Bounty page overhead: {:?} ({:.1}%)",
-            overhead, overhead_percent
-        );
+        println!("Bounty page overhead: {overhead:?} ({overhead_percent:.1}%)");
     }
 
     println!("\nQuest page is faster because it doesn't call get_weekly_reward_status()");

@@ -1,6 +1,7 @@
 use super::toggle::QuestDisplay;
 use maud::html;
 
+/// Renders the list of quests for the selected day.
 #[must_use]
 pub fn quest_list(quests: &[QuestDisplay], _is_today: bool) -> maud::Markup {
     html! {

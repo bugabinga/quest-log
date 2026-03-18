@@ -1,3 +1,8 @@
+//! Integration tests for core business logic: quest creation, completion, and reward tracking.
+#![allow(
+    clippy::tests_outside_test_module,
+    reason = "Integration tests in tests/ are only compiled during cargo test"
+)]
 use chrono::{Datelike, NaiveDate};
 use quest_log::{database::Database, models::*, time};
 use sqlx::SqlitePool;
@@ -326,14 +331,14 @@ async fn test_todays_quests_with_set_today() {
         .create_quest(wednesday_quest_req)
         .await
         .expect("Failed to create Wednesday quest");
-    let _ = db
+    let _unused = db
         .create_quest(any_day_quest_req)
         .await
         .expect("Failed to create Sunday quest");
 
     // Use time::today() to get today's quests (now returns fake Wednesday)
     let today = time::today();
-    let day_of_week = today.weekday().num_days_from_sunday() as i32;
+    let day_of_week = today.weekday().num_days_from_sunday().cast_signed();
 
     // Verify we're on Wednesday
     assert_eq!(day_of_week, 3, "Should be Wednesday (3)");
@@ -355,7 +360,7 @@ async fn test_todays_quests_with_set_today() {
     time::set_today(monday);
 
     let today_monday = time::today();
-    let monday_dow = today_monday.weekday().num_days_from_sunday() as i32;
+    let monday_dow = today_monday.weekday().num_days_from_sunday().cast_signed();
 
     assert_eq!(monday_dow, 1, "Should be Monday (1)");
 

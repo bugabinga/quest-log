@@ -1,5 +1,6 @@
 use maud::{Markup, PreEscaped, html};
 
+/// Renders navigation buttons for moving between days.
 pub fn nav_buttons(class: &str, can_navigate: bool, target_date: &str) -> Markup {
     let id = if class.contains("left") {
         "nav-left"

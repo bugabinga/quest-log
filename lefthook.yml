@@ -6,11 +6,14 @@ verbose: true
 pre-push:
   jobs:
     - run: cargo x fmt
+    - run: cargo x check
     - run: cargo x lint
+    - run: cargo x verify
 
 pre-commit:
   jobs:
     - run: cargo x fmt
+    - run: cargo x check
     - run: cargo x lint
     - run: cargo x test
 

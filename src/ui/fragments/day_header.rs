@@ -1,5 +1,6 @@
 use maud::html;
 
+/// Renders the day header showing the day name and selected date.
 #[must_use]
 pub fn day_header(day_name: &str, selected_date: &str) -> maud::Markup {
     html! {

@@ -194,16 +194,6 @@ Editor-specific JavaScript for the admin interface:
 - Toast notifications for user feedback
 - Form submission handlers using Datastar SSE
 
-## Environment Variables
-
-- `QUEST_LOG_DB` - Path to SQLite database (default: `~/.quest-log/questlog.db`)
-- `QUEST_LOG_PORT` - HTTP port (default: 3000)
-- `QUEST_LOG_TODAY` - Override "today" for testing (format: YYYY-MM-DD)
-- `QUEST_LOG_EDITOR_PASSWORD_HASH` - Argon2 hash for editor authentication
-- `QUEST_LOG_EDITOR_SESSION_DURATION_HOURS` - Session lifetime (default: 24)
-- `RUST_LOG` - Log level filter (default:
-  `quest_log=debug,tokio=info,axum=warn`)
-
 ## Logging & Observability
 
 ### Tracing Setup

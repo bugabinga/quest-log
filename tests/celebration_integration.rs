@@ -1,15 +1,9 @@
+//! Integration tests for celebration/confetti UI when all weekly rewards are claimed.
+#![allow(
+    clippy::tests_outside_test_module,
+    reason = "Integration tests in tests/ are only compiled during cargo test"
+)]
 //! Tests for the celebration animation feature when all weekly rewards are claimed.
-//!
-//! This test verifies that when the SSE signal contains `allRewardsClaimed: true`,
-//! the frontend should display:
-//! 1. An achievement banner/popup with "Achievement Unlocked" message
-//! 2. A golden pulse animation on the reward cards
-//! 3. A "Weekly Champion" badge
-//!
-//! Currently FAILS because:
-//! - The weekly rewards UI doesn't render celebration elements when allRewardsClaimed is true
-//! - No achievement banner HTML is generated
-//! - No golden pulse animation class is applied to reward cards
 
 use chrono::NaiveDate;
 use quest_log::{database::Database, models::*, time};
@@ -84,42 +78,32 @@ async fn test_weekly_rewards_ui_should_include_celebration_when_all_claimed() {
         quest_log::ui::fragments::weekly_rewards::weekly_rewards(week_exp, &rewards, true);
     let html_string = rewards_html.into_string();
 
-    // ===== FAILING TEST: CELEBRATION ELEMENTS NOT YET IMPLEMENTED =====
-    //
-    // The frontend SHOULD display celebration elements when all rewards are claimed.
-    // This test verifies that the UI includes:
-    // 1. An achievement banner (achievement-unlocked or celebration-banner)
-    // 2. Golden pulse animation class on reward cards (golden-pulse or celebration-pulse)
-    // 3. A "Weekly Champion" badge
-    //
-    // Currently FAILS because the weekly_rewards UI doesn't render these elements.
-    // Once implemented, the assertions below should PASS.
+    // Verify the celebration UI elements are present when all rewards are claimed
+    // The UI should include celebration elements when allRewardsClaimed is true
 
     // Test 1: Achievement banner should be present when all rewards are claimed
+    // Check for achievement-related content in the rendered HTML
     assert!(
         html_string.contains("achievement-unlocked")
             || html_string.contains("celebration-banner")
             || html_string.contains("Weekly Champion"),
-        "When all rewards are claimed, the HTML should include a celebration banner or achievement element. \
-         Expected: 'achievement-unlocked', 'celebration-banner', or 'Weekly Champion' in HTML. \
-         This test FAILS because celebration elements are not yet implemented in the UI."
+        "When all rewards are claimed, the HTML should include a celebration banner or achievement element."
     );
 
     // Test 2: Golden pulse animation should be applied to reward cards
+    // Check for celebration animation classes in the rendered HTML
     assert!(
         html_string.contains("golden-pulse") || html_string.contains("celebration-pulse"),
-        "When all rewards are claimed, reward cards should have a golden pulse animation class. \
-         Expected: 'golden-pulse' or 'celebration-pulse' in HTML. \
-         This test FAILS because celebration elements are not yet implemented in the UI."
+        "When all rewards are claimed, reward cards should have a golden pulse animation class."
     );
 
     // Test 3: Weekly Champion badge should be displayed
+    // Check for badge-related content in the rendered HTML
     assert!(
         html_string.contains("weekly-champion-badge")
             || html_string.contains("badge-weekly-champion")
             || (html_string.contains("🏆") && html_string.contains("Champion")),
-        "When all rewards are claimed, a Weekly Champion badge should be displayed. \
-         This test FAILS because celebration elements are not yet implemented in the UI."
+        "When all rewards are claimed, a Weekly Champion badge should be displayed."
     );
 
     time::reset_today();

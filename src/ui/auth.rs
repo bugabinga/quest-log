@@ -62,8 +62,7 @@ mod tests {
         // The form element should specify method="post"
         assert!(
             html.contains(r#"method="post""#),
-            "Expected form to have method=\"post\", got: {}",
-            html
+            "Expected form to have method=\"post\", got: {html}"
         );
     }
 
@@ -76,17 +75,15 @@ mod tests {
 
         // The form element should have data-on:submit__prevent
         assert!(
-            html.contains(r#"<form"#) && html.contains(r#"data-on:submit__prevent="#),
-            "Expected data-on:submit__prevent on <form> element, got: {}",
-            html
+            html.contains(r"<form") && html.contains(r"data-on:submit__prevent="),
+            "Expected data-on:submit__prevent on <form> element, got: {html}"
         );
 
         // The button should NOT have data-on:submit__prevent
         let button_section = html.split("<button").nth(1).unwrap_or("");
         assert!(
             !button_section.contains("data-on:submit__prevent"),
-            "data-on:submit__prevent should not be on <button>, got: {}",
-            html
+            "data-on:submit__prevent should not be on <button>, got: {html}"
         );
     }
 }

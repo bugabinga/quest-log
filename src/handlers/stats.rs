@@ -4,27 +4,21 @@ use axum::{extract::State, response::Html, response::IntoResponse};
 use chrono::NaiveDate;
 use std::collections::HashMap;
 
+use crate::handlers::AppError;
 use crate::state::AppState;
 use crate::ui;
 
-#[derive(Debug)]
-pub enum AppError {
-    Database,
-}
-
-impl IntoResponse for AppError {
-    fn into_response(self) -> axum::response::Response {
-        match self {
-            Self::Database => Html("Database error".to_string()).into_response(),
-        }
-    }
-}
-
+/// Highscore statistics data
 pub struct HighscoreData {
+    /// Total experience points earned
     pub total_exp: i32,
+    /// Number of quests completed
     pub quests_completed: i32,
+    /// Number of rewards claimed
     pub rewards_claimed: i32,
+    /// Number of weekly champions
     pub weekly_champions: i32,
+    /// Quest completions grouped by date
     pub completions_by_date: Vec<(NaiveDate, i32)>,
 }
 
@@ -40,27 +34,24 @@ pub async fn highscore(State(state): State<AppState>) -> Result<impl IntoRespons
     let total_exp = db
         .get_total_exp_earned()
         .await
-        .map_err(|_| AppError::Database)?;
+        .map_err(AppError::Database)?;
 
     let quests_completed = db
         .get_total_completions_count()
         .await
-        .map_err(|_| AppError::Database)?;
+        .map_err(AppError::Database)?;
 
     let rewards_claimed = db
         .get_rewards_claimed_count()
         .await
-        .map_err(|_| AppError::Database)?;
+        .map_err(AppError::Database)?;
 
     let weekly_champions = db
         .get_all_weekly_champions()
         .await
-        .map_err(|_| AppError::Database)?;
+        .map_err(AppError::Database)?;
 
-    let all_completions = db
-        .get_all_completions()
-        .await
-        .map_err(|_| AppError::Database)?;
+    let all_completions = db.get_all_completions().await.map_err(AppError::Database)?;
 
     // Group completions by date
     let mut completions_map: HashMap<NaiveDate, i32> = HashMap::new();

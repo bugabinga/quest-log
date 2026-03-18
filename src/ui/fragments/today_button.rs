@@ -1,5 +1,6 @@
 use maud::{Markup, PreEscaped, html};
 
+/// Renders a button to navigate back to today's date.
 pub fn today_button(is_today: bool) -> Markup {
     let onclick: Option<String> = if is_today {
         None

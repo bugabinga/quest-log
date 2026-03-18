@@ -1,3 +1,9 @@
+//! Integration tests for the bounty/weekly rewards page endpoints.
+#![allow(
+    clippy::tests_outside_test_module,
+    reason = "Integration tests in tests/ are only compiled during cargo test"
+)]
+
 //! Tests for the Bounty Board page route.
 //!
 //! This test verifies that the `/bounty` route exists and returns
@@ -24,10 +30,6 @@ use tower::util::ServiceExt;
 /// 2. Makes a GET request to /bounty
 /// 3. Verifies it returns 200 OK
 /// 4. Verifies the response contains weekly rewards content
-///
-/// Currently FAILS because:
-/// - The /bounty route handler doesn't exist yet
-/// - The handler needs to be implemented in handlers.rs
 #[tokio::test]
 async fn test_bounty_page_returns_200_ok() {
     // Setup test database
@@ -41,7 +43,7 @@ async fn test_bounty_page_returns_200_ok() {
     let (bcast_tx, _) = broadcast::channel(128);
     let app_state = AppState::new(db, bcast_tx);
     let app = Router::new()
-        .route("/bounty", get(handlers::bounty))
+        .route("/bounty", get(handlers::bounty::bounty))
         .with_state(app_state);
 
     // Make GET request to /bounty
@@ -71,9 +73,6 @@ async fn test_bounty_page_returns_200_ok() {
 /// This test verifies the Bounty Board page contains the expected content:
 /// - Should contain references to "bounty" or "weekly rewards"
 /// - Should contain reward-related elements
-///
-/// Currently FAILS because:
-/// - The handler doesn't return the expected content
 #[tokio::test]
 async fn test_bounty_page_contains_weekly_rewards_content() {
     // Setup test database
@@ -87,7 +86,7 @@ async fn test_bounty_page_contains_weekly_rewards_content() {
     let (bcast_tx, _) = broadcast::channel(128);
     let app_state = AppState::new(db, bcast_tx);
     let app = Router::new()
-        .route("/bounty", get(handlers::bounty))
+        .route("/bounty", get(handlers::bounty::bounty))
         .with_state(app_state);
 
     // Make GET request to /bounty
@@ -142,8 +141,8 @@ async fn test_bounty_route_works_alongside_quest_routes() {
     let (bcast_tx, _) = broadcast::channel(128);
     let app_state = AppState::new(db, bcast_tx);
     let app = Router::new()
-        .route("/", get(handlers::quests))
-        .route("/bounty", get(handlers::bounty))
+        .route("/", get(handlers::quests::quests))
+        .route("/bounty", get(handlers::bounty::bounty))
         .with_state(app_state);
 
     // Test that / (quests) still works

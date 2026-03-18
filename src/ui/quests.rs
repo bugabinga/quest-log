@@ -3,6 +3,7 @@ use crate::ui::base::{PageData, base_page};
 use crate::ui::fragments::toggle::QuestDisplay;
 use maud::{PreEscaped, html};
 
+/// Renders the main quest list page for a given date.
 #[must_use]
 pub fn quests_page(
     quests: &[QuestDisplay],

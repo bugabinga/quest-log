@@ -1,5 +1,8 @@
 use chrono::{Datelike, NaiveDate, Utc, Weekday};
 
+#[cfg(debug_assertions)]
+use crate::config;
+
 thread_local! {
     static FAKE_TODAY: std::cell::RefCell<Option<NaiveDate>> = const { std::cell::RefCell::new(None) };
 }
@@ -28,7 +31,7 @@ pub fn today() -> NaiveDate {
 
     #[cfg(debug_assertions)]
     {
-        if let Ok(val) = std::env::var("QUEST_LOG_TODAY") {
+        if let Some(val) = config::today_override() {
             return parse_today_override(&val);
         }
     }
@@ -131,6 +134,8 @@ pub fn reset_today() {
     FAKE_TODAY.with(|m| *m.borrow_mut() = None);
 }
 
+/// Get the start and end dates of the week containing the given date.
+/// Weeks start on Monday.
 #[must_use]
 pub fn get_week_bounds(date: NaiveDate) -> (NaiveDate, NaiveDate) {
     let week_start =
@@ -139,26 +144,31 @@ pub fn get_week_bounds(date: NaiveDate) -> (NaiveDate, NaiveDate) {
     (week_start, week_end)
 }
 
+/// Format a date as ISO string (YYYY-MM-DD).
 #[must_use]
 pub fn format_date_iso(date: NaiveDate) -> String {
     date.format("%Y-%m-%d").to_string()
 }
 
+/// Format a date for display (e.g., "January 15").
 #[must_use]
 pub fn format_date_display(date: NaiveDate) -> String {
     date.format("%B %-d").to_string()
 }
 
+/// Get the previous day.
 #[must_use]
 pub fn prev_day(date: NaiveDate) -> NaiveDate {
     date - chrono::Duration::days(1)
 }
 
+/// Get the next day.
 #[must_use]
 pub fn next_day(date: NaiveDate) -> NaiveDate {
     date + chrono::Duration::days(1)
 }
 
+/// Parse a date from ISO string (YYYY-MM-DD).
 #[must_use]
 pub fn parse_date(date_str: &str) -> Option<NaiveDate> {
     NaiveDate::parse_from_str(date_str, "%Y-%m-%d").ok()
@@ -167,7 +177,6 @@ pub fn parse_date(date_str: &str) -> Option<NaiveDate> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use chrono::NaiveDate;
 
     #[test]
     fn test_get_week_bounds_monday() {

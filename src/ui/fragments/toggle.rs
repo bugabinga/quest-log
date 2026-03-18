@@ -3,18 +3,27 @@ use maud::{Markup, PreEscaped, html};
 use crate::models::Quest;
 use crate::time;
 
+/// Display representation of a quest for rendering.
 #[derive(Debug, Clone)]
 pub struct QuestDisplay {
+    /// Quest database ID.
     pub id: i64,
+    /// Quest title.
     pub title: String,
+    /// Quest description.
     pub description: String,
+    /// Experience points value.
     pub exp_value: i32,
+    /// Whether quest was completed today.
     pub completed_today: bool,
+    /// Whether the quest date is in the past.
     pub is_past: bool,
+    /// Whether the quest date is in the future.
     pub is_future: bool,
 }
 
 impl QuestDisplay {
+    /// Creates a display representation from a quest model.
     #[must_use]
     pub fn from_quest(
         quest: Quest,
@@ -34,6 +43,7 @@ impl QuestDisplay {
     }
 }
 
+/// Renders the toggle button/display for a quest.
 #[must_use]
 pub fn toggle(quest: &QuestDisplay) -> Markup {
     let onclick = format!(

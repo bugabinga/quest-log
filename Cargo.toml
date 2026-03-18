@@ -92,6 +92,13 @@ test-utils = []
 
 [lints.rust]
 unused_unsafe = "deny"
+ambiguous_negative_literals = "deny"
+closure_returning_async_block = "deny"
+let_underscore_drop = "deny"
+missing_docs = "deny"
+redundant_lifetimes = "deny"
+redundant_imports = "deny"
+irrefutable_let_patterns = "deny"
 
 [lints.clippy]
 pedantic = { level = "warn", priority = -1 }
@@ -105,14 +112,14 @@ too_many_lines = "allow"
 too_many_arguments = "allow"
 multiple_crate_versions = "allow"
 
-expect_used = { level = "warn" }
-should_panic_without_expect = "warn"
-unused_result_ok = "warn"
-unwrap_used = "warn"
-pub_use = "warn"
-todo = "warn"
-
+expect_used = "deny"
+unwrap_used = "deny"
+should_panic_without_expect = "deny"
+unused_result_ok = "deny"
+pub_use = "deny"
+todo = "deny"
 missing_panics_doc = "deny"
+missing_errors_doc = "deny"
 allow_attributes_without_reason = "deny"
 cfg_not_test = "deny"
 verbose_file_reads = "deny"
@@ -121,3 +128,5 @@ multiple_unsafe_ops_per_block = "deny"
 unnecessary_safety_comment = "deny"
 unnecessary_safety_doc = "deny"
 tests_outside_test_module = "deny"
+doc_broken_link = "deny"
+exit = "deny"

@@ -1,6 +1,7 @@
 use crate::ui::base::{PageData, base_page};
 use maud::html;
 
+/// Renders an error page with the given title, heading, and message.
 #[must_use]
 pub fn error_page(title: &str, heading: &str, message: &str) -> maud::Markup {
     let body_content = html! {

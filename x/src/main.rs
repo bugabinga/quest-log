@@ -181,15 +181,20 @@ fn fmt(args: &[String]) -> Result<()> {
 fn lint() -> Result<()> {
     run_cargo(&["fmt", "--check"])?;
 
-    run_cargo(&["clippy"])?;
+    run_cargo(&[
+        "clippy",
+        "--all-targets",
+        "--all-features",
+        "--",
+        "-D",
+        "warnings",
+    ])?;
 
     ensure_deno()?;
     run_cmd("deno", &["lint", "static/js/"])
 }
 
 fn check() -> Result<()> {
-    lint()?;
-    verify(&[])?;
     run_cargo(&["check", "--features", "test-utils"])
 }
 

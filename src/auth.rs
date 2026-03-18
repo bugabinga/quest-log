@@ -3,6 +3,8 @@
 //! Provides password hashing with Argon2, session token generation,
 //! and rate limiting for login attempts.
 
+use crate::config;
+
 /// Simple hex encoding for session tokens (no external dependency)
 mod hex {
     const HEX_CHARS: &[u8; 16] = b"0123456789abcdef";
@@ -28,8 +30,10 @@ use thiserror::Error;
 use tokio::sync::RwLock;
 use tracing::{debug, warn};
 
+/// Authentication errors
 #[derive(Debug, Error)]
 pub enum AuthError {
+    /// Password hashing failed
     #[error("Password hashing failed: {0}")]
     HashingFailed(String),
 }
@@ -41,6 +45,7 @@ impl From<PasswordHashError> for AuthError {
 }
 
 /// Default session duration in hours
+#[allow(dead_code, reason = "Moved to config module")]
 pub const SESSION_DURATION_HOURS: u64 = 24;
 
 /// Maximum login attempts per minute per IP
@@ -100,6 +105,7 @@ impl LoginRateLimiter {
         false
     }
 
+    /// Creates a new rate limiter.
     #[must_use]
     pub fn new() -> Self {
         Self {
@@ -135,7 +141,7 @@ pub fn generate_session_token() -> String {
 /// Get the password hash from environment variable
 #[must_use]
 pub fn get_password_hash_from_env() -> Option<String> {
-    std::env::var("QUEST_LOG_EDITOR_PASSWORD_HASH").ok()
+    config::editor_password_hash()
 }
 
 /// Get password hash, using a default in debug builds
@@ -211,7 +217,7 @@ mod tests {
     #[test]
     fn test_hash_and_verify_password() {
         let password = "test_password_123";
-        let hash = hash_password(password).expect("Failed to hash password");
+        let hash = hash_password(password).unwrap();
 
         assert!(verify_password(password, &hash));
         assert!(!verify_password("wrong_password", &hash));

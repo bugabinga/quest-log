@@ -48,8 +48,7 @@ fn run_editor_password_command() -> Result<(), Box<dyn std::error::Error>> {
     let password = rpassword::read_password()?;
 
     if password.is_empty() {
-        eprintln!("Error: Password cannot be empty");
-        std::process::exit(1);
+        return Err("Error: Password cannot be empty".into());
     }
 
     // Confirm password
@@ -58,8 +57,7 @@ fn run_editor_password_command() -> Result<(), Box<dyn std::error::Error>> {
     let confirm = rpassword::read_password()?;
 
     if password != confirm {
-        eprintln!("Error: Passwords do not match");
-        std::process::exit(1);
+        return Err("Error: Passwords do not match".into());
     }
 
     // Generate hash

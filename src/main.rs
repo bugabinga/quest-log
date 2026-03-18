@@ -123,55 +123,61 @@ async fn main() {
 
     tracing::debug!("🏗️  Building router...");
     let router = Router::new()
-        .route("/", get(handlers::quests))
-        .route("/bounty", get(handlers::bounty))
+        .route("/", get(handlers::quests::quests))
+        .route("/bounty", get(handlers::bounty::bounty))
         .route("/highscore", get(handlers::stats::highscore))
-        .route("/day/{date}", get(handlers::quests_with_date))
-        .route("/navigate/{date}", get(handlers::navigate))
-        .route("/quests/toggle", post(handlers::toggle_quest))
-        .route("/rewards/claim", post(handlers::claim_reward))
-        .route("/events", get(handlers::events))
+        .route("/day/{date}", get(handlers::quests::quests_with_date))
+        .route("/navigate/{date}", get(handlers::navigate::navigate))
+        .route("/quests/toggle", post(handlers::quests::toggle_quest))
+        .route("/rewards/claim", post(handlers::bounty::claim_reward))
+        .route("/events", get(handlers::events::events))
         .route("/health", get(health))
         // Editor routes
-        .route("/editor", get(handlers::editor::editor_page_handler))
-        .route("/editor/login", post(handlers::editor::login_handler))
-        .route("/editor/logout", post(handlers::editor::logout_handler))
-        .route("/editor/quests", get(handlers::editor::get_quests_handler))
+        .route("/editor", get(handlers::editor::auth::editor_page_handler))
+        .route("/editor/login", post(handlers::editor::auth::login_handler))
+        .route(
+            "/editor/logout",
+            post(handlers::editor::auth::logout_handler),
+        )
         .route(
             "/editor/quests",
-            post(handlers::editor::create_quest_handler),
+            get(handlers::editor::quests::get_quests_handler),
+        )
+        .route(
+            "/editor/quests",
+            post(handlers::editor::quests::create_quest_handler),
         )
         .route(
             "/editor/quests/{id}",
-            put(handlers::editor::update_quest_handler),
+            put(handlers::editor::quests::update_quest_handler),
         )
         .route(
             "/editor/quests/{id}",
-            delete(handlers::editor::delete_quest_handler),
+            delete(handlers::editor::quests::delete_quest_handler),
         )
         .route(
             "/editor/rewards",
-            get(handlers::editor::get_rewards_handler),
+            get(handlers::editor::rewards::get_rewards_handler),
         )
         .route(
             "/editor/rewards",
-            post(handlers::editor::create_reward_handler),
+            post(handlers::editor::rewards::create_reward_handler),
         )
         .route(
             "/editor/rewards/{id}",
-            put(handlers::editor::update_reward_handler),
+            put(handlers::editor::rewards::update_reward_handler),
         )
         .route(
             "/editor/rewards/{id}",
-            delete(handlers::editor::delete_reward_handler),
+            delete(handlers::editor::rewards::delete_reward_handler),
         )
         .route(
             "/editor/settings",
-            get(handlers::editor::get_settings_handler),
+            get(handlers::editor::settings::get_settings_handler),
         )
         .route(
             "/editor/settings",
-            put(handlers::editor::update_settings_handler),
+            put(handlers::editor::settings::update_settings_handler),
         )
         .fallback(async |_req: axum::extract::State<AppState>| {
             Err::<axum::response::Html<String>, handlers::AppError>(handlers::AppError::NotFound)
@@ -183,7 +189,7 @@ async fn main() {
     #[cfg(feature = "test-utils")]
     let router = if config::test_endpoints_enabled() {
         tracing::debug!("🔧 Test endpoints enabled");
-        router.route("/test/slow", get(handlers::slow))
+        router.route("/test/slow", get(handlers::quests::slow))
     } else {
         router
     };

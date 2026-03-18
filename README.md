@@ -48,15 +48,17 @@ cargo x run
 
 Open http://localhost:3000 in your browser.
 
-## Development
+## Configuration
 
-### Environment Variables
+The application is configured via environment variables:
 
-The application uses the following environment variables:
+| Variable             | Default | Description                                |
+| -------------------- | ------- | ------------------------------------------ |
+| `QUEST_LOG_DATA_DIR` | `.`     | Database directory (must be absolute path) |
+| `PORT`               | `3000`  | HTTP server port                           |
 
-- `QUEST_LOG_DATA_DIR` - Directory path for storing the SQLite database file
-  (must be absolute path, default: current directory)
-- `PORT` - Server port (default: `3000`)
+For editor authentication and advanced settings, see
+[`src/config.rs`](src/config.rs).
 
 ### Development Commands
 

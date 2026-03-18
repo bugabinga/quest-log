@@ -1,7 +1,13 @@
+//! Integration tests for database migrations: idempotency, data preservation, schema integrity.
+#![allow(
+    clippy::tests_outside_test_module,
+    reason = "Integration tests in tests/ are only compiled during cargo test"
+)]
+
 //! Database migration integration tests
 //! Tests migration safety, data integrity, and rollback scenarios
 
-use chrono::{Datelike, NaiveDate, Utc};
+use chrono::NaiveDate;
 use quest_log::database::Database;
 use quest_log::models::ToggleResult;
 use quest_log::time;
@@ -19,7 +25,7 @@ async fn test_migration_idempotency() {
     for i in 0..5 {
         db.migrate()
             .await
-            .expect(&format!("Migration run {} failed", i + 1));
+            .unwrap_or_else(|_| panic!("Migration run {} failed", i + 1));
     }
 
     // Verify database structure is intact
@@ -271,7 +277,7 @@ async fn test_migration_version_tracking() {
     match result {
         Ok((count,)) => {
             assert!(count > 0, "Should have successful migrations recorded");
-            println!("Found {} successful migrations", count);
+            println!("Found {count} successful migrations");
         }
         Err(_) => {
             // If we can't query the internal table, that's OK - the important thing

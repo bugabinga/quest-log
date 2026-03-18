@@ -4,19 +4,24 @@ use std::env;
 use std::path::Path;
 use tracing::instrument;
 
+/// Represents a value that can either be explicitly set or left unchanged.
 #[derive(Clone, Debug, Default)]
 pub enum SetOrRemove<T> {
     #[default]
+    /// No change to the existing value.
     Unchanged,
+    /// Explicitly set to a new value.
     Set(T),
 }
 
 impl<T> SetOrRemove<T> {
+    /// Creates a new `SetOrRemove` with the given value.
     #[must_use]
     pub fn set(value: T) -> Self {
         Self::Set(value)
     }
 
+    /// Returns the contained value if set, or `None` if unchanged.
     pub fn as_option(&self) -> Option<&T> {
         match self {
             Self::Set(value) => Some(value),
@@ -24,6 +29,7 @@ impl<T> SetOrRemove<T> {
         }
     }
 
+    /// Returns `true` if the value is unchanged.
     pub fn is_unchanged(&self) -> bool {
         matches!(self, Self::Unchanged)
     }
@@ -34,23 +40,39 @@ use crate::models::{
     ToggleResult, UpdateQuestRequest, UpdateRewardRequest, UpdateSettingsRequest, WeeklyChampion,
     WeeklyRewardDisplay,
 };
+
 use crate::time;
 
+/// Database connection wrapper for `SQLite` operations.
 #[derive(Clone, Debug)]
 pub struct Database {
     pool: SqlitePool,
 }
 
-#[cfg(feature = "test-utils")]
 impl Database {
+    #[must_use]
+    #[allow(dead_code, reason = "test only")]
+    #[cfg(feature = "test-utils")]
+    /// Creates a new database instance with an existing pool.
     pub fn with_pool(pool: SqlitePool) -> Self {
         Self { pool }
     }
 
+    #[must_use]
+    #[allow(dead_code, reason = "test only")]
+    #[cfg(feature = "test-utils")]
+    /// Returns a reference to the underlying connection pool.
     pub fn pool(&self) -> &SqlitePool {
         &self.pool
     }
 
+    /// Get completions for a specific date.
+    ///
+    /// # Errors
+    ///
+    /// Returns `sqlx::Error` if the database query fails.
+    #[allow(dead_code, reason = "test only")]
+    #[cfg(feature = "test-utils")]
     pub async fn get_completions_for_date(
         &self,
         date: NaiveDate,
@@ -63,9 +85,6 @@ impl Database {
         .fetch_all(&self.pool)
         .await
     }
-}
-
-impl Database {
     /// Create a new database connection pool
     ///
     /// # Errors
@@ -1455,7 +1474,8 @@ impl Database {
             && !rewards.is_empty();
 
         if all_rewards_claimed {
-            let _ = self.create_weekly_champion(week_start).await;
+            // Intentionally ignore result - weekly champion creation is an optional bonus
+            drop(self.create_weekly_champion(week_start).await);
         }
 
         tracing::info!(reward_id, title = %reward.title, "Reward claimed successfully!");
@@ -1513,6 +1533,10 @@ impl Database {
     }
 
     /// Claim a reward for a specific week (test-only version without Sunday check)
+    ///
+    /// # Errors
+    ///
+    /// Returns `sqlx::Error` if the database query fails.
     #[cfg(test)]
     pub async fn claim_reward(
         &self,
@@ -1822,13 +1846,13 @@ mod tests {
         assert!(!claimed);
 
         // Create another quest and complete it
-        let quest2_req = CreateQuestRequest {
+        let quest_2_req = CreateQuestRequest {
             day_of_week: 2,
             description: None,
             exp_value: Some(15),
             title: "Test Quest 2".to_string(),
         };
-        let quest2 = db.create_quest(quest2_req).await.unwrap();
+        let quest2 = db.create_quest(quest_2_req).await.unwrap();
         db.toggle_quest_completion(quest2.id, today).await.unwrap();
 
         // Now have 35 EXP, should be able to claim
@@ -1851,6 +1875,7 @@ mod tests {
         use std::env;
         use tempfile::tempdir;
 
+        // SAFETY: Test-only manipulation of env var, restored immediately
         unsafe {
             env::set_var("QUEST_LOG_DATA_DIR", "relative/path");
         }
@@ -1862,6 +1887,7 @@ mod tests {
                 .to_string()
                 .contains("must be an absolute path")
         );
+        // SAFETY: Test-only manipulation of env var, restored immediately
         unsafe {
             env::remove_var("QUEST_LOG_DATA_DIR");
         }
@@ -1873,6 +1899,7 @@ mod tests {
             .join("test_data_dir")
             .to_string_lossy()
             .to_string();
+        // SAFETY: Test-only manipulation of env var, restored immediately
         unsafe {
             env::set_var("QUEST_LOG_DATA_DIR", &absolute_path);
         }
@@ -1892,6 +1919,7 @@ mod tests {
 
         // Clean up environment variable
         unsafe {
+            // SAFETY: Only called in tests after verifying the variable was read first
             env::remove_var("QUEST_LOG_DATA_DIR");
         }
     }
@@ -1904,7 +1932,7 @@ mod tests {
             day_of_week: 1,
             description: None,
             exp_value: Some(10),
-            title: "".to_string(),
+            title: String::new(),
         };
 
         // Empty title should still work (database doesn't enforce this constraint)
@@ -2230,11 +2258,9 @@ mod tests {
 
         // Wait for all tasks to complete
         let mut success_count = 0;
-        let _failure_count = 0;
         for handle in handles {
-            match handle.await.unwrap() {
-                Ok(_) => success_count += 1,
-                Err(_) => {}
+            if handle.await.unwrap().is_ok() {
+                success_count += 1;
             }
         }
 
@@ -2292,9 +2318,9 @@ mod tests {
             match handle.await.unwrap() {
                 Ok(result) => {
                     if result {
-                        success_count += 1
+                        success_count += 1;
                     } else {
-                        failure_count += 1
+                        failure_count += 1;
                     }
                 }
                 Err(_) => failure_count += 1,
