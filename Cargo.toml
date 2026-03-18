@@ -34,6 +34,7 @@ dotenvy = "*"
 thiserror = "*"
 serde = { version = "*", features = ["derive"] }
 serde_json = "*"
+base64 = "*"
 tokio = { version = "*", features = [
   "rt",
   "rt-multi-thread",

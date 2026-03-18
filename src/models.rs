@@ -133,6 +133,96 @@ pub struct UpdateSettingsRequest {
     pub weekly_exp_goal: i32,
 }
 
+/// Maximum file size for uploads (5MB decoded = ~6.7MB base64 encoded)
+pub const MAX_FILE_SIZE: usize = 7_000_000;
+
+/// File upload from Datastar (base64 encoded data URL)
+/// Format: [{ name: string, contents: string, type: string }]
+/// where contents is a data URL like "data:image/png;base64,..."
+#[derive(Debug, Clone, Deserialize)]
+pub struct FileUpload {
+    /// Original filename
+    pub name: String,
+    /// Base64 encoded file contents (data URL format)
+    pub contents: String,
+    /// MIME type from data URL
+    #[serde(rename = "type")]
+    pub mime: String,
+}
+
+use base64::Engine;
+
+impl FileUpload {
+    /// Decode base64 data URL to raw bytes
+    /// Returns (bytes, `mime_type`) or None if invalid
+    #[must_use]
+    pub fn decode(&self) -> Option<(Vec<u8>, String)> {
+        let base64_start = self.contents.find(";base64,")?;
+        let encoded = &self.contents[base64_start + 8..];
+        base64::engine::general_purpose::STANDARD
+            .decode(encoded)
+            .ok()
+            .map(|bytes| (bytes, self.mime.clone()))
+    }
+
+    /// Check if file exceeds size limit
+    #[must_use]
+    pub fn is_too_large(&self) -> bool {
+        self.contents.len() > MAX_FILE_SIZE
+    }
+
+    /// Get original filename for logging/audit
+    #[must_use]
+    pub fn filename(&self) -> &str {
+        &self.name
+    }
+}
+
+/// Request payload for creating/updating quest via Datastar JSON signals
+#[derive(Debug, Deserialize)]
+#[allow(
+    clippy::struct_field_names,
+    reason = "Frontend uses camelCase, Rust uses snake_case"
+)]
+pub struct QuestJsonRequest {
+    /// Quest title from form
+    #[serde(rename = "questTitle")]
+    pub quest_title: String,
+    /// Quest description from form
+    #[serde(rename = "questDescription")]
+    pub quest_description: Option<String>,
+    /// Quest EXP value from form
+    #[serde(rename = "questExpValue")]
+    pub quest_exp_value: Option<i32>,
+    /// Quest day of week from form
+    #[serde(rename = "questDayOfWeek")]
+    pub quest_day_of_week: i32,
+    /// Quest image upload from form
+    #[serde(rename = "questImage")]
+    pub quest_image: Vec<FileUpload>,
+}
+
+/// Request payload for creating/updating reward via Datastar JSON signals
+#[derive(Debug, Deserialize)]
+#[allow(
+    clippy::struct_field_names,
+    reason = "Frontend uses camelCase, Rust uses snake_case"
+)]
+pub struct RewardJsonRequest {
+    /// Reward title from form
+    #[serde(rename = "rewardTitle")]
+    pub reward_title: String,
+    /// Reward description from form
+    #[serde(rename = "rewardDescription")]
+    pub reward_description: Option<String>,
+    /// Reward required EXP from form
+    #[serde(rename = "rewardRequiredExp")]
+    pub reward_required_exp: i32,
+    /// Reward image upload from form
+    #[serde(rename = "rewardImage")]
+    pub reward_image: Vec<FileUpload>,
+}
+
 /// Result of toggling a quest completion status.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ToggleResult {

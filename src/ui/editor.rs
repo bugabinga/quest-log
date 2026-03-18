@@ -25,7 +25,37 @@ pub fn editor_page(
     rewards: &[Reward],
     settings: &Settings,
 ) -> Markup {
-    let signals = format!("{{_activeTab: '{active_tab}'}}");
+    let signals = serde_json::json!({
+        "_activeTab": active_tab,
+        "_showQuestForm": false,
+        "_editingQuestId": null,
+        "_questTitle": "",
+        "_questDescription": "",
+        "_questExpValue": 10,
+        "_questDayOfWeek": 0,
+        "_questImage": [],
+        "_showRewardForm": false,
+        "_editingRewardId": null,
+        "_rewardTitle": "",
+        "_rewardDescription": "",
+        "_rewardRequiredExp": 50,
+        "_rewardImage": []
+    })
+    .to_string();
+
+    let computed = r#"{
+        _isEditingQuest: () => $_editingQuestId !== null,
+        _questFormTitle: () => $_editingQuestId ? "Edit Quest" : "Add New Quest",
+        _questSubmitText: () => $_editingQuestId ? "Update Quest" : "Save Quest",
+        _questImageTooLarge: () => $_questImage.some(f => f.contents.length > 7000000),
+        _questFormValid: () => $_questTitle.trim() && !$_questImageTooLarge,
+        _isEditingReward: () => $_editingRewardId !== null,
+        _rewardFormTitle: () => $_editingRewardId ? "Edit Reward" : "Add New Reward",
+        _rewardSubmitText: () => $_editingRewardId ? "Update Reward" : "Save Reward",
+        _rewardImageTooLarge: () => $_rewardImage.some(f => f.contents.length > 7000000),
+        _rewardFormValid: () => $_rewardTitle.trim() && !$_rewardImageTooLarge
+    }"#
+    .to_string();
 
     let body_content = html! {
         div class="editor-wrapper" {
@@ -57,7 +87,7 @@ pub fn editor_page(
                         }
                     }
 
-                    div class="editor-content" data-signals=(PreEscaped(&signals)) {
+                    div class="editor-content" data-signals=(PreEscaped(&signals)) data-computed=(PreEscaped(&computed)) {
                         // Quests Tab
                         div class=(if active_tab == "quests" { "editor-panel" } else { "editor-panel hidden" }) data-show="_activeTab === 'quests'" {
                             (editor_quests_panel(quests))
@@ -88,7 +118,7 @@ pub fn editor_page(
         body_content,
         weekday: None,
         signals: Some(signals),
-        computed: None,
+        computed: Some(computed),
         show_nav: true,
         active_route: Some("/editor".to_string()),
         extra_scripts: None,
@@ -105,15 +135,15 @@ fn editor_quests_panel(quests: &[Quest]) -> Markup {
                 h2 { "📜 Quest Management" }
                 button
                     class="editor-btn editor-btn--primary"
-                    data-on:click="_showQuestForm = true" {
+                    data-on:click="_showQuestForm = true; _editingQuestId = null; _questTitle = ''; _questDescription = ''; _questExpValue = 10; _questDayOfWeek = 0; _questImage = []" {
                     "+ Add Quest"
                 }
             }
 
             // Add/Edit Quest Form
             div id="quest-form-container" class="editor-form-container hidden" data-show="_showQuestForm" {
-                (PreEscaped(r#"<form id="quest-form" class="editor-form" action="/editor/quests" method="POST" enctype="multipart/form-data" data-on:submit__prevent="return handleQuestForm(event)">"#))
-                    h3 { "Add New Quest" }
+                div class="editor-form" {
+                    h3 data-text="_questFormTitle" { "Add New Quest" }
 
                     div class="form-row" {
                         div class="form-group" {
@@ -121,8 +151,7 @@ fn editor_quests_panel(quests: &[Quest]) -> Markup {
                             input
                                 type="text"
                                 id="quest-title"
-                                name="title"
-                                required
+                                data-bind:_questTitle
                                 placeholder="Quest title...";
                         }
                         div class="form-group" {
@@ -130,8 +159,7 @@ fn editor_quests_panel(quests: &[Quest]) -> Markup {
                             input
                                 type="number"
                                 id="quest-exp"
-                                name="exp_value"
-                                value="10"
+                                data-bind:_questExpValue
                                 min="0";
                         }
                     }
@@ -139,19 +167,20 @@ fn editor_quests_panel(quests: &[Quest]) -> Markup {
                     div class="form-row" {
                         div class="form-group" {
                             label for="quest-day" { "Day of Week" }
-                            select id="quest-day" name="day_of_week" {
+                            select id="quest-day" data-bind:_questDayOfWeek {
                                 @for (i, name) in DAY_NAMES.iter().enumerate() {
                                     option value=(i) { (name) }
                                 }
                             }
                         }
                         div class="form-group" {
-                            label for="quest-image" { "Image (optional)" }
+                            label for="quest-image" { "Image (optional, max 5MB)" }
                             input
                                 type="file"
                                 id="quest-image"
-                                name="image"
+                                data-bind:_questImage
                                 accept="image/*";
+                            (PreEscaped(r#"<p class="error" data-show="_questImageTooLarge">Image too large (max 5MB)</p>"#))
                         }
                     }
 
@@ -159,7 +188,7 @@ fn editor_quests_panel(quests: &[Quest]) -> Markup {
                         label for="quest-description" { "Description" }
                         textarea
                             id="quest-description"
-                            name="description"
+                            data-bind:_questDescription
                             rows="3"
                             placeholder="Quest description..." {}
                     }
@@ -168,18 +197,18 @@ fn editor_quests_panel(quests: &[Quest]) -> Markup {
                         button
                             type="button"
                             class="editor-btn editor-btn--secondary"
-                            data-on:click="_showQuestForm = false" {
+                            data-on:click="_showQuestForm = false; _editingQuestId = null" {
                             "Cancel"
                         }
                         button
-                            type="submit"
+                            type="button"
                             class="editor-btn editor-btn--primary"
-                            data-indicator="#quest-saving" {
-                            span { "Save Quest" }
-                            span id="quest-saving" style="display: none" { "Saving..." }
+                            data-on:click="_questFormValid && (_editingQuestId ? @put(`/editor/quests/${_editingQuestId}`) : @post('/editor/quests'))"
+                            data-attr:disabled="!_questFormValid" {
+                            span data-text="_questSubmitText" { "Save Quest" }
                         }
                     }
-                (PreEscaped("</form>"))
+                }
             }
 
             // Quests Table
@@ -210,7 +239,7 @@ fn editor_quests_panel(quests: &[Quest]) -> Markup {
                                 div class="action-buttons" {
                                     button
                                         class="editor-btn editor-btn--small"
-                                        data-on:click="alert('Edit feature coming soon!')" {
+                                        data-on:click=[Some(PreEscaped(format!("@get('/editor/quests/{}/edit')", quest.id)))] {
                                         "Edit"
                                     }
                                     button
@@ -243,15 +272,15 @@ fn editor_rewards_panel(rewards: &[Reward]) -> Markup {
                 h2 { "🎁 Reward Management" }
                 button
                     class="editor-btn editor-btn--primary"
-                    data-on:click="_showRewardForm = true" {
+                    data-on:click="_showRewardForm = true; _editingRewardId = null; _rewardTitle = ''; _rewardDescription = ''; _rewardRequiredExp = 50; _rewardImage = []" {
                     "+ Add Reward"
                 }
             }
 
             // Add/Edit Reward Form
             div id="reward-form-container" class="editor-form-container hidden" data-show="_showRewardForm" {
-                (PreEscaped(r#"<form id="reward-form" class="editor-form" action="/editor/rewards" method="POST" enctype="multipart/form-data" data-on:submit__prevent="return handleRewardForm(event)">"#))
-                    h3 { "Add New Reward" }
+                div class="editor-form" {
+                    h3 data-text="_rewardFormTitle" { "Add New Reward" }
 
                     div class="form-row" {
                         div class="form-group" {
@@ -259,8 +288,7 @@ fn editor_rewards_panel(rewards: &[Reward]) -> Markup {
                             input
                                 type="text"
                                 id="reward-title"
-                                name="title"
-                                required
+                                data-bind:_rewardTitle
                                 placeholder="Reward title...";
                         }
                         div class="form-group" {
@@ -268,28 +296,26 @@ fn editor_rewards_panel(rewards: &[Reward]) -> Markup {
                             input
                                 type="number"
                                 id="reward-exp"
-                                name="required_exp"
-                                required
-                                min="0"
-                                value="50"
-                                placeholder="50";
+                                data-bind:_rewardRequiredExp
+                                min="0";
                         }
                     }
 
                     div class="form-group" {
-                        label for="reward-image" { "Image (optional)" }
+                        label for="reward-image" { "Image (optional, max 5MB)" }
                         input
                             type="file"
                             id="reward-image"
-                            name="image"
+                            data-bind:_rewardImage
                             accept="image/*";
+                        (PreEscaped(r#"<p class="error" data-show="_rewardImageTooLarge">Image too large (max 5MB)</p>"#))
                     }
 
                     div class="form-group" {
                         label for="reward-description" { "Description" }
                         textarea
                             id="reward-description"
-                            name="description"
+                            data-bind:_rewardDescription
                             rows="3"
                             placeholder="Reward description..." {}
                     }
@@ -298,18 +324,18 @@ fn editor_rewards_panel(rewards: &[Reward]) -> Markup {
                         button
                             type="button"
                             class="editor-btn editor-btn--secondary"
-                            data-on:click="_showRewardForm = false" {
+                            data-on:click="_showRewardForm = false; _editingRewardId = null" {
                             "Cancel"
                         }
                         button
-                            type="submit"
+                            type="button"
                             class="editor-btn editor-btn--primary"
-                            data-indicator="#reward-saving" {
-                            span { "Save Reward" }
-                            span id="reward-saving" style="display: none" { "Saving..." }
+                            data-on:click="_rewardFormValid && (_editingRewardId ? @put(`/editor/rewards/${_editingRewardId}`) : @post('/editor/rewards'))"
+                            data-attr:disabled="!_rewardFormValid" {
+                            span data-text="_rewardSubmitText" { "Save Reward" }
                         }
                     }
-                (PreEscaped("</form>"))
+                }
             }
 
             // Rewards Table
@@ -338,7 +364,7 @@ fn editor_rewards_panel(rewards: &[Reward]) -> Markup {
                                 div class="action-buttons" {
                                     button
                                         class="editor-btn editor-btn--small"
-                                        data-on:click="alert('Edit feature coming soon!')" {
+                                        data-on:click=[Some(PreEscaped(format!("@get('/editor/rewards/{}/edit')", reward.id)))] {
                                         "Edit"
                                     }
                                     button

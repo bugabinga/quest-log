@@ -156,6 +156,10 @@ async fn main() {
             delete(handlers::editor::quests::delete_quest_handler),
         )
         .route(
+            "/editor/quests/{id}/edit",
+            get(handlers::editor::quests::edit_quest_handler),
+        )
+        .route(
             "/editor/rewards",
             get(handlers::editor::rewards::get_rewards_handler),
         )
@@ -170,6 +174,10 @@ async fn main() {
         .route(
             "/editor/rewards/{id}",
             delete(handlers::editor::rewards::delete_reward_handler),
+        )
+        .route(
+            "/editor/rewards/{id}/edit",
+            get(handlers::editor::rewards::edit_reward_handler),
         )
         .route(
             "/editor/settings",
