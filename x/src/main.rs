@@ -1,6 +1,7 @@
 use anyhow::{Context, Result, bail};
 use clap::{Parser, Subcommand};
 use reqwest::Client;
+use std::path::PathBuf;
 use std::process::{Command, Stdio};
 
 const VERSION: &str = env!("APP_VERSION");
@@ -26,13 +27,20 @@ enum Commands {
     Lint,
     /// Full check (lint + verify + cargo check)
     Check,
-    /// Run the application
+    /// Run the application in foreground (blocks)
     Run {
-        #[arg(default_value = "debug")]
-        log_level: String,
         #[arg(default_value = "serve")]
         subcommand: String,
+        args: Vec<String>,
     },
+    /// Run the application in background (non-blocking)
+    Serve {
+        #[arg(default_value = "serve")]
+        subcommand: String,
+        args: Vec<String>,
+    },
+    /// Kill the background server
+    Kill,
     /// Watch for changes and rebuild
     Watch,
     /// Clean build artifacts and database
@@ -113,10 +121,9 @@ fn main() -> Result<()> {
         Commands::Fmt { args } => fmt(&args),
         Commands::Lint => lint(),
         Commands::Check => check(),
-        Commands::Run {
-            log_level,
-            subcommand,
-        } => run(&log_level, &subcommand),
+        Commands::Run { subcommand, args } => run(&subcommand, &args),
+        Commands::Serve { subcommand, args } => serve(&subcommand, &args),
+        Commands::Kill => kill(),
         Commands::Watch => watch(),
         Commands::Clean => clean(),
         Commands::Container { command } => container(command),
@@ -198,17 +205,118 @@ fn check() -> Result<()> {
     run_cargo(&["check", "--features", "test-utils"])
 }
 
-fn run(log_level: &str, subcommand: &str) -> Result<()> {
+fn build_server_command(subcommand: &str, args: &[String]) -> Command {
     let mut cmd = Command::new("cargo");
-    cmd.env("RUST_LOG", log_level)
-        .args(["run", "--", subcommand])
-        .stdout(Stdio::inherit())
-        .stderr(Stdio::inherit());
-    let status = cmd.status().context("Failed to run cargo")?;
+    cmd.env(
+        "RUST_LOG",
+        std::env::var("RUST_LOG").unwrap_or_else(|_| "debug".into()),
+    )
+    .args(["run", "--", subcommand])
+    .args(args)
+    .stdout(Stdio::inherit())
+    .stderr(Stdio::inherit());
+    cmd
+}
+
+fn run(subcommand: &str, args: &[String]) -> Result<()> {
+    let status = build_server_command(subcommand, args)
+        .status()
+        .context("Failed to run cargo")?;
     if !status.success() {
         bail!("cargo run failed");
     }
     Ok(())
+}
+
+fn serve(subcommand: &str, args: &[String]) -> Result<()> {
+    let (old_pid, old_was_running) = kill_server_internal();
+
+    if old_was_running {
+        println!("🛑 Stopping existing server (PID: {})", old_pid.unwrap());
+    }
+
+    let mut cmd = build_server_command(subcommand, args);
+    let log_file_path = std::env::current_dir()?.join(".server.log");
+    let log_file = std::fs::OpenOptions::new()
+        .create(true)
+        .write(true)
+        .truncate(true)
+        .open(&log_file_path)?;
+    cmd.stdout(Stdio::from(log_file.try_clone()?))
+        .stderr(Stdio::from(log_file));
+
+    let child = cmd.spawn().context("Failed to spawn server")?;
+    let pid = child.id();
+
+    std::fs::write(pid_path(), pid.to_string())?;
+    println!("🚀 Starting quest-log {} (PID: {})", subcommand, pid);
+    println!("   Logs: {}", log_file_path.display());
+    Ok(())
+}
+
+fn kill() -> Result<()> {
+    let (pid, was_running) = kill_server_internal();
+
+    if was_running {
+        println!("🛑 Stopped server (PID: {})", pid.unwrap());
+    } else {
+        println!("No server running");
+    }
+    Ok(())
+}
+
+fn kill_server_internal() -> (Option<u32>, bool) {
+    let pid: Option<u32> = match std::fs::read_to_string(pid_path()) {
+        Ok(s) => s.trim().parse().ok(),
+        Err(_) => None,
+    };
+
+    let mut was_running = false;
+
+    if let Some(pid) = pid {
+        was_running = process_is_alive(pid);
+        if was_running {
+            #[cfg(unix)]
+            let _ = Command::new("kill")
+                .arg("-TERM")
+                .arg(pid.to_string())
+                .status();
+            #[cfg(windows)]
+            let _ = Command::new("taskkill")
+                .args(["/F", "/PID", &pid.to_string()])
+                .status();
+        }
+    }
+
+    let _ = std::fs::remove_file(pid_path());
+
+    (pid, was_running)
+}
+
+#[cfg(unix)]
+fn process_is_alive(pid: u32) -> bool {
+    Command::new("kill")
+        .arg("-0")
+        .arg(pid.to_string())
+        .status()
+        .map(|s| s.success())
+        .unwrap_or(false)
+}
+
+#[cfg(windows)]
+fn process_is_alive(pid: u32) -> bool {
+    Command::new("tasklist")
+        .args(["/FI", &format!("PID eq {pid}")])
+        .output()
+        .map(|o| {
+            let output = String::from_utf8_lossy(&o.stdout);
+            output.lines().any(|l| l.contains(&pid.to_string()))
+        })
+        .unwrap_or(false)
+}
+
+fn pid_path() -> PathBuf {
+    PathBuf::from(".server.pid")
 }
 
 fn watch() -> Result<()> {

@@ -53,13 +53,28 @@ ADRs
 | `cargo x fmt`       | Format Rust and JS code                  |
 | `cargo x lint`      | Check formatting, clippy, and lint       |
 | `cargo x check`     | Full check (lint + verify + cargo check) |
-| `cargo x run`       | Run the application                      |
+| `cargo x run`       | Run the application (foreground, blocks) |
+| `cargo x serve`     | Run the application (background)         |
+| `cargo x kill`      | Kill the background server               |
 | `cargo x watch`     | Watch for changes and rebuild            |
 | `cargo x clean`     | Clean build artifacts and database       |
 | `cargo x container` | Container operations (build, push, etc.) |
 | `cargo x bundle`    | Bundle datastar from CDN                 |
 | `cargo x assets`    | Process assets (favicons, icons)         |
 | `cargo x commit`    | Validate commit message format           |
+
+## Server Management
+
+- `cargo x run` - Run server in foreground. **Blocks** the terminal. Use only
+  when debugging directly or needing live log output visible.
+- `cargo x serve` - Run server in background. **Non-blocking**. Preferred for
+  agent workflows. Automatically kills any existing server first.
+- `cargo x kill` - Stop the background server. Idempotent (safe to call even if
+  no server is running).
+
+**For agents:** Always use `cargo x serve` instead of `cargo x run`. The
+blocking behavior of `cargo x run` prevents the agent from executing further
+actions in the same session.
 
 **Note:** Test commands (`cargo x test`, `cargo x verify`, `cargo x check`)
 automatically enable the `test-utils` feature flag, which provides test

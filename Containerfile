@@ -1,13 +1,13 @@
 FROM rust:alpine AS builder
 
-RUN apk add --no-cache musl-dev musl-utils build-base pkgconfig openssl-dev ca-certificates
+RUN apk add --no-cache musl-dev musl-utils build-base pkgconfig openssl-dev ca-certificates tzdata
 
 WORKDIR /app
 
 COPY Cargo.toml Cargo.lock ./
 COPY src ./src
+COPY x ./x
 COPY migrations ./migrations
-COPY templates ./templates
 COPY static ./static
 
 RUN rustup target add x86_64-unknown-linux-musl

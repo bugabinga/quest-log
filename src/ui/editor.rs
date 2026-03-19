@@ -25,23 +25,25 @@ pub fn editor_page(
     rewards: &[Reward],
     settings: &Settings,
 ) -> Markup {
-    let signals = serde_json::json!({
-        "_activeTab": active_tab,
-        "_showQuestForm": false,
-        "_editingQuestId": null,
-        "_questTitle": "",
-        "_questDescription": "",
-        "_questExpValue": 10,
-        "_questDayOfWeek": 0,
-        "_questImage": [],
-        "_showRewardForm": false,
-        "_editingRewardId": null,
-        "_rewardTitle": "",
-        "_rewardDescription": "",
-        "_rewardRequiredExp": 50,
-        "_rewardImage": []
-    })
-    .to_string();
+    let signals = format!(
+        "({})",
+        serde_json::json!({
+            "_activeTab": active_tab,
+            "_showQuestForm": false,
+            "_editingQuestId": null,
+            "_questTitle": "",
+            "_questDescription": "",
+            "_questExpValue": 10,
+            "_questDayOfWeek": 0,
+            "_questImage": [],
+            "_showRewardForm": false,
+            "_editingRewardId": null,
+            "_rewardTitle": "",
+            "_rewardDescription": "",
+            "_rewardRequiredExp": 50,
+            "_rewardImage": []
+        })
+    );
 
     let computed = r#"({
         _isEditingQuest: () => $_editingQuestId !== null,
@@ -70,19 +72,19 @@ pub fn editor_page(
                         button
                             class=(if active_tab == "quests" { "editor-tab editor-tab--active" } else { "editor-tab" })
                             data-on:click="_activeTab = 'quests'; @get('/editor/tab/quests')"
-                            data-class="{'editor-tab--active': _activeTab === 'quests'}" {
+                            data-class=(r"{'editor-tab--active': _activeTab === 'quests'}") {
                             "📜 Quests"
                         }
                         button
                             class=(if active_tab == "rewards" { "editor-tab editor-tab--active" } else { "editor-tab" })
                             data-on:click="_activeTab = 'rewards'; @get('/editor/tab/rewards')"
-                            data-class="{'editor-tab--active': _activeTab === 'rewards'}" {
+                            data-class=(r"{'editor-tab--active': _activeTab === 'rewards'}") {
                             "🎁 Rewards"
                         }
                         button
                             class=(if active_tab == "settings" { "editor-tab editor-tab--active" } else { "editor-tab" })
                             data-on:click="_activeTab = 'settings'; @get('/editor/tab/settings')"
-                            data-class="{'editor-tab--active': _activeTab === 'settings'}" {
+                            data-class=(r"{'editor-tab--active': _activeTab === 'settings'}") {
                             "⚙️ Settings"
                         }
                     }

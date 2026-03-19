@@ -94,21 +94,21 @@ pub fn base_page(data: &PageData) -> maud::Markup {
                 div id="app" {
                     div class="container" {
                         @if let Some(ref signals) = data.signals {
-                            div data-signals=(PreEscaped(signals)) {}
+                            div data-signals={ (signals) } {}
                         }
                         @if let Some(ref computed) = data.computed {
-                            div data-computed=(PreEscaped(computed)) {}
+                            div data-computed={ (computed) } {}
                         }
                         div class="notifications" {}
 
                         div style="display: none;" {
-                            div data-on-signal-patch="$error && triggerErrorNotification($error)" data-on-signal-patch-filter="{include: /^error$/}" {}
+                            div data-on-signal-patch="$error && triggerErrorNotification($error)" data-on-signal-patch-filter=(r"{include: /^error$/}") {}
                         }
 
                         (data.body_content)
 
                         div style="display: none;" {
-                            div data-on-signal-patch="($rewardClaimed && setTimeout(() => $rewardClaimed = null, 2500))" data-on-signal-patch-filter="{include: /^rewardClaimed$/}" {}
+                            div data-on-signal-patch="($rewardClaimed && setTimeout(() => $rewardClaimed = null, 2500))" data-on-signal-patch-filter=(r"{include: /^rewardClaimed$/}") {}
                         }
                     }
                 }

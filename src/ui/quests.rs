@@ -67,8 +67,8 @@ pub fn quests_page(
         div class="notifications" {}
 
         div style="display: none;" {
-            div data-on-signal-patch="$questCompleted === true && (triggerSuccessNotification('Quest completed!') || document.getElementById('exp-counter')?.classList.add('exp-pulse') || setTimeout(() => document.getElementById('exp-counter')?.classList.remove('exp-pulse'), 600))" data-on-signal-patch-filter="{include: /^questCompleted$/}" {}
-            div data-on-signal-patch="$questCompleted === false && triggerQuestUncompletionNotification()" data-on-signal-patch-filter="{include: /^questCompleted$/}" {}
+            div data-on-signal-patch="$questCompleted === true && (triggerSuccessNotification('Quest completed!') || document.getElementById('exp-counter')?.classList.add('exp-pulse') || setTimeout(() => document.getElementById('exp-counter')?.classList.remove('exp-pulse'), 600))" data-on-signal-patch-filter=(r"{include: /^questCompleted$/}") {}
+            div data-on-signal-patch="$questCompleted === false && triggerQuestUncompletionNotification()" data-on-signal-patch-filter=(r"{include: /^questCompleted$/}") {}
         }
 
         h1 class="rainbow-text" { "Quest Log" }

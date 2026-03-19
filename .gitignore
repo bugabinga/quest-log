@@ -7,3 +7,5 @@ quests.db
 node_modules/
 rust-analyzer.json
 .zed
+.server.pid
+.server.log

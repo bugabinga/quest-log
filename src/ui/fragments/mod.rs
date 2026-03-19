@@ -1,5 +1,7 @@
 //! UI fragment components for quest display.
 
+/// Confetti celebration particles.
+pub mod confetti;
 /// Day header showing the selected day's name and date.
 pub mod day_header;
 /// Navigation buttons for moving between days.
