@@ -12,7 +12,8 @@ pub fn bounty_page(
 ) -> maud::Markup {
     let signals = "{weeklyRewardsOpen: true}".to_string();
     let computed =
-        "{weekExpPercent: () => Math.round($weekExp / Math.max($weekExpMax, 1) * 100)}".to_string();
+        "({weekExpPercent: () => Math.round($weekExp / Math.max($weekExpMax, 1) * 100)})"
+            .to_string();
 
     let body_content = html! {
         div data-signals=(maud::PreEscaped(&signals)) data-computed=(maud::PreEscaped(&computed)) {}

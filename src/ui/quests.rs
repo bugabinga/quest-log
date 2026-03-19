@@ -32,7 +32,7 @@ pub fn quests_page(
         if is_today { "true" } else { "false" }
     );
 
-    let computed = "{expTodayPercent: () => Math.round($expToday / Math.max($expTodayMax, 1) * 100), weekExpPercent: () => Math.round($weekExp / Math.max($weekExpMax, 1) * 100)}".to_string();
+    let computed = "({expTodayPercent: () => Math.round($expToday / Math.max($expTodayMax, 1) * 100), weekExpPercent: () => Math.round($weekExp / Math.max($weekExpMax, 1) * 100)})".to_string();
 
     let nav_left_onclick = if can_navigate_left {
         Some(PreEscaped(format!(
@@ -65,6 +65,12 @@ pub fn quests_page(
         {}
 
         div class="notifications" {}
+
+        div style="display: none;" {
+            div data-on-signal-patch="$questCompleted === true && (triggerSuccessNotification('Quest completed!') || document.getElementById('exp-counter')?.classList.add('exp-pulse') || setTimeout(() => document.getElementById('exp-counter')?.classList.remove('exp-pulse'), 600))" data-on-signal-patch-filter="{include: /^questCompleted$/}" {}
+            div data-on-signal-patch="$questCompleted === false && triggerQuestUncompletionNotification()" data-on-signal-patch-filter="{include: /^questCompleted$/}" {}
+        }
+
         h1 class="rainbow-text" { "Quest Log" }
 
         div class="day-navigation" {

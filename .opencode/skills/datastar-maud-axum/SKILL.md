@@ -238,7 +238,7 @@ let body_content = html! {
 3. **Add computed signals** for derived state:
 
 ```rust
-let computed = r#"{countDoubled: () => $count * 2}"#.to_string();
+let computed = r#"({countDoubled: () => $count * 2})"#.to_string();
 
 base_page(PageData {
     // ...
@@ -261,7 +261,7 @@ pub fn quests_page(/* params */) -> maud::Markup {
     );
     
     // Build computed signals
-    let computed = "{expTodayPercent: () => Math.round($expToday / Math.max($expTodayMax, 1) * 100)}".to_string();
+    let computed = "({expTodayPercent: () => Math.round($expToday / Math.max($expTodayMax, 1) * 100)})".to_string();
     
     // Build body with signals/computed as data attributes
     let body_content = html! {
@@ -295,6 +295,8 @@ pub fn quests_page(/* params */) -> maud::Markup {
    JS/JSON
 4. **Set active_route** - highlights current nav item
 5. **Use view-transition-name** - enables smooth animations on element changes
+6. **Wrap computed objects in parentheses** - computed signals must be wrapped
+   as `( {...} )` to ensure they're interpreted as expressions, not blocks
 
 ### Component Creation with Maud
 

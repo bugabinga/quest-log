@@ -1,5 +1,7 @@
 use maud::{DOCTYPE, PreEscaped, html};
 
+use crate::ui::fragments::confetti;
+
 fn nav_link_class(active_route: Option<&str>, route: &str) -> &'static str {
     let is_active = match active_route {
         Some(r) => r == route,
@@ -98,11 +100,25 @@ pub fn base_page(data: &PageData) -> maud::Markup {
                             div data-computed=(PreEscaped(computed)) {}
                         }
                         div class="notifications" {}
+
+                        div style="display: none;" {
+                            div data-on-signal-patch="$error && triggerErrorNotification($error)" data-on-signal-patch-filter="{include: /^error$/}" {}
+                        }
+
                         (data.body_content)
+
+                        div style="display: none;" {
+                            div data-on-signal-patch="($rewardClaimed && setTimeout(() => $rewardClaimed = null, 2500))" data-on-signal-patch-filter="{include: /^rewardClaimed$/}" {}
+                        }
                     }
                 }
 
-                script type="module" src="/js/app.js" {}
+                (confetti::confetti())
+
+                div class="reward-claimed-overlay" data-show="$rewardClaimed" {
+                    h2 { "🎉 REWARD CLAIMED! 🎉" }
+                    p { "Your treasure awaits!" }
+                }
             }
         }
     }

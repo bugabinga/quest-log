@@ -43,7 +43,7 @@ pub fn editor_page(
     })
     .to_string();
 
-    let computed = r#"{
+    let computed = r#"({
         _isEditingQuest: () => $_editingQuestId !== null,
         _questFormTitle: () => $_editingQuestId ? "Edit Quest" : "Add New Quest",
         _questSubmitText: () => $_editingQuestId ? "Update Quest" : "Save Quest",
@@ -54,7 +54,7 @@ pub fn editor_page(
         _rewardSubmitText: () => $_editingRewardId ? "Update Reward" : "Save Reward",
         _rewardImageTooLarge: () => $_rewardImage.some(f => f.contents.length > 7000000),
         _rewardFormValid: () => $_rewardTitle.trim() && !$_rewardImageTooLarge
-    }"#
+    })"#
     .to_string();
 
     let body_content = html! {
@@ -397,7 +397,7 @@ fn editor_settings_panel(settings: &Settings) -> Markup {
                 h2 { "⚙️ Settings" }
             }
 
-            (PreEscaped(r#"<form id="settings-form" class="editor-form editor-form--settings" action="/editor/settings" method="PUT" data-on:submit__prevent="return handleSettingsForm(event)">"#))
+            (PreEscaped(r#"<form id="settings-form" class="editor-form editor-form--settings" data-on:submit__prevent="@put('/editor/settings', {contentType: 'form'})">"#))
                 h3 { "Weekly Goal" }
 
                 div class="form-group" {

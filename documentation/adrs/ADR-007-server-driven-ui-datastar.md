@@ -276,6 +276,27 @@ state.bcast.send(BroadcastMessage::PatchSignals {
 
 Client handles via `datastar-signal-patch` event.
 
+### Computed Signals
+
+Datastar computed signals allow deriving frontend state from existing signals.
+**Important**: Computed objects must be wrapped in parentheses to avoid
+JavaScript interpreting the object literal `{}` as a block statement.
+
+**Correct**:
+
+```rust
+let computed = r#"({expTodayPercent: () => Math.round($expToday / Math.max($expTodayMax, 1) * 100)})"#.to_string();
+```
+
+**Incorrect** (causes syntax errors):
+
+```rust
+let computed = r#"{expTodayPercent: () => Math.round($expToday / Math.max($expTodayMax, 1) * 100)}"#.to_string();
+```
+
+This pattern applies to all computed signal objects in `data-computed`
+attributes.
+
 ## Related Decisions
 
 - **ADR-002**: Vendoring Datastar in `static/` directory
