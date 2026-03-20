@@ -64,7 +64,7 @@ enum Commands {
     Assets,
     /// Run browser/E2E tests
     Browser {
-        #[arg(default_value = "false")]
+        #[arg(long, action = clap::ArgAction::SetTrue)]
         headed: bool,
     },
 }
