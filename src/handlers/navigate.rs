@@ -11,6 +11,7 @@ use futures::stream::{self, Stream};
 use serde::Deserialize;
 use std::convert::Infallible;
 
+use crate::extractors::Timezone;
 use crate::handlers::AppError;
 use crate::state::AppState;
 use crate::time;
@@ -43,7 +44,8 @@ pub async fn navigate(
     headers: HeaderMap,
 ) -> Result<Sse<impl Stream<Item = Result<Event, Infallible>>>, AppError> {
     let db = &state.db;
-    let today = time::today();
+    let tz = Timezone::from_headers(&headers);
+    let today = time::today_with_timezone(tz.as_deref());
 
     tracing::debug!(target_date = %path.date, "🧭 Navigate request");
 
@@ -95,6 +97,7 @@ pub async fn navigate(
             quest,
             completed_today,
             selected_date,
+            today,
         ));
     }
 
@@ -162,7 +165,7 @@ pub async fn navigate(
         format!("/day/{date_iso}")
     };
     let history_script = format!(
-        "window.history.pushState({{date:'{date_iso}'}}, '', '{url_path}'); document.body.setAttribute('data-weekday', '{weekday_num}');"
+        "window.history.pushState({{date:'{date_iso}'}}, '', '{url_path}'); document.body.setAttribute('data-weekday', '{weekday_num}'); document.title = '{day_name}';"
     );
 
     let signals_json = serde_json::json!({

@@ -9,7 +9,7 @@ use chrono::{Datelike, Weekday};
 use datastar::axum::ReadSignals;
 use datastar::patch_elements::PatchElements;
 use datastar::patch_signals::PatchSignals;
-use futures::stream::{self, Stream};
+use futures::Stream;
 use serde::Deserialize;
 use std::convert::Infallible;
 
@@ -20,6 +20,17 @@ use crate::time;
 use crate::ui;
 use crate::ui::fragments::toggle::QuestDisplay;
 use tracing::instrument;
+
+macro_rules! sse_response {
+    ($events:expr) => {{
+        for event in &$events {
+            tracing::trace!(?event, "📤 SSE event");
+        }
+        axum::response::sse::Sse::new(futures::stream::iter(
+            $events.into_iter().map(Ok::<_, std::convert::Infallible>),
+        ))
+    }};
+}
 
 use super::ServerMessage;
 
@@ -177,7 +188,7 @@ pub async fn quests_handler(
         .into_iter()
         .map(|quest| {
             let completed_today = *completion_status.get(&quest.id).unwrap_or(&false);
-            QuestDisplay::from_quest(quest, completed_today, selected_date)
+            QuestDisplay::from_quest(quest, completed_today, selected_date, today)
         })
         .collect();
 
@@ -303,7 +314,7 @@ pub async fn toggle_quest(
             false
         });
 
-    let quest_display = QuestDisplay::from_quest(quest, completed_today, today);
+    let quest_display = QuestDisplay::from_quest(quest, completed_today, today, today);
 
     let day_of_week = today.weekday().num_days_from_sunday().cast_signed();
     let all_quests = db.get_quests_for_day(day_of_week).await.unwrap_or_default();
@@ -362,8 +373,7 @@ pub async fn toggle_quest(
     let signals_patch = PatchSignals::new(signals_json.to_string());
 
     let events: Vec<Event> = vec![quest_patch.into(), signals_patch.into()];
-    let stream = stream::iter(events.into_iter().map(Ok));
-    Ok(Sse::new(stream))
+    Ok(sse_response!(events))
 }
 
 /// Test endpoint that delays response for testing long-running requests

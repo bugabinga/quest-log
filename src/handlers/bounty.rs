@@ -3,6 +3,7 @@
 use std::convert::Infallible;
 
 use axum::extract::State;
+use axum::http::HeaderMap;
 use axum::response::IntoResponse;
 use axum::response::sse::{Event, Sse};
 use chrono::Datelike;
@@ -10,6 +11,7 @@ use datastar::axum::ReadSignals;
 use futures::Stream;
 use serde::Deserialize;
 
+use crate::extractors::Timezone;
 use crate::handlers::AppError;
 use crate::models::ClaimState;
 use crate::state::AppState;
@@ -33,15 +35,22 @@ pub struct ClaimRewardRequest {
 /// # Errors
 ///
 /// Returns an error if database query fails
-#[instrument(name = "🏴‍☠️ GET /bounty", skip(state))]
-pub async fn bounty(State(state): State<AppState>) -> Result<impl IntoResponse, AppError> {
+#[instrument(name = "🏴‍☠️ GET /bounty", skip(state, headers))]
+pub async fn bounty(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+) -> Result<impl IntoResponse, AppError> {
     tracing::debug!("🏴‍☠️ GET /bounty request received");
-    bounty_handler(state).await
+    bounty_handler(state, headers).await
 }
 
-async fn bounty_handler(state: AppState) -> Result<impl IntoResponse, AppError> {
+async fn bounty_handler(
+    state: AppState,
+    headers: HeaderMap,
+) -> Result<impl IntoResponse, AppError> {
     let db = &state.db;
-    let today = time::today();
+    let tz = Timezone::from_headers(&headers);
+    let today = time::today_with_timezone(tz.as_deref());
     let (week_start, week_end) = time::get_week_bounds(today);
 
     let week_exp = db
@@ -73,14 +82,16 @@ async fn bounty_handler(state: AppState) -> Result<impl IntoResponse, AppError> 
 /// # Errors
 ///
 /// Returns an error if database operation fails
-#[instrument(name = "🏆 claim_reward", skip(state, request))]
+#[instrument(name = "🏆 claim_reward", skip(state, request, headers))]
 pub async fn claim_reward(
     State(state): State<AppState>,
+    headers: HeaderMap,
     ReadSignals(request): ReadSignals<ClaimRewardRequest>,
 ) -> Result<Sse<impl Stream<Item = Result<Event, Infallible>>>, AppError> {
     let db = &state.db;
     let bcast = state.bcast.clone();
-    let today = time::today();
+    let tz = Timezone::from_headers(&headers);
+    let today = time::today_with_timezone(tz.as_deref());
     let reward_id = request.reward_id;
 
     tracing::debug!(reward_id, "🏆 Claim reward request received");

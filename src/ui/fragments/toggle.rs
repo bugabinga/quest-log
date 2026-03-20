@@ -1,7 +1,7 @@
 use maud::{Markup, PreEscaped, html};
 
 use crate::models::Quest;
-use crate::time;
+use chrono::NaiveDate;
 
 /// Display representation of a quest for rendering.
 #[derive(Debug, Clone)]
@@ -28,9 +28,9 @@ impl QuestDisplay {
     pub fn from_quest(
         quest: Quest,
         completed_today: bool,
-        selected_date: chrono::NaiveDate,
+        selected_date: NaiveDate,
+        today: NaiveDate,
     ) -> Self {
-        let today = time::today();
         Self {
             id: quest.id,
             title: quest.title,

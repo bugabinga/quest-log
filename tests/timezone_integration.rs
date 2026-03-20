@@ -36,7 +36,7 @@ use axum::{
     Router,
     body::Body,
     http::{Request, StatusCode},
-    routing::get,
+    routing::{get, post},
 };
 use chrono::{NaiveDate, TimeZone, Utc};
 use quest_log::{database::Database, handlers, models::*, state::AppState, time};
@@ -431,6 +431,105 @@ async fn test_timezone_cookie_fallback() {
         html.contains("Wednesday Quest") && !html.contains("Thursday Quest"),
         "With timezone fix, QuestLog-TZ cookie should be used for timezone. \
          UTC was Jan 1st (Thursday) but NY time was Dec 31st (Wednesday)."
+    );
+
+    time::reset_today();
+}
+
+/// Test: Navigate handler should respect timezone header
+///
+/// REGRESSION TEST for bug where navigate used `time::today()` (UTC)
+/// while toggle used `time::today_with_timezone(tz)`.
+///
+/// Scenario: It's Saturday in Europe/Berlin (UTC+1) but still Friday in UTC.
+/// Navigate should show Saturday's quests (Berlin's today), not Friday's quests (UTC's today).
+#[tokio::test]
+async fn test_navigate_respects_timezone_header() {
+    // March 20, 2026 at 23:30 UTC = March 21, 2026 at 00:30 Berlin time (Saturday)
+    // In UTC, it's still Friday March 20
+    let utc_dt = Utc.from_utc_datetime(
+        &NaiveDate::from_ymd_opt(2026, 3, 20)
+            .unwrap()
+            .and_hms_opt(23, 30, 0)
+            .unwrap(),
+    );
+    time::set_fake_datetime(utc_dt);
+
+    let pool = SqlitePool::connect("sqlite::memory:").await.unwrap();
+    let db: Database = Database::with_pool(pool);
+    db.migrate().await.unwrap();
+
+    let (bcast_tx, _) = broadcast::channel(128);
+    let app_state = AppState::new(db.clone(), bcast_tx);
+    let app = Router::new()
+        .route("/navigate/{date}", get(handlers::navigate::navigate))
+        .route("/quests/toggle", post(handlers::quests::toggle_quest))
+        .with_state(app_state);
+
+    // Create quests for Saturday (day 6) and Friday (day 5)
+    // March 20, 2026 was a Friday (day 5)
+    // March 21, 2026 was a Saturday (day 6)
+    let saturday_quest = create_quest_for_day(&db, "Saturday Quest", 6).await;
+    let _friday_quest = create_quest_for_day(&db, "Friday Quest", 5).await;
+
+    // With X-Timezone: Europe/Berlin, it should show Saturday (00:30 March 21 in Berlin)
+    let response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri("/navigate/today")
+                .header("X-Timezone", "Europe/Berlin")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let html = String::from_utf8(body.to_vec()).unwrap();
+
+    // With timezone fix, Berlin user should see Saturday (March 21)
+    // Before fix, navigate used UTC so it would show Friday (March 20)
+    assert!(
+        html.contains("Saturday Quest") && !html.contains("Friday Quest"),
+        "Navigate with Europe/Berlin timezone should show Saturday (UTC was Friday). \
+         Got HTML containing: {}",
+        if html.contains("Friday Quest") {
+            "Friday Quest (BUG: using UTC instead of timezone)"
+        } else {
+            "neither Friday nor Saturday"
+        }
+    );
+
+    // Also verify toggle with same timezone would accept Saturday quests
+    let response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/quests/toggle")
+                .header("Content-Type", "application/json")
+                .header("X-Timezone", "Europe/Berlin")
+                .body(Body::from(r#"{"quest_id":"#.chars().chain(saturday_quest.id.to_string().chars()).chain("}".chars()).collect::<String>()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    // Toggle should succeed for Saturday quest (not rejected as "wrong day")
+    // It might fail for other reasons (already completed, etc.) but NOT "wrong day"
+    // If it's "wrong day" error, that means toggle is using a different "today" than navigate
+    let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let body_str = String::from_utf8(body.to_vec()).unwrap();
+    assert!(
+        !body_str.contains("wrong day"),
+        "Toggle with Europe/Berlin should NOT reject Saturday quest as 'wrong day'. \
+         Navigate and toggle must agree on 'today'. Body: {body_str}"
     );
 
     time::reset_today();
