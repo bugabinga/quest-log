@@ -58,3 +58,20 @@ export async function newPage(browser: puppeteer.Browser) {
   await page.goto("http://localhost:3000");
   return page;
 }
+
+export async function clearBrowserState(page: puppeteer.Page) {
+  await page.evaluate(() => {
+    localStorage.clear();
+    sessionStorage.clear();
+  });
+  await page.reload();
+}
+
+export async function typeIntoInput(
+  page: puppeteer.Page,
+  selector: string,
+  text: string,
+) {
+  await page.focus(selector);
+  await page.keyboard.type(text);
+}

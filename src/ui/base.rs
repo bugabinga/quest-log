@@ -2,6 +2,10 @@ use maud::{DOCTYPE, PreEscaped, html};
 
 use crate::ui::fragments::confetti;
 
+fn escape_for_html_attr(s: &str) -> String {
+    s.replace('"', "&quot;")
+}
+
 fn nav_link_class(active_route: Option<&str>, route: &str) -> &'static str {
     let is_active = match active_route {
         Some(r) => r == route,
@@ -94,10 +98,10 @@ pub fn base_page(data: &PageData) -> maud::Markup {
                 div id="app" {
                     div class="container" {
                         @if let Some(ref signals) = data.signals {
-                            div data-signals={ (signals) } {}
+                            div data-signals=(PreEscaped(escape_for_html_attr(signals))) {}
                         }
                         @if let Some(ref computed) = data.computed {
-                            div data-computed={ (computed) } {}
+                            div data-computed=(PreEscaped(escape_for_html_attr(computed))) {}
                         }
                         div class="notifications" {}
 

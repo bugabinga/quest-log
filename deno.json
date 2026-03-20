@@ -7,12 +7,16 @@
     "puppeteer-core": "npm:puppeteer-core@^24.39.1"
   },
   "compilerOptions": {
-    "strict": true
+    "strict": true,
+    "lib": ["deno.window", "dom"]
   },
   "lint": {
     "exclude": ["static/js/datastar.js"]
   },
   "fmt": {
     "exclude": ["static/js/datastar.js"]
+  },
+  "tasks": {
+    "test:e2e": "deno test --allow-all tests/e2e/"
   }
 }

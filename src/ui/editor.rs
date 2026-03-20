@@ -45,19 +45,7 @@ pub fn editor_page(
         })
     );
 
-    let computed = r#"({
-        _isEditingQuest: () => $_editingQuestId !== null,
-        _questFormTitle: () => $_editingQuestId ? "Edit Quest" : "Add New Quest",
-        _questSubmitText: () => $_editingQuestId ? "Update Quest" : "Save Quest",
-        _questImageTooLarge: () => $_questImage.some(f => f.contents.length > 7000000),
-        _questFormValid: () => $_questTitle.trim() && !$_questImageTooLarge,
-        _isEditingReward: () => $_editingRewardId !== null,
-        _rewardFormTitle: () => $_editingRewardId ? "Edit Reward" : "Add New Reward",
-        _rewardSubmitText: () => $_editingRewardId ? "Update Reward" : "Save Reward",
-        _rewardImageTooLarge: () => $_rewardImage.some(f => f.contents.length > 7000000),
-        _rewardFormValid: () => $_rewardTitle.trim() && !$_rewardImageTooLarge
-    })"#
-    .to_string();
+    let computed = String::new();
 
     let body_content = html! {
         div class="editor-wrapper" {
@@ -71,37 +59,34 @@ pub fn editor_page(
                     div class="editor-tabs" {
                         button
                             class=(if active_tab == "quests" { "editor-tab editor-tab--active" } else { "editor-tab" })
-                            data-on:click="_activeTab = 'quests'; @get('/editor/tab/quests')"
-                            data-class=(r"{'editor-tab--active': _activeTab === 'quests'}") {
+                            data-on:click="@get('/editor/tab/quests')" {
                             "📜 Quests"
                         }
                         button
                             class=(if active_tab == "rewards" { "editor-tab editor-tab--active" } else { "editor-tab" })
-                            data-on:click="_activeTab = 'rewards'; @get('/editor/tab/rewards')"
-                            data-class=(r"{'editor-tab--active': _activeTab === 'rewards'}") {
+                            data-on:click="@get('/editor/tab/rewards')" {
                             "🎁 Rewards"
                         }
                         button
                             class=(if active_tab == "settings" { "editor-tab editor-tab--active" } else { "editor-tab" })
-                            data-on:click="_activeTab = 'settings'; @get('/editor/tab/settings')"
-                            data-class=(r"{'editor-tab--active': _activeTab === 'settings'}") {
+                            data-on:click="@get('/editor/tab/settings')" {
                             "⚙️ Settings"
                         }
                     }
 
-                    div class="editor-content" data-signals=(PreEscaped(&signals)) data-computed=(PreEscaped(&computed)) {
+                    div class="editor-content" {
                         // Quests Tab
-                        div class=(if active_tab == "quests" { "editor-panel" } else { "editor-panel hidden" }) data-show="_activeTab === 'quests'" {
+                        div class=(if active_tab == "quests" { "editor-panel" } else { "editor-panel hidden" }) {
                             (editor_quests_panel(quests))
                         }
 
                         // Rewards Tab
-                        div class=(if active_tab == "rewards" { "editor-panel" } else { "editor-panel hidden" }) data-show="_activeTab === 'rewards'" {
+                        div class=(if active_tab == "rewards" { "editor-panel" } else { "editor-panel hidden" }) {
                             (editor_rewards_panel(rewards))
                         }
 
                         // Settings Tab
-                        div class=(if active_tab == "settings" { "editor-panel" } else { "editor-panel hidden" }) data-show="_activeTab === 'settings'" {
+                        div class=(if active_tab == "settings" { "editor-panel" } else { "editor-panel hidden" }) {
                             (editor_settings_panel(settings))
                         }
                     }
