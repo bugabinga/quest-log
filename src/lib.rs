@@ -6,6 +6,7 @@ pub mod auth;
 pub mod config;
 /// Database operations and connection management.
 pub mod database;
+pub mod extractors;
 pub mod handlers;
 /// Data models and DTOs for quests, rewards, and settings.
 pub mod models;

@@ -4,6 +4,7 @@ mod auth;
 mod cli;
 mod config;
 mod database;
+mod extractors;
 mod handlers;
 mod models;
 mod state;

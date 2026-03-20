@@ -1,6 +1,7 @@
 //! Quest handlers for the Quest Log
 
 use axum::extract::{Path, Query, State};
+use axum::http::HeaderMap;
 use axum::response::Html;
 use axum::response::IntoResponse;
 use axum::response::sse::{Event, Sse};
@@ -12,6 +13,7 @@ use futures::stream::{self, Stream};
 use serde::Deserialize;
 use std::convert::Infallible;
 
+use crate::extractors::Timezone;
 use crate::handlers::AppError;
 use crate::state::AppState;
 use crate::time;
@@ -82,9 +84,11 @@ pub struct ToggleQuestRequest {
 pub async fn quests(
     State(state): State<AppState>,
     Query(query): Query<QuestsQuery>,
+    headers: HeaderMap,
 ) -> Result<impl IntoResponse, AppError> {
     tracing::debug!(date = ?query.date, "📜 GET / request received");
-    quests_handler(state, query.date).await
+    let tz = Timezone::from_headers(&headers);
+    quests_handler(state, query.date, tz.0).await
 }
 
 #[instrument(name = "📜 GET /day/:date", skip(state), fields(date = %date_str))]
@@ -96,9 +100,11 @@ pub async fn quests(
 pub async fn quests_with_date(
     State(state): State<AppState>,
     Path(date_str): Path<String>,
+    headers: HeaderMap,
 ) -> Result<impl IntoResponse, AppError> {
     tracing::debug!(date_str = %date_str, "GET /day/:date request received");
-    quests_handler(state, Some(date_str)).await
+    let tz = Timezone::from_headers(&headers);
+    quests_handler(state, Some(date_str), tz.0).await
 }
 
 /// Internal handler for loading quests
@@ -109,9 +115,10 @@ pub async fn quests_with_date(
 pub async fn quests_handler(
     state: AppState,
     date_str: Option<String>,
+    timezone: Option<String>,
 ) -> Result<impl IntoResponse, AppError> {
     let db = &state.db;
-    let today = time::today();
+    let today = time::today_with_timezone(timezone.as_deref());
 
     let selected_date = match &date_str {
         Some(date_str) => {
@@ -245,11 +252,13 @@ pub async fn quests_handler(
 /// Returns an error if database operation fails
 pub async fn toggle_quest(
     State(state): State<AppState>,
+    headers: HeaderMap,
     ReadSignals(request): ReadSignals<ToggleQuestRequest>,
 ) -> Result<Sse<impl Stream<Item = Result<Event, Infallible>>>, AppError> {
     let db = &state.db;
     let bcast = state.bcast.clone();
-    let today = time::today();
+    let tz = Timezone::from_headers(&headers);
+    let today = time::today_with_timezone(tz.as_deref());
     let quest_id = request.quest_id.as_i64();
 
     tracing::debug!(quest_id, "✨ Toggle quest request received");

@@ -1,10 +1,60 @@
-use chrono::{Datelike, NaiveDate, Utc, Weekday};
+use chrono::{Datelike, NaiveDate, NaiveDateTime, Utc, Weekday};
 
 #[cfg(debug_assertions)]
 use crate::config;
 
 thread_local! {
-    static FAKE_TODAY: std::cell::RefCell<Option<NaiveDate>> = const { std::cell::RefCell::new(None) };
+    static FAKE_TODAY: std::cell::RefCell<Option<NaiveDateTime>> = const { std::cell::RefCell::new(None) };
+}
+
+/// Returns the current date adjusted to the specified timezone.
+///
+/// This function provides timezone-aware date calculation:
+/// 1. **Test Override**: If [`set_today()`] was called (thread-local), returns that date
+/// 2. **Environment Variable**: If `QUEST_LOG_TODAY` is set (debug builds only)
+/// 3. **Timezone-Aware**: If a valid timezone is provided, returns the local date in that timezone
+/// 4. **UTC Fallback**: Returns UTC date if no timezone is provided or timezone is invalid
+///
+/// # Arguments
+///
+/// * `tz` - Optional IANA timezone string (e.g., `America/New_York`, `Asia/Tokyo`)
+///
+/// # Examples
+///
+/// ```
+/// use quest_log::time::today_with_timezone;
+///
+/// // With valid timezone
+/// let today = today_with_timezone(Some("America/New_York"));
+///
+/// // With None (defaults to UTC)
+/// let today_utc = today_with_timezone(None);
+/// ```
+#[must_use]
+pub fn today_with_timezone(tz: Option<&str>) -> NaiveDate {
+    if let Some(datetime) = FAKE_TODAY.with(|m| *m.borrow()) {
+        if let Some(tz_str) = tz
+            && let Ok(tz) = tz_str.parse::<chrono_tz::Tz>()
+        {
+            return datetime.and_utc().with_timezone(&tz).date_naive();
+        }
+        return datetime.date();
+    }
+
+    #[cfg(debug_assertions)]
+    {
+        if let Some(val) = config::today_override() {
+            return parse_today_override(&val);
+        }
+    }
+
+    if let Some(tz_str) = tz
+        && let Ok(tz) = tz_str.parse::<chrono_tz::Tz>()
+    {
+        return Utc::now().with_timezone(&tz).date_naive();
+    }
+
+    Utc::now().date_naive()
 }
 
 /// Returns the current date.
@@ -25,8 +75,8 @@ thread_local! {
 /// - Weekday name: `QUEST_LOG_TODAY=Monday`
 #[must_use]
 pub fn today() -> NaiveDate {
-    if let Some(date) = FAKE_TODAY.with(|m| *m.borrow()) {
-        return date;
+    if let Some(datetime) = FAKE_TODAY.with(|m| *m.borrow()) {
+        return datetime.date();
     }
 
     #[cfg(debug_assertions)]
@@ -80,7 +130,9 @@ fn parse_today_override(val: &str) -> NaiveDate {
 /// Override the current date for testing purposes.
 ///
 /// This function sets a thread-local variable that makes [`today()`] return
-/// the specified date instead of the real current date.
+/// the specified date instead of the real current date. The time component
+/// is set to the current UTC time to enable proper timezone conversion in
+/// [`today_with_timezone()`].
 ///
 /// # Why Thread-Locals Instead of Environment Variables?
 ///
@@ -106,10 +158,10 @@ fn parse_today_override(val: &str) -> NaiveDate {
 /// # Set to a specific date
 /// QUEST_LOG_TODAY=2024-01-01 cargo run
 ///
-/// # Set to a specific weekday (0 = Sunday, 1 = Monday, etc.)
+/// # Set to a specific weekday (0 = Sunday, 1=Monday, etc.)
 /// QUEST_LOG_TODAY=1 cargo run  # Forces Monday
 ///
-/// # Set to a weekday by name
+/// # Set a weekday by name
 /// QUEST_LOG_TODAY=Monday cargo run
 /// ```
 ///
@@ -118,10 +170,38 @@ fn parse_today_override(val: &str) -> NaiveDate {
 #[cfg(feature = "test-utils")]
 #[allow(dead_code, reason = "only used in tests")]
 pub fn set_today(date: NaiveDate) {
-    FAKE_TODAY.with(|m| *m.borrow_mut() = Some(date));
+    let now = Utc::now().naive_utc();
+    let datetime = date.and_time(now.time());
+    FAKE_TODAY.with(|m| *m.borrow_mut() = Some(datetime));
 }
 
-/// Reset the date override set by [`set_today()`].
+/// Set a specific UTC datetime for testing timezone-aware functions.
+///
+/// This function sets both the date AND time, allowing proper testing of
+/// [`today_with_timezone()`] where timezone offset can change the resulting date.
+///
+/// # Example
+///
+/// For testing when UTC is ahead but local timezone is behind:
+/// ```
+/// use chrono::{NaiveDate, Utc};
+/// use quest_log::time::{set_fake_datetime, reset_today};
+///
+/// // Jan 2nd 2026 02:00 UTC = Jan 1st 2026 21:00 NY (previous day in NY)
+/// let dt = NaiveDate::from_ymd_opt(2026, 1, 2)
+///     .unwrap()
+///     .and_hms_opt(2, 0, 0)
+///     .unwrap()
+///     .and_utc();
+/// set_fake_datetime(dt);
+/// ```
+#[cfg(feature = "test-utils")]
+#[allow(dead_code, reason = "only used in tests")]
+pub fn set_fake_datetime(datetime: chrono::DateTime<Utc>) {
+    FAKE_TODAY.with(|m| *m.borrow_mut() = Some(datetime.naive_utc()));
+}
+
+/// Reset the date override set by [`set_today()`] or [`set_fake_datetime()`].
 ///
 /// After calling this function, [`today()`] will return the real current date
 /// again.

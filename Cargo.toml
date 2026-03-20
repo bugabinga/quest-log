@@ -47,6 +47,7 @@ tokio = { version = "*", features = [
 tokio-stream = { version = "*", features = ["sync"] }
 static-serve = "*"
 chrono = { version = "*", features = ["serde"] }
+chrono-tz = "*"
 tracing = "*"
 tracing-subscriber = { version = "*", features = ["env-filter"] }
 tracing-error = "*"
