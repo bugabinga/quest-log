@@ -1,0 +1,15 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "lsp": {
+    "rust": {
+      "env": {
+        "RUST_LOG": "quest_log=trace",
+      },
+      "initialization": {
+        "cargo": {
+          "features": ["test-utils"],
+        },
+      },
+    },
+  },
+}

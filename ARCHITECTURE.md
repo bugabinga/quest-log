@@ -242,14 +242,21 @@ logging:
 
 ```bash
 # Debug (default)
-cargo x run
+cargo x serve
 
-# With trace logging
-cargo x run trace
+# With trace logging (enables SSE content logging)
+RUST_LOG=quest_log=trace cargo x serve
 
-# Or manually
-RUST_LOG=trace cargo run -- serve
+# Trace all crates
+RUST_LOG=trace cargo x serve
 ```
+
+### SSE Debugging
+
+When debugging Datastar UI issues, trace logging outputs all SSE events:
+
+- `📤 SSE event` - shows event type and structure at trace level
+- Enable with `RUST_LOG=quest_log=trace`
 
 ### Client-Side Logging
 
@@ -262,6 +269,7 @@ JavaScript uses `console.log`/`console.error` with prefixes:
 - `[Health]` - Health check polling
 - `[JS]` - Uncaught errors
 - `[Celebration]` - Weekly Champion celebration triggers
+- `[Datastar]` - Datastar framework errors (includes GenerateExpression errors)
 
 ### Best Practices
 

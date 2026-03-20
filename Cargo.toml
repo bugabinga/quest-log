@@ -73,6 +73,7 @@ nix = { version = "*" }
 libc = { version = "*" }
 
 [build-dependencies]
+glob = "*"
 
 [profile.dev.package."*"]
 opt-level = 3

@@ -12,6 +12,22 @@ import {
 } from "./datastar.js";
 
 // ============================================================================
+// SECTION 0: Datastar Error Interceptor (runs immediately)
+// ============================================================================
+// Global error handler for Datastar - catches and logs all Datastar errors
+// including GenerateExpression errors which are otherwise hard to debug.
+document.addEventListener("datastar-fetch", (e) => {
+  const detail = e.detail;
+  if (detail?.argsRaw) {
+    if (detail.argsRaw.error) {
+      console.error("[Datastar]", detail.type, detail.argsRaw.error);
+    } else if (detail.argsRaw.message) {
+      console.error("[Datastar]", detail.type, detail.argsRaw);
+    }
+  }
+});
+
+// ============================================================================
 // SECTION 1: Timezone Header (runs immediately)
 // ============================================================================
 // Monkey-patch fetch to add X-Timezone header to all requests.
