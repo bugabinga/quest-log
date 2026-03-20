@@ -1,12 +1,5 @@
 //! HTTP handlers for the Quest Log application
 
-pub mod bounty;
-pub mod editor;
-pub mod events;
-pub mod navigate;
-pub mod quests;
-pub mod stats;
-
 use axum::body::Body;
 use axum::http::{Response, StatusCode};
 use axum::response::Html;
@@ -22,6 +15,13 @@ pub enum ServerMessage {
     /// Signals to update client-side state
     Signals(String, Option<String>),
 }
+
+pub mod bounty;
+pub mod editor;
+pub mod events;
+pub mod navigate;
+pub mod quests;
+pub mod stats;
 
 /// Application errors that can occur during request handling
 #[derive(Debug, thiserror::Error)]

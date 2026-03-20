@@ -1,5 +1,12 @@
 //! Adds build options, that Cargo.toml cannot
+#[allow(
+    clippy::unwrap_used,
+    reason = "Build scripts cannot propagate errors, they just fail"
+)]
 fn main() {
-    // Add static/ to watched dirs in cargo watch
-    println!("cargo:rerun-if-changed=static/");
+    for entry in glob::glob("static/**/*").unwrap().flatten() {
+        if entry.is_file() {
+            println!("cargo:rerun-if-changed={}", entry.display());
+        }
+    }
 }
