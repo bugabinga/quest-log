@@ -21,16 +21,7 @@ use crate::ui;
 use crate::ui::fragments::toggle::QuestDisplay;
 use tracing::instrument;
 
-macro_rules! sse_response {
-    ($events:expr) => {{
-        for event in &$events {
-            tracing::trace!(?event, "📤 SSE event");
-        }
-        axum::response::sse::Sse::new(futures::stream::iter(
-            $events.into_iter().map(Ok::<_, std::convert::Infallible>),
-        ))
-    }};
-}
+use crate::sse_response;
 
 use super::ServerMessage;
 

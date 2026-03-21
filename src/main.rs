@@ -7,6 +7,7 @@ mod database;
 mod extractors;
 mod handlers;
 mod models;
+mod sse;
 mod state;
 mod systemd;
 mod time;

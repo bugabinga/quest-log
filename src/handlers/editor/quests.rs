@@ -12,11 +12,12 @@ use axum::{
 use datastar::axum::ReadSignals;
 use datastar::patch_elements::PatchElements;
 use datastar::patch_signals::PatchSignals;
-use futures::stream::{self, Stream};
+use futures::Stream;
 
 use crate::database::SetOrRemove;
 use crate::handlers::AppError;
 use crate::models::{CreateQuestRequest, FileUpload, QuestJsonRequest, UpdateQuestRequest};
+use crate::sse_response;
 use crate::state::AppState;
 
 use super::auth::extract_and_validate_session;
@@ -176,9 +177,7 @@ pub async fn create_quest_handler(
         PatchSignals::new(signals).into(),
     ];
 
-    Ok(Sse::new(stream::iter(
-        events.into_iter().map(Ok::<_, std::convert::Infallible>),
-    )))
+    Ok(sse_response!(events))
 }
 
 /// Delete a quest
@@ -221,7 +220,7 @@ pub async fn delete_quest_handler(
         PatchSignals::new(signals.to_string()).into(),
     ];
 
-    Ok(Sse::new(stream::iter(events.into_iter().map(Ok))))
+    Ok(sse_response!(events))
 }
 
 /// Get all quests as JSON (for tab loading)
@@ -273,7 +272,7 @@ pub async fn edit_quest_handler(
     });
 
     let events: Vec<Event> = vec![PatchSignals::new(signals.to_string()).into()];
-    Ok(Sse::new(stream::iter(events.into_iter().map(Ok))))
+    Ok(sse_response!(events))
 }
 
 /// Update a quest
@@ -347,5 +346,5 @@ pub async fn update_quest_handler(
         PatchSignals::new(signals).into(),
     ];
 
-    Ok(Sse::new(stream::iter(events.into_iter().map(Ok))))
+    Ok(sse_response!(events))
 }

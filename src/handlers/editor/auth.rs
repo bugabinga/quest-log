@@ -12,13 +12,14 @@ use axum::{
 use chrono::Utc;
 use datastar::patch_elements::PatchElements;
 use datastar::patch_signals::PatchSignals;
-use futures::stream::{self, Stream};
+use futures::Stream;
 use serde::Deserialize;
 use tracing::{debug, error, info, warn};
 
 use crate::auth;
 use crate::handlers::AppError;
 use crate::models::Settings;
+use crate::sse_response;
 use crate::state::AppState;
 use crate::ui;
 
@@ -183,10 +184,7 @@ pub async fn login_handler(
 
         let events: Vec<Event> = vec![PatchSignals::new(signals.to_string()).into()];
         let response_headers = HeaderMap::new();
-        return Ok((
-            response_headers,
-            Sse::new(stream::iter(events.into_iter().map(Ok))),
-        ));
+        return Ok((response_headers, sse_response!(events)));
     }
 
     let password_hash = auth::get_password_hash_or_default();
@@ -205,10 +203,7 @@ pub async fn login_handler(
 
         let events: Vec<Event> = vec![PatchSignals::new(signals.to_string()).into()];
         let response_headers = HeaderMap::new();
-        return Ok((
-            response_headers,
-            Sse::new(stream::iter(events.into_iter().map(Ok))),
-        ));
+        return Ok((response_headers, sse_response!(events)));
     }
 
     state.login_rate_limiter.clear_attempts(&client_ip).await;
@@ -250,10 +245,7 @@ pub async fn login_handler(
     });
     response_headers.insert(SET_COOKIE, cookie_header_value);
 
-    Ok((
-        response_headers,
-        Sse::new(stream::iter(events.into_iter().map(Ok))),
-    ))
+    Ok((response_headers, sse_response!(events)))
 }
 
 /// Logout handler
@@ -295,5 +287,5 @@ pub async fn logout_handler(
         PatchSignals::new(signals.to_string()).into(),
     ];
 
-    Ok(Sse::new(stream::iter(events.into_iter().map(Ok))))
+    Ok(sse_response!(events))
 }

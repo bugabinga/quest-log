@@ -12,11 +12,12 @@ use axum::{
 use datastar::axum::ReadSignals;
 use datastar::patch_elements::PatchElements;
 use datastar::patch_signals::PatchSignals;
-use futures::stream::{self, Stream};
+use futures::Stream;
 
 use crate::database::SetOrRemove;
 use crate::handlers::AppError;
 use crate::models::{CreateRewardRequest, FileUpload, RewardJsonRequest, UpdateRewardRequest};
+use crate::sse_response;
 use crate::state::AppState;
 
 use super::auth::extract_and_validate_session;
@@ -158,7 +159,7 @@ pub async fn create_reward_handler(
         PatchSignals::new(signals).into(),
     ];
 
-    Ok(Sse::new(stream::iter(events.into_iter().map(Ok))))
+    Ok(sse_response!(events))
 }
 
 /// Delete a reward
@@ -201,7 +202,7 @@ pub async fn delete_reward_handler(
         PatchSignals::new(signals.to_string()).into(),
     ];
 
-    Ok(Sse::new(stream::iter(events.into_iter().map(Ok))))
+    Ok(sse_response!(events))
 }
 
 /// Get all rewards as JSON
@@ -252,7 +253,7 @@ pub async fn edit_reward_handler(
     });
 
     let events: Vec<Event> = vec![PatchSignals::new(signals.to_string()).into()];
-    Ok(Sse::new(stream::iter(events.into_iter().map(Ok))))
+    Ok(sse_response!(events))
 }
 
 /// Update a reward
@@ -324,5 +325,5 @@ pub async fn update_reward_handler(
         PatchSignals::new(signals).into(),
     ];
 
-    Ok(Sse::new(stream::iter(events.into_iter().map(Ok))))
+    Ok(sse_response!(events))
 }

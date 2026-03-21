@@ -10,6 +10,8 @@ pub mod extractors;
 pub mod handlers;
 /// Data models and DTOs for quests, rewards, and settings.
 pub mod models;
+/// SSE response utilities.
+pub mod sse;
 /// Application state shared across handlers.
 pub mod state;
 /// Time utilities for date handling.

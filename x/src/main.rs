@@ -201,7 +201,11 @@ fn lint() -> Result<()> {
     ])?;
 
     ensure_deno()?;
-    run_cmd("deno", &["lint", "static/js/"])
+    run_cmd("deno", &["lint", "static/js/"])?;
+
+    check_sse_macro_usage()?;
+
+    Ok(())
 }
 
 fn check() -> Result<()> {
@@ -586,6 +590,32 @@ fn check_clean() -> Result<()> {
     if !output.stdout.is_empty() {
         bail!("Working directory is dirty. Commit or stash changes before release.");
     }
+    Ok(())
+}
+
+fn check_sse_macro_usage() -> Result<()> {
+    let patterns = ["Sse::new(stream::iter", "Sse::new(futures::stream::iter"];
+
+    for entry in walkdir::WalkDir::new("src/handlers")
+        .into_iter()
+        .filter_map(|e| e.ok())
+        .filter(|e| e.path().extension().is_some_and(|ext| ext == "rs"))
+    {
+        let content = std::fs::read_to_string(entry.path())?;
+        for pattern in &patterns {
+            if content.contains(pattern) {
+                bail!(
+                    "Found manual SSE construction in {}.\n\
+                     Pattern: '{}'\n\
+                     Use `sse_response!(events)` macro instead.\n\
+                     See src/sse.rs for documentation.",
+                    entry.path().display(),
+                    pattern
+                );
+            }
+        }
+    }
+
     Ok(())
 }
 

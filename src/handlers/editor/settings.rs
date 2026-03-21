@@ -8,10 +8,11 @@ use axum::{
     response::sse::{Event, Sse},
 };
 use datastar::patch_signals::PatchSignals;
-use futures::stream::{self, Stream};
+use futures::Stream;
 
 use crate::handlers::AppError;
 use crate::models::UpdateSettingsRequest;
+use crate::sse_response;
 use crate::state::AppState;
 
 use super::auth::extract_and_validate_session;
@@ -60,5 +61,5 @@ pub async fn update_settings_handler(
 
     let events: Vec<Event> = vec![PatchSignals::new(signals.to_string()).into()];
 
-    Ok(Sse::new(stream::iter(events.into_iter().map(Ok))))
+    Ok(sse_response!(events))
 }

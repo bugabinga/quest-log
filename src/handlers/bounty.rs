@@ -14,6 +14,7 @@ use serde::Deserialize;
 use crate::extractors::Timezone;
 use crate::handlers::AppError;
 use crate::models::ClaimState;
+use crate::sse_response;
 use crate::state::AppState;
 use crate::time;
 use crate::ui;
@@ -177,6 +178,5 @@ pub async fn claim_reward(
         datastar::patch_signals::PatchSignals::new(signals_json.to_string()).into(),
     ];
 
-    let stream = futures::stream::iter(events.into_iter().map(Ok));
-    Ok(Sse::new(stream))
+    Ok(sse_response!(events))
 }

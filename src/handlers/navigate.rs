@@ -7,12 +7,13 @@ use chrono::{Datelike, NaiveDate};
 use datastar::execute_script::ExecuteScript;
 use datastar::patch_elements::PatchElements;
 use datastar::patch_signals::PatchSignals;
-use futures::stream::{self, Stream};
+use futures::Stream;
 use serde::Deserialize;
 use std::convert::Infallible;
 
 use crate::extractors::Timezone;
 use crate::handlers::AppError;
+use crate::sse_response;
 use crate::state::AppState;
 use crate::time;
 use crate::ui::fragments::day_header::day_header;
@@ -191,6 +192,5 @@ pub async fn navigate(
         ExecuteScript::new(history_script).into(),
     ];
 
-    let stream = stream::iter(events.into_iter().map(Ok));
-    Ok(Sse::new(stream))
+    Ok(sse_response!(events))
 }
