@@ -5,11 +5,7 @@
 // Order matters: early-execution code first, then event-driven code.
 // ============================================================================
 
-import {
-  filtered as _filtered,
-  mergePatch,
-  root as _root,
-} from "../vendor/datastar.js";
+import { mergePatch } from "../vendor/datastar.js";
 
 // ============================================================================
 // SECTION 0: Datastar Error Interceptor (runs immediately)
