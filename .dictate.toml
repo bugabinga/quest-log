@@ -1,0 +1,46 @@
+# Dictator Configuration
+# Decree-based structural enforcement for code quality
+
+[decree.ignore]
+extensions = ["png", "mp4", "woff2"]
+
+[decree.supreme]
+# Universal structural rules (applies to ALL files unless overridden)
+trailing_whitespace = "deny"
+tabs_vs_spaces = "spaces"
+tab_width = 2
+final_newline = "require"
+line_endings = "lf"
+blank_line_whitespace = "deny"
+# max_line_length: opt-in per language (uncomment to enforce globally)
+
+# Per-rule ignores (decree-level, not language-level)
+# - Markdown can contain tabs inside code blocks
+[decree.supreme.ignore.tab-character]
+extensions = ["md", "mdx"]
+
+[decree.typescript]
+# TypeScript/JavaScript structural enforcement
+max_line_length = 100
+max_lines = 1200
+ignore_comments = true
+ignore_blank_lines = true
+import_order = ["system", "external", "internal"]
+
+[decree.rust]
+tab_width = 4
+max_line_length = 120
+max_lines = 1200
+ignore_comments = true
+ignore_blank_lines = true
+visibility_order = ["pub", "private"]
+
+# this does nothing currently. dictator cannot find clippy for some reason
+[decree.rust.linter]
+command = "clippy"
+
+[decree.frontmatter]
+# YAML frontmatter ordering for .md and .mdx files only
+# Does NOT handle: .astro (JS/TS frontmatter), .yml/.yaml, .toml
+order = ["author", "date", "status", "tags"]
+required = ["author", "date", "status", "tags"]

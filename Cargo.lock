@@ -4731,6 +4731,7 @@ dependencies = [
  "regex",
  "reqwest",
  "tokio",
+ "walkdir",
 ]
 
 [[package]]
