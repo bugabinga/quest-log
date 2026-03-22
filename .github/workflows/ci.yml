@@ -16,6 +16,8 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
+      - name: Install dictator
+        run: cargo install dictator
       - run: |
           cargo x check
           cargo x lint

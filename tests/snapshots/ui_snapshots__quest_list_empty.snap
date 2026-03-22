@@ -1,0 +1,5 @@
+---
+source: tests/ui_snapshots.rs
+expression: html
+---
+<div class="quests-list" id="quest-list" style="view-transition-name: quest-list;"><p class="no-quests">Your parent forgot to assign quests for this day! Time to create some adventures! 🎮</p></div>

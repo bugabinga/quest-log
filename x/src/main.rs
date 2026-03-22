@@ -185,10 +185,22 @@ fn fmt(args: &[String]) -> Result<()> {
     deno_args.push("static/");
     ensure_deno()?;
     deno_args.extend(args.iter().map(|s| s.as_str()));
-    run_cmd("deno", &deno_args)
+    run_cmd("deno", &deno_args)?;
+
+    ensure_dictator()?;
+    run_cmd(
+        "dictator",
+        &["dictate", "src/", "x/src/", "tests/", "static/js/"],
+    )
 }
 
 fn lint() -> Result<()> {
+    ensure_dictator()?;
+    run_cmd(
+        "dictator",
+        &["lint", "src/", "x/src/", "tests/", "static/js/"],
+    )?;
+
     run_cargo(&["fmt", "--check"])?;
 
     run_cargo(&[
@@ -442,7 +454,7 @@ fn bundle(command: BundleCommands) -> Result<()> {
 }
 
 fn bundle_datastar(version: &str) -> Result<()> {
-    std::fs::create_dir_all("static/js")?;
+    std::fs::create_dir_all("static/vendor")?;
 
     let runtime = tokio::runtime::Builder::new_current_thread()
         .enable_all()
@@ -455,19 +467,11 @@ fn bundle_datastar(version: &str) -> Result<()> {
             "https://cdn.jsdelivr.net/gh/starfederation/datastar@{}/bundles/datastar.js",
             version
         );
-        let map_url = format!(
-            "https://cdn.jsdelivr.net/gh/starfederation/datastar@{}/bundles/datastar.js.map",
-            version
-        );
 
-        let (js_result, map_result) =
-            tokio::join!(client.get(&js_url).send(), client.get(&map_url).send());
+        let js_result = client.get(&js_url).send().await?;
+        let js_content = js_result.bytes().await?;
 
-        let js_content = js_result?.bytes().await?;
-        std::fs::write("static/js/datastar.js", &js_content)?;
-
-        let map_content = map_result?.bytes().await?;
-        std::fs::write("static/js/datastar.js.map", &map_content)?;
+        std::fs::write("static/vendor/datastar.js", &js_content)?;
 
         Ok::<(), anyhow::Error>(())
     })
@@ -548,12 +552,7 @@ fn validate_commit_msg(file_path: &str) -> Result<()> {
              Expected: <type>(<scope>)<!>: <subject>\n\
                - Type: feat, fix, docs, style, refactor, test, chore, perf, revert\n\
                - Add ! before : for breaking changes\n\n\
-             Examples:\n\
-               feat(auth): add login button\n\
-               fix(ui): resolve padding issue\n\
-               feat(api)!: remove v1 endpoint\n\n\
-             Your commit:\n\
-             {}",
+             Examples:\n               feat(auth): add login button\n               fix(ui): resolve padding issue\n               feat(api)!: remove v1 endpoint\n\n             Your commit:\n             {}",
             first_line
         );
     }
@@ -577,6 +576,18 @@ fn ensure_deno() -> Result<()> {
 
     if !output.status.success() {
         bail!("deno not installed. Install: curl -fsSL https://deno.land/install.sh | sh");
+    }
+    Ok(())
+}
+
+fn ensure_dictator() -> Result<()> {
+    let output = Command::new("dictator")
+        .arg("--version")
+        .output()
+        .context("dictator not found")?;
+
+    if !output.status.success() {
+        bail!("dictator not installed. Install: cargo install dictator");
     }
     Ok(())
 }

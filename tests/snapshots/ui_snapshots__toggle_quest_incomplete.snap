@@ -1,0 +1,5 @@
+---
+source: tests/ui_snapshots.rs
+expression: html
+---
+<div class="quest-item" id="quest-1" data-quest-id="1" style="view-transition-name: quest-1;" data-view-transition="quest-morph"><div class="quest-content"><h3>Defeat the Dragon</h3><p>Venture into the volcanic mountains and defeat the ancient dragon</p><span class="exp-value">100 EXP</span></div><div class="quest-actions"><button class="toggle-btn" type="button" data-on:click__prevent="@post('/quests/toggle', { payload: { quest_id: 1 } })">⚔️ Mark Complete</button></div></div>

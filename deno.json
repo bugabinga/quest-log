@@ -11,10 +11,10 @@
     "lib": ["deno.window", "dom"]
   },
   "lint": {
-    "exclude": ["static/js/datastar.js"]
+    "exclude": ["static/vendor/datastar.js"]
   },
   "fmt": {
-    "exclude": ["static/js/datastar.js"]
+    "exclude": ["static/vendor/datastar.js"]
   },
   "tasks": {
     "test:e2e": "deno test --allow-all tests/e2e/"

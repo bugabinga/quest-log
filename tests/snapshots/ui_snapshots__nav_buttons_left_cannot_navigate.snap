@@ -1,0 +1,5 @@
+---
+source: tests/ui_snapshots.rs
+expression: html
+---
+<button class="nav-btn left" id="nav-left" aria-label="Previous Day"></button>

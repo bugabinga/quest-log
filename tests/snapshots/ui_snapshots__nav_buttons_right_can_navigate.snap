@@ -1,0 +1,5 @@
+---
+source: tests/ui_snapshots.rs
+expression: html
+---
+<button class="nav-btn right" id="nav-right" aria-label="Next Day" data-on:click="@get('/navigate/2026-03-22', { headers: { 'X-Navigate-Dir': 'next' } })"></button>

@@ -9,3 +9,5 @@ A collection of session reflections documenting our work on quest-log.
 | 0001 | 2026-03-15 | Session cleanup and refactoring      |
 | 0002 | 2026-03-19 | Datastar/Maud curly brace syntax fix |
 | 0003 | 2026-03-20 | Editor JS error fix                  |
+| 0004 | 2026-03-21 | Workspace WASM decree integration    |
+| 0005 | 2026-03-22 | Dictator integration into cargo x    |

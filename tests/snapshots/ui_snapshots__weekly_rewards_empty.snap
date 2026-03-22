@@ -1,0 +1,5 @@
+---
+source: tests/ui_snapshots.rs
+expression: html
+---
+<details class="weekly-rewards" id="weekly-rewards" data-attr:open="$weeklyRewardsOpen ? 'true' : ''"><summary class="rewards-summary" data-on:click__prevent="$weeklyRewardsOpen = !$weeklyRewardsOpen"><span class="rewards-icon">🏆</span><span class="rewards-title">Weekly Rewards</span><span class="rewards-exp">0 EXP</span></summary><div class="rewards-list"></div></details>

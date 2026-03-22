@@ -109,7 +109,7 @@ Static assets (generated from `assets/` via `cargo x assets`):
 - `js/app.js` - Consolidated application JavaScript (SSE, UI interactions, death
   screen)
 - `js/editor.js` - Editor-specific JavaScript (tab switching, form handling)
-- `js/datastar.js` - Datastar library for reactive UI
+- `vendor/datastar.js` - Datastar library for reactive UI
 - `style.css` - All styles including death screen overlay
 - `images/`, `video/`, `fonts/`
 - `manifest.json` - PWA manifest
@@ -179,7 +179,7 @@ Consolidated application JavaScript (all in one file for simplicity):
 - Weekly Champion celebration (achievement banner, golden pulse, badge)
 - localStorage tracking to prevent celebration replay on refresh
 
-### `static/js/datastar.js`
+### `static/vendor/datastar.js`
 
 External library (~50KB) for reactive DOM updates. We use a small subset of its
 features.

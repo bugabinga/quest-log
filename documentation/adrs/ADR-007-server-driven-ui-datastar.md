@@ -157,7 +157,7 @@ We chose **Datastar with SSE** for server-driven UI:
 
 **Client-side**:
 
-- `static/js/datastar.js` - Datastar library (~50KB)
+- `static/vendor/datastar.js` - Datastar library (~50KB)
 - `static/js/app.js` - Minimal JS for SSE connection, death screen, UI effects
 
 ### Code Example

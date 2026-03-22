@@ -1,0 +1,5 @@
+---
+source: tests/ui_snapshots.rs
+expression: html
+---
+<div class="day-info" id="day-info"><h2 class="day-title">Monday</h2><p class="day-date">March 21, 2026</p></div>

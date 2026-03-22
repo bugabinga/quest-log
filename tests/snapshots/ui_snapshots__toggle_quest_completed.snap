@@ -1,0 +1,5 @@
+---
+source: tests/ui_snapshots.rs
+expression: html
+---
+<div class="quest-item completed" id="quest-2" data-quest-id="2" style="view-transition-name: quest-2;" data-view-transition="quest-morph"><div class="quest-content"><h3>Complete the Tutorial</h3><p>Learn the basics of quest management</p><span class="exp-value">50 EXP</span></div><div class="quest-actions"><button class="toggle-btn completed" type="button" data-on:click__prevent="@post('/quests/toggle', { payload: { quest_id: 2 } })">✅ Quest Complete</button></div></div>

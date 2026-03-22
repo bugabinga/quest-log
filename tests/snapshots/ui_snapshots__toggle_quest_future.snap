@@ -1,0 +1,5 @@
+---
+source: tests/ui_snapshots.rs
+expression: html
+---
+<div class="quest-item future" id="quest-4" data-quest-id="4" style="view-transition-name: quest-4;" data-view-transition="quest-morph"><div class="quest-content"><h3>Explore the New Dungeon</h3><p>Chart the unknown territories beyond the western ridge</p><span class="exp-value">200 EXP</span></div><div class="quest-actions"><div class="completion-status quest-status--future">🗺️ Adventure Awaits</div></div></div>

@@ -9,7 +9,7 @@ import {
   filtered as _filtered,
   mergePatch,
   root as _root,
-} from "./datastar.js";
+} from "../vendor/datastar.js";
 
 // ============================================================================
 // SECTION 0: Datastar Error Interceptor (runs immediately)
@@ -689,14 +689,22 @@ function _parseSseData(data) {
     };
   }
 
-  document.addEventListener("DOMContentLoaded", function () {
+  function initApp() {
     connect();
     // Start proactive health check to detect server death even if EventSource doesn't fire onerror
     startProactiveHealthCheck();
     // Initialize video modal and quest UI
     initVideoModal();
     initQuestUI();
-  });
+  }
+
+  // Handle both cases: DOMContentLoaded already fired or not yet
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", initApp);
+  } else {
+    // DOMContentLoaded has already fired, initialize immediately
+    initApp();
+  }
 
   document.addEventListener("visibilitychange", function () {
     if (

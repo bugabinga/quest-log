@@ -1,0 +1,5 @@
+---
+source: tests/ui_snapshots.rs
+expression: html
+---
+<div class="quest-item past" id="quest-3" data-quest-id="3" style="view-transition-name: quest-3;" data-view-transition="quest-morph"><div class="quest-content"><h3>Recover the Lost Artifact</h3><p>Find the ancient relic in the abandoned temple</p><span class="exp-value">150 EXP</span></div><div class="quest-actions"><div class="completion-status quest-status--past">💀 Quest Failed</div></div></div>

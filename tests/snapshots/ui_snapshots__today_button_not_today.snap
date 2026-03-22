@@ -1,0 +1,5 @@
+---
+source: tests/ui_snapshots.rs
+expression: html
+---
+<div class="today-button" id="today-btn-container"><button class="today-btn" data-on:click="@get('/navigate/today')">🏰 Return to Today</button></div>

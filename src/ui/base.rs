@@ -51,13 +51,14 @@ pub fn base_page(data: &PageData) -> maud::Markup {
                 link rel="manifest" href="/manifest.json";
                 link rel="icon" href="/favicon.png" type="image/png";
                 link rel="stylesheet" href="/style.css";
-                script type="module" src="/js/datastar.js" {}
+                script type="module" src="/vendor/datastar.js" {}
                 script type="module" src="/js/app.js" {}
                 @if let Some(ref extra_scripts) = data.extra_scripts {
                     (PreEscaped(extra_scripts))
                 }
             }
             body data-weekday=(data.weekday.map(|w| w.to_string()).unwrap_or_default().as_str()) {
+                a class="skip-link" href="#main-content" { "Skip to main content" }
                 @if data.show_nav {
                     div id="video-modal" class="video-modal" style="display: none;" {
                         div class="video-overlay" {}
@@ -96,7 +97,7 @@ pub fn base_page(data: &PageData) -> maud::Markup {
                 }
 
                 div id="app" {
-                    div class="container" {
+                    div id="main-content" class="container" {
                         @if let Some(ref signals) = data.signals {
                             div data-signals=(PreEscaped(escape_for_html_attr(signals))) {}
                         }
