@@ -24,7 +24,7 @@ use sqlx::SqlitePool;
 /// This test verifies the "Weekly Champions" achievement tracking feature:
 ///
 /// 1. Creates rewards with different EXP requirements
-/// 2. Completes quests to earn enough EXP to claim all rewards  
+/// 2. Completes quests to earn enough EXP to claim all rewards
 /// 3. Claims all rewards on Sunday (when claiming is allowed)
 /// 4. Verifies the handler should return signals including `allRewardsClaimed: true`
 ///
