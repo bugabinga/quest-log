@@ -17,6 +17,8 @@ This directory contains ADRs documenting significant architectural decisions.
 | 009 | Editor Authentication Strategy                       | Accepted |
 | 010 | Graceful Shutdown Pattern (Death Screen)             | Accepted |
 | 011 | Systemd Integration for Linux Deployments            | Accepted |
+| 012 | Snapshot Testing for UI Templates                    | Accepted |
+| 013 | PGO-Optimized Container Builds                       | Proposed |
 
 ## What is an ADR?
 

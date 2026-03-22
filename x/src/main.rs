@@ -641,10 +641,10 @@ fn browser(headed: bool) -> Result<()> {
     let status = Command::new("deno")
         .args(&args)
         .status()
-        .context("Failed to run playwright tests")?;
+        .context("Failed to run browser tests")?;
 
     if !status.success() {
-        bail!("Playwright tests failed");
+        bail!("Browser tests failed");
     }
     Ok(())
 }

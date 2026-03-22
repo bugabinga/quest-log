@@ -116,7 +116,7 @@ single CLI entry point. All development commands go through `cargo x <command>`.
 | `cargo x bundle datastar [version]`    | Bundle datastar JS from CDN                                |
 | `cargo x assets`                       | Generate optimized images (favicons, icons)                |
 | `cargo x commit validate <file>`       | Validate commit message format                             |
-| `cargo x browser [--headed]`           | Run Playwright E2E tests                                   |
+| `cargo x browser [--headed]`           | Run Puppeteer E2E tests                                    |
 
 ### Implementation Details
 
