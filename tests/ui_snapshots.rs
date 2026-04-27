@@ -1,3 +1,8 @@
+#![allow(
+    clippy::tests_outside_test_module,
+    reason = "tests/ files are test crates by definition; the lint targets src/ only"
+)]
+
 //! Snapshot tests for Maud UI templates.
 //!
 //! Purpose: Help agents predict HTML output of Maud templates.

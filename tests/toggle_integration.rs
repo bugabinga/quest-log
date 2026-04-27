@@ -10,8 +10,8 @@ use axum::{
     http::{Method, Request, StatusCode},
     routing::{get, post},
 };
-use chrono::{Datelike, Utc};
-use quest_log::{database::Database, handlers, models::*, state::AppState};
+use chrono::{Datelike, NaiveDate, Utc};
+use quest_log::{database::Database, handlers, models::*, state::AppState, time};
 
 use sqlx::SqlitePool;
 use tokio::sync::broadcast;
@@ -170,6 +170,10 @@ async fn test_toggle_invalid_quest_id() {
 
 #[tokio::test]
 async fn test_toggle_wrong_day() {
+    // Pin to Wednesday so the Monday quest is always on the wrong day
+    let wednesday = NaiveDate::from_ymd_opt(2026, 3, 18).unwrap();
+    time::set_today(wednesday);
+
     let pool = SqlitePool::connect("sqlite::memory:")
         .await
         .expect("Failed to create in-memory database");
