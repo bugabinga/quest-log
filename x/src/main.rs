@@ -552,7 +552,12 @@ fn validate_commit_msg(file_path: &str) -> Result<()> {
              Expected: <type>(<scope>)<!>: <subject>\n\
                - Type: feat, fix, docs, style, refactor, test, chore, perf, revert\n\
                - Add ! before : for breaking changes\n\n\
-             Examples:\n               feat(auth): add login button\n               fix(ui): resolve padding issue\n               feat(api)!: remove v1 endpoint\n\n             Your commit:\n             {}",
+             Examples:\n\
+               feat(auth): add login button\n\
+               fix(ui): resolve padding issue\n\
+               feat(api)!: remove v1 endpoint\n\
+\n\
+             Your commit:\n             {}",
             first_line
         );
     }

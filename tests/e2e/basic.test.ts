@@ -1,5 +1,5 @@
-import { launchBrowser, newPage } from "./browser.ts";
 import { assertEquals } from "@std/assert";
+import { launchBrowser, newPage } from "./browser.ts";
 
 Deno.test("Basic Smoke Test", async () => {
   const browser = await launchBrowser();

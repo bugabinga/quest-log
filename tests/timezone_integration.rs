@@ -513,7 +513,14 @@ async fn test_navigate_respects_timezone_header() {
                 .uri("/quests/toggle")
                 .header("Content-Type", "application/json")
                 .header("X-Timezone", "Europe/Berlin")
-                .body(Body::from(r#"{"quest_id":"#.chars().chain(saturday_quest.id.to_string().chars()).chain("}".chars()).collect::<String>()))
+                .body({
+                    let body = r#"{"quest_id":"#
+                        .chars()
+                        .chain(saturday_quest.id.to_string().chars())
+                        .chain("}".chars())
+                        .collect::<String>();
+                    Body::from(body)
+                })
                 .unwrap(),
         )
         .await

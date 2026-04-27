@@ -244,11 +244,18 @@ async fn main() {
                             tokio_listener
                         }
                         Err(e) => {
-                            tracing::error!(error = %e, "💥 Failed to use socket-activated fd - falling back to bind");
+                            tracing::error!(
+                                error = %e,
+                                "💥 Failed to use socket-activated fd - falling back to bind"
+                            );
                             match tokio::net::TcpListener::bind(addr).await {
                                 Ok(l) => l,
                                 Err(e) => {
-                                    tracing::error!(error = %e, port = %port, "💥 Failed to bind to port - address may be in use");
+                                    tracing::error!(
+                                        error = %e,
+                                        port = %port,
+                                        "💥 Failed to bind to port - address may be in use"
+                                    );
                                     return;
                                 }
                             }
@@ -260,7 +267,11 @@ async fn main() {
                 match tokio::net::TcpListener::bind(addr).await {
                     Ok(l) => l,
                     Err(e) => {
-                        tracing::error!(error = %e, port = %port, "💥 Failed to bind to port - address may be in use");
+                        tracing::error!(
+                            error = %e,
+                            port = %port,
+                            "💥 Failed to bind to port - address may be in use"
+                        );
                         return;
                     }
                 }

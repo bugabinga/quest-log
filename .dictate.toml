@@ -19,6 +19,13 @@ blank_line_whitespace = "deny"
 [decree.supreme.ignore.tab-character]
 extensions = ["md", "mdx"]
 
+# Ignore line-too-long for Rust files — Maud HTML DSLs and macro-heavy code
+# routinely produce lines that exceed 120 chars due to Tailwind class
+# concatenation and data-binding attribute chains. This is a category error
+# for DSLs; we rely on rustfmt for structural formatting instead.
+[decree.rust.ignore.line-too-long]
+extensions = ["rs"]
+
 [decree.typescript]
 # TypeScript/JavaScript structural enforcement
 max_line_length = 100

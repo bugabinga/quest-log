@@ -546,8 +546,23 @@ function _parseSseData(data) {
     console.log("[SSE] 🎭 Creating shutdown overlay...");
     const overlay = document.createElement("div");
     overlay.id = "shutdown-overlay";
-    overlay.innerHTML =
-      '<div class="realm-shutdown"><div class="realm-content"><h1>⚔️ THE REALM REBIRTHS ⚔️</h1><span class="skull-icon">💀</span><p>The Quest Log realm is undergoing mystical regeneration...</p><p class="sub-message">Thy progress is safe. Return shortly, brave adventurer.</p><div class="progress-bar"><div class="progress-bar-fill"></div></div><div class="retry-dots"><div class="retry-dot"></div><div class="retry-dot"></div><div class="retry-dot"></div></div><p class="tip">Waiting for realm to revive...</p></div></div>';
+    overlay.innerHTML = `<div class="realm-shutdown">
+      <div class="realm-content">
+        <h1>⚔️ THE REALM REBIRTHS ⚔️</h1>
+        <span class="skull-icon">💀</span>
+        <p>The Quest Log realm is undergoing mystical regeneration...</p>
+        <p class="sub-message">Thy progress is safe. Return shortly, brave adventurer.</p>
+        <div class="progress-bar">
+          <div class="progress-bar-fill"></div>
+        </div>
+        <div class="retry-dots">
+          <div class="retry-dot"></div>
+          <div class="retry-dot"></div>
+          <div class="retry-dot"></div>
+        </div>
+        <p class="tip">Waiting for realm to revive...</p>
+      </div>
+    </div>`;
     document.body.appendChild(overlay);
     shutdownOverlay = overlay;
     console.log("[SSE] 🎭 Overlay created and added to DOM");

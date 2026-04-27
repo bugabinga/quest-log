@@ -477,9 +477,9 @@ async fn bench_quest_vs_bounty_comparison() {
 /// Summary test that prints all results
 #[tokio::test]
 async fn bench_summary() {
-    println!("\n╔══════════════════════════════════════════════════════════════════╗");
+    println!("\n+================================================================+");
     println!("║  Performance Impact: Removing Weekly Rewards from Quest Page     ║");
-    println!("╚══════════════════════════════════════════════════════════════════╝");
+    println!("+================================================================+");
     println!("\n📋 KEY FINDINGS:");
     println!();
     println!("1. Quest Page (GET /):");

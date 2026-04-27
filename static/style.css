@@ -1038,50 +1038,46 @@
   /* Glow shadows */
   --shadow-glow-primary: 0 0 12px oklch(
     var(--glow-color-primary)
-    /
-    var(--glow-intensity)
+    / var(--glow-intensity)
   );
   --shadow-glow-success: 0 0 12px oklch(
     var(--glow-color-success)
-    /
-    var(--glow-intensity)
+    / var(--glow-intensity)
   );
   --shadow-glow-warning: 0 0 12px oklch(
     var(--glow-color-warning)
-    /
-    var(--glow-intensity)
+    / var(--glow-intensity)
   );
   --shadow-glow-error: 0 0 12px oklch(
     var(--glow-color-error)
-    /
-    var(--glow-intensity)
+    / var(--glow-intensity)
   );
 
   /* Text glow shadows */
   --text-glow-primary: 0 0 8px oklch(
     var(--glow-color-primary)
-    /
-    var(--glow-intensity)
+    / var(--glow-intensity)
   );
   --text-glow-success: 0 0 8px oklch(
     var(--glow-color-success)
-    /
-    var(--glow-intensity)
+    / var(--glow-intensity)
   );
   --text-glow-warning: 0 0 8px oklch(
     var(--glow-color-warning)
-    /
-    var(--glow-intensity)
+    / var(--glow-intensity)
   );
 
   /* Shadows */
   --shadow-sm: 0 1px 2px 0 oklch(0 0 0 / 0.05);
   --shadow-md:
-    0 4px 6px -1px oklch(0 0 0 / 0.1), 0 2px 4px -2px oklch(0 0 0 / 0.1);
+    0 4px 6px -1px oklch(0 0 0 / 0.1),
+    0 2px 4px -2px oklch(0 0 0 / 0.1);
   --shadow-lg:
-    0 10px 15px -3px oklch(0 0 0 / 0.1), 0 4px 6px -4px oklch(0 0 0 / 0.1);
+    0 10px 15px -3px oklch(0 0 0 / 0.1),
+    0 4px 6px -4px oklch(0 0 0 / 0.1);
   --shadow-xl:
-    0 20px 25px -5px oklch(0 0 0 / 0.1), 0 8px 10px -6px oklch(0 0 0 / 0.1);
+    0 20px 25px -5px oklch(0 0 0 / 0.1),
+    0 8px 10px -6px oklch(0 0 0 / 0.1);
 
   /* Animation durations */
   --duration-fast: 150ms;

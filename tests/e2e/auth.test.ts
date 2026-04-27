@@ -1,11 +1,11 @@
 /**
- * E2E Tests for Auth Modal
- *
- * Tests the login flow:
- * 1. Empty password -> submit button disabled
- * 2. Wrong password -> error message shown
- * 3. Correct password -> modal closes, editor shown
- */
+  * E2E Tests for Auth Modal
+  *
+  * Tests the login flow:
+  * 1. Empty password -> submit button disabled
+  * 2. Wrong password -> error message shown
+  * 3. Correct password -> modal closes, editor shown
+  */
 
 import {
   clearBrowserState,
