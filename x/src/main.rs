@@ -209,7 +209,14 @@ fn check() -> Result<()> {
 }
 
 fn coverage() -> Result<()> {
-    run_cargo(&["tarpaulin", "--out", "Xml", "--features", "test-utils"])
+    run_cargo(&[
+        "tarpaulin",
+        "--lib",
+        "--out",
+        "Xml",
+        "--features",
+        "test-utils",
+    ])
 }
 
 fn build_server_command(subcommand: &str, args: &[String]) -> Command {
