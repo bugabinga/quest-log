@@ -27,11 +27,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Install cargo-tarpaulin
-        uses: actions-rs/tarpaulin@release-0.3.0
+        uses: taiki-e/install-action@v2
         with:
-          version: "0.30.0"
+          tool: cargo-tarpaulin@0.30.0
       - name: Generate coverage report
-        run: cargo tarpaulin --out Xml --engine daca
+        run: cargo x coverage
       - name: Upload to Codecov
         uses: codecov/codecov-action@v4
         with:

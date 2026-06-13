@@ -27,6 +27,8 @@ enum Commands {
     Lint,
     /// Full check (lint + verify + cargo check)
     Check,
+    /// Generate coverage report
+    Coverage,
     /// Run the application in foreground (blocks)
     Run {
         #[arg(default_value = "serve")]
@@ -121,6 +123,7 @@ fn main() -> Result<()> {
         Commands::Fmt { args } => fmt(&args),
         Commands::Lint => lint(),
         Commands::Check => check(),
+        Commands::Coverage => coverage(),
         Commands::Run { subcommand, args } => run(&subcommand, &args),
         Commands::Serve { subcommand, args } => serve(&subcommand, &args),
         Commands::Kill => kill(),
@@ -203,6 +206,10 @@ fn lint() -> Result<()> {
 
 fn check() -> Result<()> {
     run_cargo(&["check", "--features", "test-utils"])
+}
+
+fn coverage() -> Result<()> {
+    run_cargo(&["tarpaulin", "--out", "Xml", "--engine", "daca"])
 }
 
 fn build_server_command(subcommand: &str, args: &[String]) -> Command {
