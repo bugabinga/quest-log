@@ -209,7 +209,7 @@ fn check() -> Result<()> {
 }
 
 fn coverage() -> Result<()> {
-    run_cargo(&["tarpaulin", "--out", "Xml", "--engine", "daca"])
+    run_cargo(&["tarpaulin", "--out", "Xml"])
 }
 
 fn build_server_command(subcommand: &str, args: &[String]) -> Command {
