@@ -16,9 +16,10 @@ use axum::{
     Router,
     body::Body,
     http::{Request, StatusCode},
-    routing::get,
+    routing::{get, post},
 };
-use quest_log::{database::Database, handlers, state::AppState};
+use chrono::{NaiveDate, TimeZone, Utc};
+use quest_log::{database::Database, handlers, models::*, state::AppState, time};
 use sqlx::SqlitePool;
 use tokio::sync::broadcast;
 use tower::util::ServiceExt;
@@ -176,4 +177,66 @@ async fn test_bounty_route_works_alongside_quest_routes() {
     );
 
     println!("Bounty route works correctly alongside quest routes");
+}
+
+#[tokio::test]
+async fn test_claim_reward_uses_request_timezone() {
+    let utc_dt = Utc.from_utc_datetime(
+        &NaiveDate::from_ymd_opt(2024, 1, 8)
+            .unwrap()
+            .and_hms_opt(2, 0, 0)
+            .unwrap(),
+    );
+    time::set_fake_datetime(utc_dt);
+
+    let pool = SqlitePool::connect("sqlite::memory:")
+        .await
+        .expect("Failed to create in-memory database");
+    let db: Database = Database::with_pool(pool);
+    db.migrate().await.expect("Failed to run migrations");
+
+    let reward = db
+        .create_reward(CreateRewardRequest {
+            title: "Timezone Reward".to_string(),
+            description: None,
+            required_exp: 10,
+        })
+        .await
+        .unwrap();
+
+    let quest = db
+        .create_quest(CreateQuestRequest {
+            title: "EXP Quest".to_string(),
+            description: None,
+            exp_value: Some(10),
+            day_of_week: 1,
+        })
+        .await
+        .unwrap();
+    db.toggle_quest_completion(quest.id, NaiveDate::from_ymd_opt(2024, 1, 1).unwrap())
+        .await
+        .unwrap();
+
+    let (bcast_tx, _) = broadcast::channel(128);
+    let app_state = AppState::new(db, bcast_tx);
+    let app = Router::new()
+        .route("/rewards/claim", post(handlers::bounty::claim_reward))
+        .with_state(app_state);
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/rewards/claim")
+                .header("content-type", "application/json")
+                .header("X-Timezone", "America/Los_Angeles")
+                .body(Body::from(format!(r#"{{"reward_id":{}}}"#, reward.id)))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    time::reset_today();
+
+    assert_eq!(response.status(), StatusCode::OK);
 }

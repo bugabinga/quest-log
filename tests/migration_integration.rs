@@ -98,7 +98,7 @@ async fn test_migration_data_preservation() {
     // Calculate week_start - the previous Monday
     let week_start = NaiveDate::from_ymd_opt(2024, 1, 8).unwrap();
     let claimed = db
-        .claim_reward_for_week(reward.id, week_start)
+        .claim_reward_for_week_on(reward.id, week_start, sunday_after)
         .await
         .unwrap();
     assert!(claimed);
@@ -240,7 +240,7 @@ async fn test_migration_schema_integrity() {
     // Calculate week_start - the previous Monday
     let week_start = NaiveDate::from_ymd_opt(2024, 1, 8).unwrap();
     let claimed = db
-        .claim_reward_for_week(reward.id, week_start)
+        .claim_reward_for_week_on(reward.id, week_start, sunday_after)
         .await
         .expect("Reward claims table should exist");
     assert!(claimed);

@@ -10,8 +10,6 @@ use crate::models::{
     WeeklyRewardDisplay,
 };
 
-use crate::time;
-
 use super::{Database, SetOrRemove};
 
 impl Database {
@@ -76,15 +74,17 @@ impl Database {
         tracing::debug!(today = %today, week_start = %week_start, week_end = %week_end, "📊 Getting week stats");
         let day_of_week = today.weekday().num_days_from_sunday().cast_signed();
 
-        // Today's quests and completed EXP
         let today_quests = self.get_quests_for_day(day_of_week).await?;
         let exp_today_max: i32 = today_quests.iter().map(|q| q.exp_value).sum();
         let quests_total = i32::try_from(today_quests.len()).unwrap_or(i32::MAX);
 
+        let quest_ids: Vec<i64> = today_quests.iter().map(|q| q.id).collect();
+        let completion_status = self.get_quests_completion_status(&quest_ids, today).await?;
+
         let mut exp_today = 0i32;
         let mut quests_completed = 0i32;
         for quest in &today_quests {
-            if self.is_quest_completed_today(quest.id, today).await? {
+            if completion_status.get(&quest.id).copied().unwrap_or(false) {
                 exp_today = exp_today
                     .checked_add(quest.exp_value)
                     .ok_or_else(|| sqlx::Error::Protocol("Integer overflow in exp_today".into()))?;
@@ -94,18 +94,13 @@ impl Database {
             }
         }
 
-        // Weekly stats
         let week_exp = self.calculate_weekly_exp(week_start, week_end).await?;
-
-        // Max weekly EXP (all quests for each day of the week)
-        let mut week_exp_max = 0i32;
-        for dow in 0..7 {
-            let quests = self.get_quests_for_day(dow).await?;
-            let day_exp: i32 = quests.iter().map(|q| q.exp_value).sum();
-            week_exp_max = week_exp_max
-                .checked_add(day_exp)
-                .ok_or_else(|| sqlx::Error::Protocol("Integer overflow in week_exp_max".into()))?;
-        }
+        let week_exp_max_raw: (i64,) =
+            sqlx::query_as("SELECT COALESCE(SUM(exp_value), 0) FROM quests WHERE is_active = TRUE")
+                .fetch_one(&self.pool)
+                .await?;
+        let week_exp_max = i32::try_from(week_exp_max_raw.0)
+            .map_err(|_| sqlx::Error::Protocol("Integer overflow in week_exp_max".into()))?;
 
         Ok(crate::models::QuestStats {
             exp_today,
@@ -227,33 +222,26 @@ impl Database {
     }
 
     #[instrument(name = "🏆 claim_reward_for_week", skip(self))]
-    /// Claim a reward for a specific week (only on Sunday)
+    /// Claim a reward for a specific week using an explicit request-local date.
     ///
-    /// # Arguments
-    ///
-    /// * `reward_id` - The ID of the reward to claim
-    /// * `week_start` - The start date of the week (Monday) for which to claim the reward
-    ///
-    /// # Returns
-    ///
-    /// True if the reward was successfully claimed, false if not eligible (wrong day, already claimed, etc.)
+    /// Returns false if the date is not that week's Sunday, EXP is too low, or the reward is already claimed.
     ///
     /// # Errors
     ///
-    /// Returns an error if the database query fails
+    /// Returns an error if the database query fails.
     ///
     /// # Panics
     ///
-    /// Panics if the week end date overflows
-    pub async fn claim_reward_for_week(
+    /// Panics if the week end date overflows.
+    pub async fn claim_reward_for_week_on(
         &self,
         reward_id: i64,
         week_start: NaiveDate,
+        today: NaiveDate,
     ) -> Result<bool, sqlx::Error> {
         let week_end = week_start
             .checked_add_days(chrono::Days::new(6))
             .unwrap_or_else(|| panic!("date overflow"));
-        let today = time::today();
         let is_sunday = today.weekday().num_days_from_sunday() == 0;
 
         if today < week_start || today > week_end || !is_sunday {
@@ -297,11 +285,18 @@ impl Database {
         }
 
         let claimed_date = today;
-        sqlx::query("INSERT INTO reward_claims (reward_id, claimed_date) VALUES (?, ?)")
+        match sqlx::query("INSERT INTO reward_claims (reward_id, claimed_date) VALUES (?, ?)")
             .bind(reward_id)
             .bind(claimed_date)
             .execute(&self.pool)
-            .await?;
+            .await
+        {
+            Ok(_) => {}
+            Err(sqlx::Error::Database(db_err)) if db_err.is_unique_violation() => {
+                return Ok(false);
+            }
+            Err(e) => return Err(e),
+        }
 
         let rewards = self.get_weekly_reward_status(week_start, today).await?;
         let all_rewards_claimed = rewards

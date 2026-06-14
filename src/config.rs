@@ -218,58 +218,80 @@ pub fn test_endpoints_enabled() -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::Mutex;
+
+    static ENV_LOCK: Mutex<()> = Mutex::new(());
+
+    fn with_env_lock(test: impl FnOnce()) {
+        let _guard = ENV_LOCK
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        test();
+    }
 
     #[test]
     fn test_default_port() {
-        // SAFETY: Test-only manipulation of env var, restored immediately
-        unsafe { std::env::remove_var(QUEST_LOG_PORT) };
-        assert_eq!(port().unwrap(), 3000);
+        with_env_lock(|| {
+            // SAFETY: serialized test-only env mutation.
+            unsafe { std::env::remove_var(QUEST_LOG_PORT) };
+            assert_eq!(port().unwrap(), 3000);
+        });
     }
 
     #[test]
     fn test_custom_port() {
-        // SAFETY: Test-only manipulation of env var, restored immediately
-        unsafe { std::env::set_var(QUEST_LOG_PORT, "8080") };
-        assert_eq!(port().unwrap(), 8080);
-        // SAFETY: Test-only manipulation of env var, restored immediately
-        unsafe { std::env::remove_var(QUEST_LOG_PORT) };
+        with_env_lock(|| {
+            // SAFETY: serialized test-only env mutation.
+            unsafe { std::env::set_var(QUEST_LOG_PORT, "8080") };
+            assert_eq!(port().unwrap(), 8080);
+            // SAFETY: serialized test-only env mutation.
+            unsafe { std::env::remove_var(QUEST_LOG_PORT) };
+        });
     }
 
     #[test]
     fn test_invalid_port() {
-        // SAFETY: Test-only manipulation of env var, restored immediately
-        unsafe { std::env::set_var(QUEST_LOG_PORT, "not-a-port") };
-        assert!(port().is_err());
-        // SAFETY: Test-only manipulation of env var, restored immediately
-        unsafe { std::env::remove_var(QUEST_LOG_PORT) };
+        with_env_lock(|| {
+            // SAFETY: serialized test-only env mutation.
+            unsafe { std::env::set_var(QUEST_LOG_PORT, "not-a-port") };
+            assert!(port().is_err());
+            // SAFETY: serialized test-only env mutation.
+            unsafe { std::env::remove_var(QUEST_LOG_PORT) };
+        });
     }
 
     #[test]
     fn test_default_session_duration() {
-        // SAFETY: Test-only manipulation of env var, restored immediately
-        unsafe { std::env::remove_var(QUEST_LOG_EDITOR_SESSION_DURATION_HOURS) };
-        assert_eq!(editor_session_duration_hours(), 24);
+        with_env_lock(|| {
+            // SAFETY: serialized test-only env mutation.
+            unsafe { std::env::remove_var(QUEST_LOG_EDITOR_SESSION_DURATION_HOURS) };
+            assert_eq!(editor_session_duration_hours(), 24);
+        });
     }
 
     #[test]
     fn test_custom_session_duration() {
-        // SAFETY: Test-only manipulation of env var, restored immediately
-        unsafe { std::env::set_var(QUEST_LOG_EDITOR_SESSION_DURATION_HOURS, "48") };
-        assert_eq!(editor_session_duration_hours(), 48);
-        // SAFETY: Test-only manipulation of env var, restored immediately
-        unsafe { std::env::remove_var(QUEST_LOG_EDITOR_SESSION_DURATION_HOURS) };
+        with_env_lock(|| {
+            // SAFETY: serialized test-only env mutation.
+            unsafe { std::env::set_var(QUEST_LOG_EDITOR_SESSION_DURATION_HOURS, "48") };
+            assert_eq!(editor_session_duration_hours(), 48);
+            // SAFETY: serialized test-only env mutation.
+            unsafe { std::env::remove_var(QUEST_LOG_EDITOR_SESSION_DURATION_HOURS) };
+        });
     }
 
     #[test]
     fn test_editor_password_hash() {
-        // SAFETY: Test-only manipulation of env var, restored immediately
-        unsafe { std::env::remove_var(QUEST_LOG_EDITOR_PASSWORD_HASH) };
-        assert!(editor_password_hash().is_none());
+        with_env_lock(|| {
+            // SAFETY: serialized test-only env mutation.
+            unsafe { std::env::remove_var(QUEST_LOG_EDITOR_PASSWORD_HASH) };
+            assert!(editor_password_hash().is_none());
 
-        // SAFETY: Test-only manipulation of env var, restored immediately
-        unsafe { std::env::set_var(QUEST_LOG_EDITOR_PASSWORD_HASH, "test-hash") };
-        assert_eq!(editor_password_hash(), Some("test-hash".to_string()));
-        // SAFETY: Test-only manipulation of env var, restored immediately
-        unsafe { std::env::remove_var(QUEST_LOG_EDITOR_PASSWORD_HASH) };
+            // SAFETY: serialized test-only env mutation.
+            unsafe { std::env::set_var(QUEST_LOG_EDITOR_PASSWORD_HASH, "test-hash") };
+            assert_eq!(editor_password_hash(), Some("test-hash".to_string()));
+            // SAFETY: serialized test-only env mutation.
+            unsafe { std::env::remove_var(QUEST_LOG_EDITOR_PASSWORD_HASH) };
+        });
     }
 }

@@ -24,7 +24,10 @@ use super::auth::extract_and_validate_session;
 /// Returns an error if database query fails
 pub async fn get_settings_handler(
     State(state): State<AppState>,
+    headers: HeaderMap,
 ) -> Result<impl IntoResponse, AppError> {
+    extract_and_validate_session(&headers, &state).await?;
+
     let settings = state.db.get_settings().await.map_err(|e| {
         tracing::error!(error = %e, "Failed to load settings");
         AppError::Database(e)
@@ -44,6 +47,12 @@ pub async fn update_settings_handler(
     Form(request): Form<UpdateSettingsRequest>,
 ) -> Result<Sse<impl Stream<Item = Result<Event, std::convert::Infallible>>>, AppError> {
     extract_and_validate_session(&headers, &state).await?;
+
+    if request.weekly_exp_goal < 0 {
+        return Err(AppError::ValidationError(
+            "Weekly EXP goal must be non-negative".into(),
+        ));
+    }
 
     let settings = state.db.update_settings(request).await.map_err(|e| {
         tracing::error!(error = %e, "Failed to update settings");

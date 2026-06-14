@@ -308,45 +308,24 @@ pub async fn toggle_quest(
     let quest_display = QuestDisplay::from_quest(quest, completed_today, today, today);
 
     let day_of_week = today.weekday().num_days_from_sunday().cast_signed();
-    let all_quests = db.get_quests_for_day(day_of_week).await.unwrap_or_default();
-    let mut total_exp: i32 = 0;
-    let mut quests_completed: i32 = 0;
-
-    for q in &all_quests {
-        if let Ok(completed) = db.is_quest_completed_today(q.id, today).await
-            && completed
-        {
-            total_exp = total_exp.saturating_add(q.exp_value);
-            quests_completed = quests_completed.saturating_add(1);
-        }
-    }
-
-    let exp_today_max: i32 = all_quests.iter().map(|q| q.exp_value).sum();
-    let quests_total = i32::try_from(all_quests.len()).unwrap_or(0);
-
     let (week_start, week_end) = time::get_week_bounds(today);
-    let week_exp = db
-        .calculate_weekly_exp(week_start, week_end)
+    let quest_stats = db
+        .get_week_stats(today, week_start, week_end)
         .await
-        .unwrap_or(0);
-
-    let mut week_exp_max = 0i32;
-    for dow in 0..7 {
-        if let Ok(quests) = db.get_quests_for_day(dow).await {
-            week_exp_max =
-                week_exp_max.saturating_add(quests.iter().map(|q| q.exp_value).sum::<i32>());
-        }
-    }
+        .map_err(|e| {
+            tracing::error!(error = %e, "💥 Database error loading quest stats");
+            AppError::Database(e)
+        })?;
 
     let quest_html = ui::fragments::toggle::toggle(&quest_display).into_string();
 
     let signals_json = serde_json::json!({
-        "expToday": total_exp,
-        "expTodayMax": exp_today_max,
-        "weekExp": week_exp,
-        "weekExpMax": week_exp_max,
-        "questsCompleted": quests_completed,
-        "questsTotal": quests_total,
+        "expToday": quest_stats.exp_today,
+        "expTodayMax": quest_stats.exp_today_max,
+        "weekExp": quest_stats.week_exp,
+        "weekExpMax": quest_stats.week_exp_max,
+        "questsCompleted": quest_stats.quests_completed,
+        "questsTotal": quest_stats.quests_total,
         "currentDay": day_of_week,
         "isToday": true
     });

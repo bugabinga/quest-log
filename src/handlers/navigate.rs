@@ -84,46 +84,25 @@ pub async fn navigate(
         .await
         .map_err(AppError::Database)?;
 
-    use crate::ui::fragments::toggle::QuestDisplay;
-    let mut quests_display = Vec::new();
-    for quest in quests {
-        let completed_today = db
-            .is_quest_completed_today(quest.id, selected_date)
-            .await
-            .unwrap_or_else(|e| {
-                tracing::warn!(error = %e, quest_id = quest.id, "⚠️ Failed to check completion status");
-                false
-            });
-        quests_display.push(QuestDisplay::from_quest(
-            quest,
-            completed_today,
-            selected_date,
-            today,
-        ));
-    }
-
-    let total_exp: i32 = quests_display
-        .iter()
-        .filter(|q| q.completed_today)
-        .map(|q| q.exp_value)
-        .sum();
-    let quests_completed =
-        i32::try_from(quests_display.iter().filter(|q| q.completed_today).count()).unwrap_or(0);
-    let exp_today_max: i32 = quests_display.iter().map(|q| q.exp_value).sum();
-    let quests_total = i32::try_from(quests_display.len()).unwrap_or(0);
-
-    let week_exp = db
-        .calculate_weekly_exp(week_start, week_end)
+    let quest_ids: Vec<i64> = quests.iter().map(|q| q.id).collect();
+    let completion_status = db
+        .get_quests_completion_status(&quest_ids, selected_date)
         .await
-        .unwrap_or(0);
+        .map_err(AppError::Database)?;
 
-    let mut week_exp_max = 0i32;
-    for dow in 0..7 {
-        if let Ok(quests) = db.get_quests_for_day(dow).await {
-            week_exp_max =
-                week_exp_max.saturating_add(quests.iter().map(|q| q.exp_value).sum::<i32>());
-        }
-    }
+    use crate::ui::fragments::toggle::QuestDisplay;
+    let quests_display: Vec<QuestDisplay> = quests
+        .into_iter()
+        .map(|quest| {
+            let completed_today = completion_status.get(&quest.id).copied().unwrap_or(false);
+            QuestDisplay::from_quest(quest, completed_today, selected_date, today)
+        })
+        .collect();
+
+    let quest_stats = db
+        .get_week_stats(selected_date, week_start, week_end)
+        .await
+        .map_err(AppError::Database)?;
 
     use crate::handlers::quests::get_fantasy_day_name;
     let day_name = get_fantasy_day_name(selected_date.weekday()).to_string();
@@ -170,12 +149,12 @@ pub async fn navigate(
     );
 
     let signals_json = serde_json::json!({
-        "expToday": total_exp,
-        "expTodayMax": exp_today_max,
-        "weekExp": week_exp,
-        "weekExpMax": week_exp_max,
-        "questsCompleted": quests_completed,
-        "questsTotal": quests_total,
+        "expToday": quest_stats.exp_today,
+        "expTodayMax": quest_stats.exp_today_max,
+        "weekExp": quest_stats.week_exp,
+        "weekExpMax": quest_stats.week_exp_max,
+        "questsCompleted": quest_stats.quests_completed,
+        "questsTotal": quest_stats.quests_total,
         "currentDay": day_of_week,
         "isToday": is_today
     });

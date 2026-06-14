@@ -659,6 +659,11 @@ impl Database {
             weekly_exp_goal = req.weekly_exp_goal,
             "⚙️ Updating settings"
         );
+        if req.weekly_exp_goal < 0 {
+            return Err(sqlx::Error::Protocol(
+                "weekly_exp_goal must be non-negative".into(),
+            ));
+        }
         let now = Utc::now();
         sqlx::query_as::<_, Settings>(
             "UPDATE settings SET weekly_exp_goal = ?, updated_at = ? WHERE id = 1 RETURNING *",
@@ -703,6 +708,11 @@ impl Database {
     /// Returns an error if the database insert fails
     pub async fn create_reward(&self, req: CreateRewardRequest) -> Result<Reward, sqlx::Error> {
         tracing::debug!(title = %req.title, exp = req.required_exp, "🎁 Creating new reward");
+        if req.required_exp < 0 {
+            return Err(sqlx::Error::Protocol(
+                "required_exp must be non-negative".into(),
+            ));
+        }
         let now = Utc::now();
         let reward = sqlx::query_as::<_, Reward>(
             "INSERT INTO rewards (title, description, required_exp, created_at, updated_at)
@@ -814,6 +824,11 @@ impl Database {
         }
 
         if let Some(required_exp) = req.required_exp {
+            if required_exp < 0 {
+                return Err(sqlx::Error::Protocol(
+                    "required_exp must be non-negative".into(),
+                ));
+            }
             sqlx::query("UPDATE rewards SET required_exp = ?, updated_at = ? WHERE id = ?")
                 .bind(required_exp)
                 .bind(now)

@@ -186,6 +186,11 @@ impl Database {
         image_content_type: Option<String>,
     ) -> Result<Reward, sqlx::Error> {
         tracing::debug!(title = %title, exp = required_exp, "🎁 Creating reward with image");
+        if required_exp < 0 {
+            return Err(sqlx::Error::Protocol(
+                "required_exp must be non-negative".into(),
+            ));
+        }
         let now = Utc::now();
         let reward = sqlx::query_as::<_, Reward>(
             "INSERT INTO rewards (title, description, required_exp, image_data, image_content_type, created_at, updated_at)
@@ -256,6 +261,11 @@ impl Database {
         }
 
         if let Some(required_exp) = required_exp {
+            if required_exp < 0 {
+                return Err(sqlx::Error::Protocol(
+                    "required_exp must be non-negative".into(),
+                ));
+            }
             sqlx::query("UPDATE rewards SET required_exp = ?, updated_at = ? WHERE id = ?")
                 .bind(required_exp)
                 .bind(now)

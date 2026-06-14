@@ -78,6 +78,12 @@ fn extract_reward_from_request(req: RewardJsonRequest) -> Result<RewardData, App
         return Err(AppError::ValidationError("Title is required".into()));
     }
 
+    if req.reward_required_exp < 0 {
+        return Err(AppError::ValidationError(
+            "Required EXP must be non-negative".into(),
+        ));
+    }
+
     if let Some(file) = req.reward_image.first() {
         if file.is_too_large() {
             return Err(AppError::ValidationError(
@@ -212,7 +218,10 @@ pub async fn delete_reward_handler(
 /// Returns an error if database query fails
 pub async fn get_rewards_handler(
     State(state): State<AppState>,
+    headers: HeaderMap,
 ) -> Result<impl IntoResponse, AppError> {
+    extract_and_validate_session(&headers, &state).await?;
+
     let rewards = state.db.get_all_rewards().await.map_err(|e| {
         tracing::error!(error = %e, "Failed to load rewards");
         AppError::Database(e)
@@ -271,7 +280,7 @@ pub async fn update_reward_handler(
 
     let data = extract_reward_from_request(req)?;
 
-    let is_active: Option<bool> = Some(true);
+    let is_active: Option<bool> = None;
 
     let reward = if let Some(img_data) = data.image_data {
         let img_content_type = data.image_content_type.unwrap_or_default();

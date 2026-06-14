@@ -83,7 +83,7 @@ async fn test_claim_reward_handler_returns_all_rewards_claimed_signal() {
         .expect("Failed to complete quest");
 
     // Claim the reward
-    db.claim_reward_for_week(1, week_start)
+    db.claim_reward_for_week_on(1, week_start, sunday)
         .await
         .expect("Failed to claim reward");
 
@@ -163,7 +163,7 @@ async fn test_partial_claim_should_not_return_all_rewards_claimed() {
         .expect("Failed to complete quest");
 
     // Claim only the first reward (30 EXP required)
-    let claim_result = db.claim_reward_for_week(1, week_start).await;
+    let claim_result = db.claim_reward_for_week_on(1, week_start, sunday).await;
     assert!(claim_result.is_ok(), "Should be able to claim first reward");
 
     // Get reward status
@@ -246,7 +246,7 @@ async fn test_weekly_champions_table_should_track_completion() {
         .expect("Failed to complete quest");
 
     // Claim the reward
-    db.claim_reward_for_week(reward.id, week_start)
+    db.claim_reward_for_week_on(reward.id, week_start, sunday)
         .await
         .expect("Failed to claim reward");
 

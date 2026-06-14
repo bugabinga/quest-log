@@ -115,7 +115,7 @@ pub async fn claim_reward(
     }
 
     let claim_result = db
-        .claim_reward_for_week(reward_id, week_start)
+        .claim_reward_for_week_on(reward_id, week_start, today)
         .await
         .map_err(|e| {
             tracing::error!(error = %e, reward_id, "💥 Database error claiming reward");
