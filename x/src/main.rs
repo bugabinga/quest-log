@@ -219,15 +219,50 @@ fn build(
 }
 
 fn test(args: &[String]) -> Result<()> {
-    let mut cmd_args = vec!["test", "--lib", "--features", "test-utils"];
-    cmd_args.extend(args.iter().map(|s| s.as_str()));
-    run_cargo(&cmd_args)
+    let mut app_args = vec![
+        "test",
+        "--package",
+        "quest-log",
+        "--lib",
+        "--features",
+        "test-utils",
+    ];
+    app_args.extend(args.iter().map(|s| s.as_str()));
+    run_cargo(&app_args)?;
+
+    run_cargo(&["test", "--package", "x"])
+}
+
+#[derive(Debug, PartialEq, Eq)]
+enum VerifyStep {
+    RustTests,
+    XtaskTests,
+    BrowserTests,
+}
+
+fn verify_steps() -> [VerifyStep; 3] {
+    [
+        VerifyStep::RustTests,
+        VerifyStep::XtaskTests,
+        VerifyStep::BrowserTests,
+    ]
 }
 
 fn verify(args: &[String]) -> Result<()> {
-    let mut cmd_args = vec!["test", "--features", "test-utils"];
-    cmd_args.extend(args.iter().map(|s| s.as_str()));
-    run_cargo(&cmd_args)
+    for step in verify_steps() {
+        match step {
+            VerifyStep::RustTests => {
+                let mut app_args =
+                    vec!["test", "--package", "quest-log", "--features", "test-utils"];
+                app_args.extend(args.iter().map(|s| s.as_str()));
+                run_cargo(&app_args)?;
+            }
+            VerifyStep::XtaskTests => run_cargo(&["test", "--package", "x"])?,
+            VerifyStep::BrowserTests => browser(false)?,
+        }
+    }
+
+    Ok(())
 }
 
 fn fmt(args: &[String]) -> Result<()> {
@@ -814,4 +849,21 @@ fn program_path(program: &str) -> Option<String> {
             .find(|path| path.is_file())
             .map(|path| path.display().to_string())
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn verify_runs_rust_tests_then_xtask_tests_then_browser_tests() {
+        assert_eq!(
+            verify_steps(),
+            [
+                VerifyStep::RustTests,
+                VerifyStep::XtaskTests,
+                VerifyStep::BrowserTests,
+            ]
+        );
+    }
 }
