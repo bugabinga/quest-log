@@ -8,6 +8,7 @@ use std::time::{Duration, Instant};
 
 const VERSION: &str = env!("APP_VERSION");
 const QUEST_LOG_DATA_DIR: &str = "QUEST_LOG_DATA_DIR";
+const QUEST_LOG_X_SERVER_ID: &str = "QUEST_LOG_X_SERVER_ID";
 const DEV_STATE_DIR: &str = "target/quest-log";
 
 #[derive(Parser)]
@@ -235,30 +236,26 @@ fn test(args: &[String]) -> Result<()> {
 
 #[derive(Debug, PartialEq, Eq)]
 enum VerifyStep {
-    RustTests,
-    XtaskTests,
-    BrowserTests,
+    Rust,
+    Xtask,
+    Browser,
 }
 
 fn verify_steps() -> [VerifyStep; 3] {
-    [
-        VerifyStep::RustTests,
-        VerifyStep::XtaskTests,
-        VerifyStep::BrowserTests,
-    ]
+    [VerifyStep::Rust, VerifyStep::Xtask, VerifyStep::Browser]
 }
 
 fn verify(args: &[String]) -> Result<()> {
     for step in verify_steps() {
         match step {
-            VerifyStep::RustTests => {
+            VerifyStep::Rust => {
                 let mut app_args =
                     vec!["test", "--package", "quest-log", "--features", "test-utils"];
                 app_args.extend(args.iter().map(|s| s.as_str()));
                 run_cargo(&app_args)?;
             }
-            VerifyStep::XtaskTests => run_cargo(&["test", "--package", "x"])?,
-            VerifyStep::BrowserTests => browser(false)?,
+            VerifyStep::Xtask => run_cargo(&["test", "--package", "x"])?,
+            VerifyStep::Browser => browser(false)?,
         }
     }
 
@@ -266,16 +263,14 @@ fn verify(args: &[String]) -> Result<()> {
 }
 
 fn fmt(args: &[String]) -> Result<()> {
-    let mut cargo_args = vec!["fmt"];
-    cargo_args.extend(args.iter().map(|s| s.as_str()));
-    run_cargo(&cargo_args)?;
+    let cargo_args = cargo_fmt_args(args);
+    let cargo_refs = cargo_args.iter().map(String::as_str).collect::<Vec<_>>();
+    run_cargo(&cargo_refs)?;
 
-    let mut deno_args = vec!["fmt"];
-    deno_args.extend(args.iter().map(|s| s.as_str()));
-    deno_args.push("static/");
     ensure_deno()?;
-    deno_args.extend(args.iter().map(|s| s.as_str()));
-    run_cmd("deno", &deno_args)?;
+    let deno_args = deno_fmt_args(args);
+    let deno_refs = deno_args.iter().map(String::as_str).collect::<Vec<_>>();
+    run_cmd("deno", &deno_refs)?;
 
     ensure_dictator()?;
     run_cmd(
@@ -284,62 +279,106 @@ fn fmt(args: &[String]) -> Result<()> {
     )
 }
 
+fn cargo_fmt_args(args: &[String]) -> Vec<String> {
+    let mut fmt_args = vec!["fmt".to_string()];
+    fmt_args.extend(args.iter().cloned());
+    fmt_args
+}
+
+fn deno_fmt_args(args: &[String]) -> Vec<String> {
+    let mut fmt_args = vec!["fmt".to_string()];
+    fmt_args.extend(args.iter().cloned());
+    fmt_args.push("static/".to_string());
+    fmt_args
+}
+
 fn lint() -> Result<()> {
-    ensure_dictator()?;
-    run_cmd(
-        "dictator",
-        &["lint", "src/", "x/src/", "tests/", "static/js/"],
-    )?;
+    let steps = lint_step_names();
 
-    run_cargo(&["fmt", "--check"])?;
+    run_lint_step(steps[0], || {
+        ensure_dictator()?;
+        run_cmd(
+            "dictator",
+            &["lint", "src/", "x/src/", "tests/", "static/js/"],
+        )
+    })?;
 
-    run_cargo(&[
+    run_lint_step(steps[1], || run_cargo(&["fmt", "--check"]))?;
+
+    run_lint_step(steps[2], || run_cargo(&clippy_lint_args()))?;
+
+    run_lint_step(steps[3], || {
+        ensure_deno()?;
+        run_cmd("deno", &["lint", "static/js/"])
+    })?;
+
+    run_lint_step(steps[4], check_sse_macro_usage)
+}
+
+fn run_lint_step(step: &str, action: impl FnOnce() -> Result<()>) -> Result<()> {
+    println!("==> {step}");
+    action()
+}
+
+fn lint_step_names() -> [&'static str; 5] {
+    [
+        "dictator lint",
+        "rustfmt check",
+        "clippy workspace",
+        "deno lint",
+        "sse macro policy",
+    ]
+}
+
+fn clippy_lint_args() -> [&'static str; 7] {
+    [
         "clippy",
+        "--workspace",
         "--all-targets",
         "--all-features",
         "--",
         "-D",
         "warnings",
-    ])?;
-
-    ensure_deno()?;
-    run_cmd("deno", &["lint", "static/js/"])?;
-
-    check_sse_macro_usage()?;
-
-    Ok(())
+    ]
 }
 
 fn check() -> Result<()> {
-    run_cargo(&["check", "--features", "test-utils"])
+    run_cargo(&check_args())
+}
+
+fn check_args() -> [&'static str; 5] {
+    [
+        "check",
+        "--workspace",
+        "--all-targets",
+        "--features",
+        "test-utils",
+    ]
 }
 
 fn coverage() -> Result<()> {
     if !cargo_subcommand_exists("tarpaulin")? {
-        println!("cargo-tarpaulin not installed; skipping coverage");
-        return Ok(());
+        bail!("cargo-tarpaulin not installed. Install: cargo install cargo-tarpaulin");
     }
 
-    run_cargo(&[
+    run_cargo(&coverage_args())
+}
+
+fn coverage_args() -> [&'static str; 7] {
+    [
         "tarpaulin",
-        "--lib",
+        "--package",
+        "quest-log",
         "--out",
         "Xml",
         "--features",
         "test-utils",
-    ])
+    ]
 }
 
 fn build_server_command(subcommand: &str, args: &[String]) -> Result<Command> {
     let mut cmd = Command::new("cargo");
-    cmd.env(
-        "RUST_LOG",
-        std::env::var("RUST_LOG").unwrap_or_else(|_| "debug".into()),
-    );
-
-    if std::env::var_os(QUEST_LOG_DATA_DIR).is_none() {
-        cmd.env(QUEST_LOG_DATA_DIR, default_data_dir()?);
-    }
+    apply_server_env(&mut cmd)?;
 
     cmd.args(["run", "--", subcommand])
         .args(args)
@@ -348,8 +387,35 @@ fn build_server_command(subcommand: &str, args: &[String]) -> Result<Command> {
     Ok(cmd)
 }
 
-fn default_data_dir() -> Result<PathBuf> {
-    Ok(std::env::current_dir()?.join(DEV_STATE_DIR).join("data"))
+fn apply_server_env(cmd: &mut Command) -> Result<()> {
+    for (key, value) in server_env_vars(
+        std::env::var("RUST_LOG").ok(),
+        std::env::var_os(QUEST_LOG_DATA_DIR).map(PathBuf::from),
+        &std::env::current_dir()?,
+    ) {
+        cmd.env(key, value);
+    }
+    Ok(())
+}
+
+fn server_env_vars(
+    rust_log: Option<String>,
+    data_dir: Option<PathBuf>,
+    cwd: &std::path::Path,
+) -> Vec<(String, String)> {
+    vec![
+        (
+            "RUST_LOG".to_string(),
+            rust_log.unwrap_or_else(|| "debug".to_string()),
+        ),
+        (
+            QUEST_LOG_DATA_DIR.to_string(),
+            data_dir
+                .unwrap_or_else(|| cwd.join(DEV_STATE_DIR).join("data"))
+                .display()
+                .to_string(),
+        ),
+    ]
 }
 
 fn dev_state_path(name: &str) -> PathBuf {
@@ -374,6 +440,8 @@ fn serve(subcommand: &str, args: &[String]) -> Result<()> {
     }
 
     let mut cmd = build_server_command(subcommand, args)?;
+    let server_id = new_server_id();
+    cmd.env(QUEST_LOG_X_SERVER_ID, &server_id);
     let state_dir = std::env::current_dir()?.join(DEV_STATE_DIR);
     std::fs::create_dir_all(&state_dir)?;
     let log_file_path = state_dir.join("server.log");
@@ -389,6 +457,7 @@ fn serve(subcommand: &str, args: &[String]) -> Result<()> {
     let pid = child.id();
 
     std::fs::write(pid_path(), pid.to_string())?;
+    std::fs::write(server_id_path(), server_id)?;
     println!("🚀 Starting quest-log {} (PID: {})", subcommand, pid);
     println!("   Logs: {}", log_file_path.display());
     Ok(())
@@ -410,11 +479,12 @@ fn kill_server_internal() -> (Option<u32>, bool) {
         Ok(s) => s.trim().parse().ok(),
         Err(_) => None,
     };
+    let server_id = std::fs::read_to_string(server_id_path()).ok();
 
     let mut was_running = false;
 
-    if let Some(pid) = pid {
-        was_running = process_is_alive(pid);
+    if let (Some(pid), Some(server_id)) = (pid, server_id.as_deref()) {
+        was_running = process_is_alive(pid) && process_has_server_id(pid, server_id.trim());
         if was_running {
             #[cfg(unix)]
             let _ = Command::new("kill")
@@ -429,8 +499,16 @@ fn kill_server_internal() -> (Option<u32>, bool) {
     }
 
     let _ = std::fs::remove_file(pid_path());
+    let _ = std::fs::remove_file(server_id_path());
 
     (pid, was_running)
+}
+
+fn new_server_id() -> String {
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |duration| duration.as_nanos());
+    format!("{}-{now}", std::process::id())
 }
 
 #[cfg(unix)]
@@ -455,8 +533,31 @@ fn process_is_alive(pid: u32) -> bool {
         .unwrap_or(false)
 }
 
+#[cfg(target_os = "linux")]
+fn process_has_server_id(pid: u32, server_id: &str) -> bool {
+    std::fs::read(format!("/proc/{pid}/environ"))
+        .map(|environ| environ_has_var(&environ, QUEST_LOG_X_SERVER_ID, server_id))
+        .unwrap_or(false)
+}
+
+#[cfg(not(target_os = "linux"))]
+fn process_has_server_id(_pid: u32, _server_id: &str) -> bool {
+    false
+}
+
+fn environ_has_var(environ: &[u8], name: &str, value: &str) -> bool {
+    let expected = format!("{name}={value}");
+    environ
+        .split(|byte| *byte == 0)
+        .any(|entry| entry == expected.as_bytes())
+}
+
 fn pid_path() -> PathBuf {
     dev_state_path("server.pid")
+}
+
+fn server_id_path() -> PathBuf {
+    dev_state_path("server.id")
 }
 
 fn watch() -> Result<()> {
@@ -465,12 +566,28 @@ fn watch() -> Result<()> {
         return check();
     }
 
-    run_cmd(
-        "cargo",
-        &[
-            "watch", "--delay", "1", "--exec", "run", "--notify", "--clear",
-        ],
-    )
+    let mut cmd = Command::new("cargo");
+    apply_server_env(&mut cmd)?;
+    cmd.args(watch_args())
+        .stdout(Stdio::inherit())
+        .stderr(Stdio::inherit());
+    let status = cmd.status().context("Failed to run cargo watch")?;
+    if !status.success() {
+        bail!("cargo watch failed");
+    }
+    Ok(())
+}
+
+fn watch_args() -> [&'static str; 7] {
+    [
+        "watch",
+        "--delay",
+        "1",
+        "--exec",
+        "run -- serve",
+        "--notify",
+        "--clear",
+    ]
 }
 
 fn clean() -> Result<()> {
@@ -581,12 +698,20 @@ fn bundle_datastar(version: &str) -> Result<()> {
         );
 
         let js_result = client.get(&js_url).send().await?;
+        http_status_ok(js_result.status(), &js_url)?;
         let js_content = js_result.bytes().await?;
 
         std::fs::write("static/vendor/datastar.js", &js_content)?;
 
         Ok::<(), anyhow::Error>(())
     })
+}
+
+fn http_status_ok(status: reqwest::StatusCode, url: &str) -> Result<()> {
+    if !status.is_success() {
+        bail!("download failed: {url} returned {status}");
+    }
+    Ok(())
 }
 
 fn assets() -> Result<()> {
@@ -766,7 +891,7 @@ fn check_sse_macro_usage() -> Result<()> {
 
 fn browser(headed: bool) -> Result<()> {
     ensure_deno()?;
-    let browser = std::env::var("BROWSER").map_or_else(|_| default_browser(), |value| Ok(value))?;
+    let browser = std::env::var("BROWSER").map_or_else(|_| default_browser(), Ok)?;
 
     let args = Vec::new();
     serve("serve", &args)?;
@@ -807,10 +932,11 @@ fn run_browser_tests(headed: bool, browser: &str) -> Result<()> {
     cmd.args(&args);
 
     cmd.env("BROWSER", browser);
-    if browser == "chrome" && std::env::var_os("BROWSER_EXECUTABLE").is_none() {
-        if let Some(path) = chrome_executable() {
-            cmd.env("BROWSER_EXECUTABLE", path);
-        }
+    if browser == "chrome"
+        && std::env::var_os("BROWSER_EXECUTABLE").is_none()
+        && let Some(path) = chrome_executable()
+    {
+        cmd.env("BROWSER_EXECUTABLE", path);
     }
     if !headed && std::env::var_os("HEADLESS").is_none() {
         cmd.env("HEADLESS", "true");
@@ -859,11 +985,117 @@ mod tests {
     fn verify_runs_rust_tests_then_xtask_tests_then_browser_tests() {
         assert_eq!(
             verify_steps(),
+            [VerifyStep::Rust, VerifyStep::Xtask, VerifyStep::Browser]
+        );
+    }
+
+    #[test]
+    fn fmt_check_args_are_not_duplicated_for_deno() {
+        let args = vec!["--check".to_string()];
+
+        assert_eq!(cargo_fmt_args(&args), ["fmt", "--check"]);
+        assert_eq!(deno_fmt_args(&args), ["fmt", "--check", "static/"]);
+    }
+
+    #[test]
+    fn check_checks_workspace_targets() {
+        assert_eq!(
+            check_args(),
             [
-                VerifyStep::RustTests,
-                VerifyStep::XtaskTests,
-                VerifyStep::BrowserTests,
+                "check",
+                "--workspace",
+                "--all-targets",
+                "--features",
+                "test-utils",
             ]
         );
+    }
+
+    #[test]
+    fn lint_checks_entire_workspace_with_clippy() {
+        assert_eq!(
+            clippy_lint_args(),
+            [
+                "clippy",
+                "--workspace",
+                "--all-targets",
+                "--all-features",
+                "--",
+                "-D",
+                "warnings",
+            ]
+        );
+    }
+
+    #[test]
+    fn lint_steps_are_explicit() {
+        assert_eq!(
+            lint_step_names(),
+            [
+                "dictator lint",
+                "rustfmt check",
+                "clippy workspace",
+                "deno lint",
+                "sse macro policy",
+            ]
+        );
+    }
+
+    #[test]
+    fn watch_uses_server_defaults() {
+        assert_eq!(
+            watch_args(),
+            [
+                "watch",
+                "--delay",
+                "1",
+                "--exec",
+                "run -- serve",
+                "--notify",
+                "--clear"
+            ]
+        );
+        assert_eq!(
+            server_env_vars(None, None, std::path::Path::new("/repo")),
+            [
+                ("RUST_LOG".to_string(), "debug".to_string()),
+                (
+                    QUEST_LOG_DATA_DIR.to_string(),
+                    "/repo/target/quest-log/data".to_string(),
+                ),
+            ]
+        );
+    }
+
+    #[test]
+    fn coverage_fails_if_tool_missing_and_checks_integration_tests() {
+        assert_eq!(
+            coverage_args(),
+            [
+                "tarpaulin",
+                "--package",
+                "quest-log",
+                "--out",
+                "Xml",
+                "--features",
+                "test-utils",
+            ]
+        );
+        assert!(!coverage_args().contains(&"--lib"));
+    }
+
+    #[test]
+    fn datastar_download_rejects_http_errors() {
+        assert!(http_status_ok(reqwest::StatusCode::OK, "url").is_ok());
+        assert!(http_status_ok(reqwest::StatusCode::NOT_FOUND, "url").is_err());
+    }
+
+    #[test]
+    fn server_pid_marker_matches_exact_env_var() {
+        let env = b"PATH=/bin\0QUEST_LOG_X_SERVER_ID=abc\0OTHER=x\0";
+
+        assert!(environ_has_var(env, QUEST_LOG_X_SERVER_ID, "abc"));
+        assert!(!environ_has_var(env, QUEST_LOG_X_SERVER_ID, "ab"));
+        assert!(!environ_has_var(env, "SERVER_ID", "abc"));
     }
 }
