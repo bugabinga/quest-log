@@ -7,7 +7,7 @@ Proposed
 ## Context
 
 The current container build process (via `Containerfile`) runs
-`cargo build --release` without access to a database. This works because sqlx
+`cargo x build --release` without access to a database. This works because sqlx
 connects to the database at runtime, but it means:
 
 1. **Slow container builds**: Compile-time SQL verification is skipped anyway
@@ -46,7 +46,7 @@ cargo sqlx prepare  # generates sqlx-data.json
 git add sqlx-data.json
 
 # CI / Container (no DB needed)
-SQLX_OFFLINE=true cargo build --release
+SQLX_OFFLINE=true cargo x build --release
 ```
 
 ## Consequences

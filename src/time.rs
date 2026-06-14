@@ -1,4 +1,7 @@
-use chrono::{Datelike, NaiveDate, NaiveDateTime, Utc, Weekday};
+use chrono::{Datelike, NaiveDate, NaiveDateTime, Utc};
+
+#[cfg(debug_assertions)]
+use chrono::Weekday;
 
 #[cfg(debug_assertions)]
 use crate::config;
@@ -89,6 +92,7 @@ pub fn today() -> NaiveDate {
     Utc::now().date_naive()
 }
 
+#[cfg(debug_assertions)]
 fn parse_today_override(val: &str) -> NaiveDate {
     let val = val.trim();
 

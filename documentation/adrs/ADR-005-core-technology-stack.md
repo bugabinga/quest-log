@@ -214,15 +214,7 @@ paths to configure, no missing asset errors at runtime.
 
 ### File Structure
 
-```
-src/
-├── main.rs          # Axum setup, routes, shutdown handling
-├── database.rs      # sqlx queries with compile-time verification
-├── models.rs        # Data structures matching DB schema
-├── handlers/        # Route handlers returning HTML/SSE
-└── ui/              # Maud templates
-    └── fragments/   # Reusable UI components
-```
+Current source layout lives in `src/` and is summarized in `ARCHITECTURE.md`.
 
 ### Development Workflow
 

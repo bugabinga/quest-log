@@ -76,9 +76,7 @@ Fast. Reliable. 21.6MB binary.
 
 # Deploy in Seconds
 
-```bash
-podman run -p 3000:3000 ghcr.io/bugabinga/quest-log
-```
+Container image published on GHCR.
 
 One container. Done.
 

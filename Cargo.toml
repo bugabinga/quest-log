@@ -1,5 +1,6 @@
 [workspace]
 members = ["x"]
+default-members = ["."]
 
 [workspace.package]
 version = "0.0.0"

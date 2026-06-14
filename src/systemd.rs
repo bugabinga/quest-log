@@ -1,5 +1,4 @@
-//! Optional systemd integration (enabled via `features = ["systemd"]`).
-//! Compiles only on Linux when the `systemd` feature is enabled.
+//! Systemd integration for Linux builds.
 
 use sd_notify::NotifyState;
 use std::os::unix::io::RawFd;

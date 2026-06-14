@@ -194,10 +194,12 @@ ListenStream=3000
 WantedBy=sockets.target
 ```
 
-### Building with Systemd Support
+### Building
+
+Systemd support is part of Linux builds.
 
 ```bash
-cargo build --release --features systemd
+cargo x build --release
 ```
 
 ### Code Integration Points

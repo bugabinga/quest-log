@@ -66,15 +66,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: gacts/install-podman@v1
       - name: Test database migrations
-        run: |
-          # Create temporary volume for testing
-          podman volume create quest-log-test-data || true
-
-          # Run migrations using cargo x (builds image if needed)
-          cargo x container migrate --volume quest-log-test-data
-
-          # Verify database file exists
-          podman volume inspect quest-log-test-data --format '{{.Mountpoint}}' | xargs ls -la
+        run: cargo x container migrate quest-log-test-data
 
   release:
     needs: check
@@ -117,7 +109,7 @@ jobs:
         with:
           targets: ${{ matrix.target }}
       - name: Build release
-        run: cargo build --release --target ${{ matrix.target }}
+        run: cargo x build --release --triple ${{ matrix.target }}
       - name: Package binary
         run: |
           mkdir -p release/${{ matrix.binary }}

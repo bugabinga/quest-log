@@ -14,8 +14,9 @@ export async function launchBrowser() {
 }
 
 async function firefox(isCI: boolean, headless: boolean) {
-  const executablePath = "/usr/bin/firefox";
-  const launchArgs = [];
+  const executablePath = Deno.env.get("BROWSER_EXECUTABLE") ?? "/usr/bin/firefox";
+  const userDataDir = await Deno.makeTempDir({ prefix: "quest-log-firefox-" });
+  const launchArgs = ["--profile", userDataDir];
   if (isCI) {
     // In CI (GitHub Actions, GitLab, etc.), we usually run in containers
     // as root or without user namespaces, so sandbox is required.
@@ -29,11 +30,12 @@ async function firefox(isCI: boolean, headless: boolean) {
     executablePath: executablePath,
     headless: headless,
     args: launchArgs,
+    userDataDir,
   });
 }
 
 async function chrome(isCI: boolean, headless: boolean) {
-  const executablePath = "/usr/bin/google-chrome"; // Or google-chrome-stable
+  const executablePath = Deno.env.get("BROWSER_EXECUTABLE") ?? chromeExecutable();
   const launchArgs = [
     "--disable-dev-shm-usage", // General Linux stability
   ];
@@ -51,6 +53,23 @@ async function chrome(isCI: boolean, headless: boolean) {
     headless: headless,
     args: launchArgs,
   });
+}
+
+function chromeExecutable() {
+  for (const path of [
+    "/usr/bin/google-chrome",
+    "/usr/bin/google-chrome-stable",
+    "/usr/bin/chromium",
+    "/usr/bin/chromium-browser",
+  ]) {
+    try {
+      Deno.statSync(path);
+      return path;
+    } catch {
+      // try next common Linux browser path
+    }
+  }
+  return "/usr/bin/google-chrome";
 }
 
 export async function newPage(browser: puppeteer.Browser) {

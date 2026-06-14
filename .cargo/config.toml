@@ -1,2 +1,2 @@
 [alias]
-x = "run --package x --"
+x = ["run", "--package", "x", "--"]

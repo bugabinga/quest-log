@@ -102,21 +102,8 @@ single CLI entry point. All development commands go through `cargo x <command>`.
 
 ### Available Commands
 
-| Command                                | Description                                                |
-| -------------------------------------- | ---------------------------------------------------------- |
-| `cargo x test`                         | Run unit tests with `test-utils` feature enabled           |
-| `cargo x verify`                       | Run all tests including integration tests                  |
-| `cargo x fmt`                          | Format Rust code (cargo fmt) and JS code (deno fmt)        |
-| `cargo x lint`                         | Check formatting, run clippy with `-D warnings`, deno lint |
-| `cargo x check`                        | Full check (cargo check with test-utils feature)           |
-| `cargo x run [level] [cmd]`            | Run application with RUST_LOG set                          |
-| `cargo x watch`                        | Watch for changes and rebuild (cargo-watch)                |
-| `cargo x clean`                        | Clean build artifacts and remove local database            |
-| `cargo x container build/push/migrate` | Container operations with podman                           |
-| `cargo x bundle datastar [version]`    | Bundle datastar JS from CDN                                |
-| `cargo x assets`                       | Generate optimized images (favicons, icons)                |
-| `cargo x commit validate <file>`       | Validate commit message format                             |
-| `cargo x browser [--headed]`           | Run Puppeteer E2E tests                                    |
+Current command truth lives in `x/src/main.rs` and `cargo x --help`.
+Do not duplicate the full command list here.
 
 ### Implementation Details
 

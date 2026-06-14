@@ -1,10 +1,14 @@
 use anyhow::{Context, Result, bail};
 use clap::{Parser, Subcommand};
 use reqwest::Client;
+use std::net::{SocketAddr, TcpStream};
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
+use std::time::{Duration, Instant};
 
 const VERSION: &str = env!("APP_VERSION");
+const QUEST_LOG_DATA_DIR: &str = "QUEST_LOG_DATA_DIR";
+const DEV_STATE_DIR: &str = "target/quest-log";
 
 #[derive(Parser)]
 #[command(name = "x")]
@@ -17,15 +21,30 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Commands {
+    /// Build application binary
+    Build {
+        /// Release build
+        #[arg(long)]
+        release: bool,
+        /// Enable all features
+        #[arg(long)]
+        all_features: bool,
+        /// Enable features
+        #[arg(long, value_delimiter = ',')]
+        features: Vec<String>,
+        /// Build target triple
+        #[arg(long)]
+        triple: Option<String>,
+    },
     /// Run unit tests
     Test { args: Vec<String> },
-    /// Run all tests (integration)
+    /// Run all tests
     Verify { args: Vec<String> },
     /// Format Rust and JS code
     Fmt { args: Vec<String> },
-    /// Check formatting, clippy, and lint
+    /// Quality gate: formatting check, clippy, JS lint, policy lint
     Lint,
-    /// Full check (lint + verify + cargo check)
+    /// Fast typecheck
     Check,
     /// Generate coverage report
     Coverage,
@@ -45,7 +64,7 @@ enum Commands {
     Kill,
     /// Watch for changes and rebuild
     Watch,
-    /// Clean build artifacts and database
+    /// Clean build artifacts
     Clean,
     /// Container operations
     Container {
@@ -118,6 +137,12 @@ fn main() -> Result<()> {
     let cli = Cli::parse();
 
     match cli.command {
+        Commands::Build {
+            release,
+            all_features,
+            features,
+            triple,
+        } => build(release, all_features, &features, triple.as_deref()),
         Commands::Test { args } => test(&args),
         Commands::Verify { args } => verify(&args),
         Commands::Fmt { args } => fmt(&args),
@@ -161,6 +186,36 @@ fn run_cmd(program: &str, args: &[&str]) -> Result<()> {
         bail!("{program} command failed");
     }
     Ok(())
+}
+
+fn build(
+    release: bool,
+    all_features: bool,
+    features: &[String],
+    target: Option<&str>,
+) -> Result<()> {
+    let mut args = vec![
+        "build".to_string(),
+        "--package".to_string(),
+        "quest-log".to_string(),
+    ];
+    if release {
+        args.push("--release".to_string());
+    }
+    if all_features {
+        args.push("--all-features".to_string());
+    }
+    if !features.is_empty() {
+        args.push("--features".to_string());
+        args.push(features.join(","));
+    }
+    if let Some(target) = target {
+        args.push("--target".to_string());
+        args.push(target.to_string());
+    }
+
+    let refs = args.iter().map(String::as_str).collect::<Vec<_>>();
+    run_cargo(&refs)
 }
 
 fn test(args: &[String]) -> Result<()> {
@@ -225,6 +280,11 @@ fn check() -> Result<()> {
 }
 
 fn coverage() -> Result<()> {
+    if !cargo_subcommand_exists("tarpaulin")? {
+        println!("cargo-tarpaulin not installed; skipping coverage");
+        return Ok(());
+    }
+
     run_cargo(&[
         "tarpaulin",
         "--lib",
@@ -235,21 +295,34 @@ fn coverage() -> Result<()> {
     ])
 }
 
-fn build_server_command(subcommand: &str, args: &[String]) -> Command {
+fn build_server_command(subcommand: &str, args: &[String]) -> Result<Command> {
     let mut cmd = Command::new("cargo");
     cmd.env(
         "RUST_LOG",
         std::env::var("RUST_LOG").unwrap_or_else(|_| "debug".into()),
-    )
-    .args(["run", "--", subcommand])
-    .args(args)
-    .stdout(Stdio::inherit())
-    .stderr(Stdio::inherit());
-    cmd
+    );
+
+    if std::env::var_os(QUEST_LOG_DATA_DIR).is_none() {
+        cmd.env(QUEST_LOG_DATA_DIR, default_data_dir()?);
+    }
+
+    cmd.args(["run", "--", subcommand])
+        .args(args)
+        .stdout(Stdio::inherit())
+        .stderr(Stdio::inherit());
+    Ok(cmd)
+}
+
+fn default_data_dir() -> Result<PathBuf> {
+    Ok(std::env::current_dir()?.join(DEV_STATE_DIR).join("data"))
+}
+
+fn dev_state_path(name: &str) -> PathBuf {
+    PathBuf::from(DEV_STATE_DIR).join(name)
 }
 
 fn run(subcommand: &str, args: &[String]) -> Result<()> {
-    let status = build_server_command(subcommand, args)
+    let status = build_server_command(subcommand, args)?
         .status()
         .context("Failed to run cargo")?;
     if !status.success() {
@@ -265,8 +338,10 @@ fn serve(subcommand: &str, args: &[String]) -> Result<()> {
         println!("🛑 Stopping existing server (PID: {})", old_pid.unwrap());
     }
 
-    let mut cmd = build_server_command(subcommand, args);
-    let log_file_path = std::env::current_dir()?.join(".server.log");
+    let mut cmd = build_server_command(subcommand, args)?;
+    let state_dir = std::env::current_dir()?.join(DEV_STATE_DIR);
+    std::fs::create_dir_all(&state_dir)?;
+    let log_file_path = state_dir.join("server.log");
     let log_file = std::fs::OpenOptions::new()
         .create(true)
         .write(true)
@@ -346,10 +421,15 @@ fn process_is_alive(pid: u32) -> bool {
 }
 
 fn pid_path() -> PathBuf {
-    PathBuf::from(".server.pid")
+    dev_state_path("server.pid")
 }
 
 fn watch() -> Result<()> {
+    if !cargo_subcommand_exists("watch")? {
+        println!("cargo-watch not installed; running one check instead");
+        return check();
+    }
+
     run_cmd(
         "cargo",
         &[
@@ -359,12 +439,7 @@ fn watch() -> Result<()> {
 }
 
 fn clean() -> Result<()> {
-    run_cargo(&["clean"])?;
-    let db_path = std::path::Path::new("quests.db");
-    if db_path.exists() {
-        std::fs::remove_file(db_path).context("Failed to remove quests.db")?;
-    }
-    Ok(())
+    run_cargo(&["clean"])
 }
 
 fn container(command: ContainerCommands) -> Result<()> {
@@ -439,6 +514,8 @@ fn run_migrate(volume: &str) -> Result<()> {
         &[
             "run",
             "--rm",
+            "-e",
+            "QUEST_LOG_DATA_DIR=/data",
             "-v",
             &format!("{}:/data", volume),
             "bugabinga/quest-log:local",
@@ -573,6 +650,23 @@ fn validate_commit_msg(file_path: &str) -> Result<()> {
     Ok(())
 }
 
+fn cargo_subcommand_exists(name: &str) -> Result<bool> {
+    let output = Command::new("cargo")
+        .arg("--list")
+        .output()
+        .context("Failed to list cargo commands")?;
+
+    if !output.status.success() {
+        bail!("cargo --list failed");
+    }
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    Ok(stdout
+        .lines()
+        .filter_map(|line| line.split_whitespace().next())
+        .any(|command| command == name))
+}
+
 fn ensure_deno() -> Result<()> {
     let output = Command::new("deno")
         .arg("--version")
@@ -636,6 +730,37 @@ fn check_sse_macro_usage() -> Result<()> {
 }
 
 fn browser(headed: bool) -> Result<()> {
+    ensure_deno()?;
+    let browser = std::env::var("BROWSER").map_or_else(|_| default_browser(), |value| Ok(value))?;
+
+    let args = Vec::new();
+    serve("serve", &args)?;
+    let test_result = wait_for_server().and_then(|()| run_browser_tests(headed, &browser));
+    let kill_result = kill();
+
+    test_result?;
+    kill_result
+}
+
+fn wait_for_server() -> Result<()> {
+    let port = std::env::var("PORT")
+        .ok()
+        .and_then(|value| value.parse().ok())
+        .unwrap_or(3000);
+    let addr = SocketAddr::from(([127, 0, 0, 1], port));
+    let deadline = Instant::now() + Duration::from_secs(20);
+
+    while Instant::now() < deadline {
+        if TcpStream::connect_timeout(&addr, Duration::from_millis(200)).is_ok() {
+            return Ok(());
+        }
+        std::thread::sleep(Duration::from_millis(200));
+    }
+
+    bail!("server did not start on {addr}")
+}
+
+fn run_browser_tests(headed: bool, browser: &str) -> Result<()> {
     let mut args = vec!["task", "test:e2e"];
 
     if headed {
@@ -643,13 +768,50 @@ fn browser(headed: bool) -> Result<()> {
         args.push("--headed");
     }
 
-    let status = Command::new("deno")
-        .args(&args)
-        .status()
-        .context("Failed to run browser tests")?;
+    let mut cmd = Command::new("deno");
+    cmd.args(&args);
+
+    cmd.env("BROWSER", browser);
+    if browser == "chrome" && std::env::var_os("BROWSER_EXECUTABLE").is_none() {
+        if let Some(path) = chrome_executable() {
+            cmd.env("BROWSER_EXECUTABLE", path);
+        }
+    }
+    if !headed && std::env::var_os("HEADLESS").is_none() {
+        cmd.env("HEADLESS", "true");
+    }
+
+    let status = cmd.status().context("Failed to run browser tests")?;
 
     if !status.success() {
         bail!("Browser tests failed");
     }
     Ok(())
+}
+
+fn default_browser() -> Result<String> {
+    if chrome_executable().is_some() {
+        return Ok("chrome".to_string());
+    }
+    bail!("Chrome not found. Install google-chrome, google-chrome-stable, or chromium")
+}
+
+fn chrome_executable() -> Option<String> {
+    [
+        "google-chrome",
+        "google-chrome-stable",
+        "chromium",
+        "chromium-browser",
+    ]
+    .iter()
+    .find_map(|program| program_path(program))
+}
+
+fn program_path(program: &str) -> Option<String> {
+    std::env::var_os("PATH").and_then(|paths| {
+        std::env::split_paths(&paths)
+            .map(|path| path.join(program))
+            .find(|path| path.is_file())
+            .map(|path| path.display().to_string())
+    })
 }

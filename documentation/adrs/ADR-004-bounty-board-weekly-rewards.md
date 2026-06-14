@@ -104,19 +104,8 @@ This ensures celebration only plays once per week, not on every page refresh.
 
 ### Files Changed
 
-1. `src/main.rs` - Added `/bounty` route
-2. `src/handlers.rs` - Added `bounty` and `bounty_handler` functions
-3. `src/ui/bounty.rs` - New template for Bounty Board
-4. `src/ui/mod.rs` - Export `bounty_page`
-5. `src/ui/base.rs` - Added navigation link to `/bounty`
-6. `src/ui/fragments/weekly_rewards.rs` - Added celebration elements
-7. `src/database.rs` - Added `get_weekly_champion` and `create_weekly_champion`
-   methods
-8. `src/models.rs` - Added `WeeklyChampion` struct
-9. `migrations/002_weekly_champions.sql` - New migration
-10. `static/style.css` - Celebration animations (celebration-banner,
-    celebration-pulse, etc.)
-11. `static/js/app.js` - Celebration trigger logic with localStorage
+Current implementation lives under `src/`, `migrations/`, and `static/`.
+Use `ARCHITECTURE.md` for current source-of-truth pointers.
 
 ### CSS Animations
 
