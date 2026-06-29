@@ -197,7 +197,8 @@
 }
 
 @keyframes nav-active-glow {
-  0%, 100% {
+  0%,
+  100% {
     text-shadow: 0 0 6px oklch(0.6 0.18 160 / 0.4);
   }
   50% {
@@ -208,7 +209,8 @@
 }
 
 @keyframes nav-underline-pulse {
-  0%, 100% {
+  0%,
+  100% {
     box-shadow: 0 0 6px var(--glow-emerald);
     opacity: 1;
   }
@@ -223,7 +225,8 @@
 }
 
 @keyframes nav-icon-bounce {
-  0%, 100% {
+  0%,
+  100% {
     transform: translateY(0);
   }
   50% {
@@ -1522,7 +1525,8 @@ h1 {
 }
 
 @keyframes completed-glow {
-  0%, 100% {
+  0%,
+  100% {
     box-shadow:
       var(--shadow-md),
       var(--shadow-glow-success);
@@ -1535,7 +1539,8 @@ h1 {
 }
 
 @keyframes glow-pulse-success {
-  0%, 100% {
+  0%,
+  100% {
     box-shadow:
       var(--shadow-md),
       var(--shadow-glow-success);
@@ -1548,7 +1553,8 @@ h1 {
 }
 
 @keyframes glow-pulse-warning {
-  0%, 100% {
+  0%,
+  100% {
     box-shadow:
       var(--shadow-sm),
       var(--shadow-glow-warning);
@@ -1561,7 +1567,8 @@ h1 {
 }
 
 @keyframes glow-pulse-primary {
-  0%, 100% {
+  0%,
+  100% {
     box-shadow:
       var(--shadow-md),
       var(--shadow-glow-primary);
@@ -1586,7 +1593,8 @@ h1 {
 }
 
 @keyframes flicker {
-  0%, 100% {
+  0%,
+  100% {
     opacity: 1;
   }
   10% {
@@ -1619,7 +1627,8 @@ h1 {
 }
 
 @keyframes gear-tick {
-  0%, 100% {
+  0%,
+  100% {
     transform: scale(1);
   }
   25% {
@@ -1634,7 +1643,8 @@ h1 {
 }
 
 @keyframes rune-pulse {
-  0%, 100% {
+  0%,
+  100% {
     filter: brightness(1);
   }
   50% {
@@ -1890,7 +1900,9 @@ h1 {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after {
+  *,
+  *::before,
+  *::after {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
@@ -2042,7 +2054,8 @@ h1 {
 
 /* High-DPI / Retina display optimization */
 @media (min-resolution: 2dppx), (min-resolution: 192dpi) {
-  .quest-item, .toggle-btn {
+  .quest-item,
+  .toggle-btn {
     image-rendering: pixelated;
   }
 
@@ -2697,7 +2710,8 @@ h1 {
 }
 
 @keyframes text-glow {
-  0%, 100% {
+  0%,
+  100% {
     text-shadow: 0 0 10px oklch(var(--glow-color-accent));
   }
   50% {
@@ -2841,7 +2855,8 @@ h1 {
 }
 
 @keyframes realmPulse {
-  0%, 100% {
+  0%,
+  100% {
     transform: scale(1);
     box-shadow:
       0 0 60px rgba(255, 107, 107, 0.2),
@@ -2856,7 +2871,8 @@ h1 {
 }
 
 @keyframes realmFlicker {
-  0%, 100% {
+  0%,
+  100% {
     opacity: 1;
   }
   50% {
@@ -2874,7 +2890,8 @@ h1 {
 }
 
 @keyframes skullBounce {
-  0%, 100% {
+  0%,
+  100% {
     transform: translateY(0);
   }
   50% {
@@ -2898,7 +2915,9 @@ h1 {
 }
 
 @keyframes dotBounce {
-  0%, 80%, 100% {
+  0%,
+  80%,
+  100% {
     background: #3d3d5c;
     transform: scale(0.8);
   }
@@ -2985,7 +3004,8 @@ h1 {
 }
 
 @keyframes celebration-bounce {
-  0%, 100% {
+  0%,
+  100% {
     transform: translateY(0) rotate(-5deg);
   }
   50% {
@@ -3029,7 +3049,8 @@ h1 {
 }
 
 @keyframes badge-pulse {
-  0%, 100% {
+  0%,
+  100% {
     transform: scale(1);
     box-shadow:
       0 0 15px oklch(0.7 0.2 50 / 0.4),
@@ -3069,7 +3090,8 @@ h1 {
 }
 
 @keyframes golden-pulse {
-  0%, 100% {
+  0%,
+  100% {
     box-shadow:
       0 0 20px oklch(0.7 0.2 50 / 0.3),
       inset 0 0 15px oklch(0.9 0.1 50 / 0.1);
@@ -3558,7 +3580,8 @@ h1 {
 }
 
 @keyframes shake {
-  0%, 100% {
+  0%,
+  100% {
     transform: translateX(0);
   }
   25% {
