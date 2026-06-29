@@ -7,6 +7,7 @@ use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};
 
 const VERSION: &str = env!("APP_VERSION");
+const IMAGE_REPOSITORY: &str = "ghcr.io/bugabinga/quest-log";
 const QUEST_LOG_DATA_DIR: &str = "QUEST_LOG_DATA_DIR";
 const QUEST_LOG_X_SERVER_ID: &str = "QUEST_LOG_X_SERVER_ID";
 const DEV_STATE_DIR: &str = "target/quest-log";
@@ -621,9 +622,9 @@ fn build_container() -> Result<()> {
         &[
             "build",
             "--build-arg",
-            &format!("VERSION={}", VERSION),
+            &format!("VERSION={VERSION}"),
             "-t",
-            "bugabinga/quest-log:local",
+            &format!("{IMAGE_REPOSITORY}:local"),
             "-f",
             "Containerfile",
             ".",
@@ -636,28 +637,28 @@ fn tag_container() -> Result<()> {
         "podman",
         &[
             "tag",
-            "bugabinga/quest-log:local",
-            &format!("bugabinga/quest-log:{}", VERSION),
+            &format!("{IMAGE_REPOSITORY}:local"),
+            &format!("{IMAGE_REPOSITORY}:{VERSION}"),
         ],
     )?;
     run_cmd(
         "podman",
         &[
             "tag",
-            "bugabinga/quest-log:local",
-            "bugabinga/quest-log:latest",
+            &format!("{IMAGE_REPOSITORY}:local"),
+            &format!("{IMAGE_REPOSITORY}:latest"),
         ],
     )?;
-    println!("Tagged as bugabinga/quest-log:{} and latest", VERSION);
+    println!("Tagged as {IMAGE_REPOSITORY}:{VERSION} and latest");
     Ok(())
 }
 
 fn push_container() -> Result<()> {
     run_cmd(
         "podman",
-        &["push", &format!("bugabinga/quest-log:{}", VERSION)],
+        &["push", &format!("{IMAGE_REPOSITORY}:{VERSION}")],
     )?;
-    run_cmd("podman", &["push", "bugabinga/quest-log:latest"])
+    run_cmd("podman", &["push", &format!("{IMAGE_REPOSITORY}:latest")])
 }
 
 fn run_migrate(volume: &str) -> Result<()> {
@@ -670,7 +671,7 @@ fn run_migrate(volume: &str) -> Result<()> {
             "QUEST_LOG_DATA_DIR=/data",
             "-v",
             &format!("{}:/data", volume),
-            "bugabinga/quest-log:local",
+            &format!("{IMAGE_REPOSITORY}:local"),
             "migrate-only",
         ],
     )
@@ -1062,6 +1063,18 @@ mod tests {
         assert!(!ci.contains("macos-"));
         assert!(!ci.contains("pc-windows"));
         assert!(!ci.contains("apple-darwin"));
+    }
+
+    #[test]
+    fn container_image_repository_is_ghcr() {
+        let unit_path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .unwrap()
+            .join("container/systemd/quest-log.container");
+        let unit = std::fs::read_to_string(unit_path).unwrap();
+
+        assert_eq!(IMAGE_REPOSITORY, "ghcr.io/bugabinga/quest-log");
+        assert!(unit.contains("Image=ghcr.io/bugabinga/quest-log:latest"));
     }
 
     #[test]

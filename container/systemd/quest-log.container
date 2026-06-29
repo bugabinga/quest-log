@@ -4,7 +4,7 @@ Documentation=https://github.com/bugabinga/quest-log
 After=network.target
 
 [Container]
-Image=bugabinga/quest-log:latest
+Image=ghcr.io/bugabinga/quest-log:latest
 PublishPort=3000:3000
 Volume=quest-log-data:/data
 Environment=QUEST_LOG_DATA_DIR=/data
