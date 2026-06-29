@@ -1141,6 +1141,16 @@ mod tests {
     }
 
     #[test]
+    fn ci_migration_pulls_published_image() {
+        let ci = ci_workflow();
+
+        assert!(ci.contains("podman pull ghcr.io/bugabinga/quest-log:latest"));
+        assert!(ci.contains(
+            "podman tag ghcr.io/bugabinga/quest-log:latest ghcr.io/bugabinga/quest-log:local"
+        ));
+    }
+
+    #[test]
     fn container_image_repository_is_ghcr() {
         let unit_path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
             .parent()

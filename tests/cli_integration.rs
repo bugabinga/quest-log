@@ -11,11 +11,15 @@
 use std::process::Command;
 use std::str;
 
+fn quest_log_command() -> Command {
+    Command::new(env!("CARGO_BIN_EXE_quest-log"))
+}
+
 /// Test that the default command runs without error
 #[test]
 fn test_default_command_help() {
-    let output = Command::new("cargo")
-        .args(["run", "--", "--help"])
+    let output = quest_log_command()
+        .arg("--help")
         .output()
         .expect("Failed to execute command");
 
@@ -32,8 +36,8 @@ fn test_default_command_help() {
 /// Test that all CLI subcommands are available
 #[test]
 fn test_cli_subcommands() {
-    let output = Command::new("cargo")
-        .args(["run", "--", "--help"])
+    let output = quest_log_command()
+        .arg("--help")
         .output()
         .expect("Failed to execute");
 
