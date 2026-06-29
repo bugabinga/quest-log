@@ -1041,15 +1041,27 @@ mod tests {
         );
     }
 
-    #[test]
-    fn ci_installs_locked_dictator_version() {
+    fn ci_workflow() -> String {
         let ci_path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
             .parent()
             .unwrap()
             .join(".github/workflows/ci.yml");
-        let ci = std::fs::read_to_string(ci_path).unwrap();
+        std::fs::read_to_string(ci_path).unwrap()
+    }
 
-        assert!(ci.contains("cargo install dictator --version 0.16.5 --locked"));
+    #[test]
+    fn ci_installs_locked_dictator_version() {
+        assert!(ci_workflow().contains("cargo install dictator --version 0.16.5 --locked"));
+    }
+
+    #[test]
+    fn release_matrix_is_linux_only() {
+        let ci = ci_workflow();
+
+        assert!(!ci.contains("windows-"));
+        assert!(!ci.contains("macos-"));
+        assert!(!ci.contains("pc-windows"));
+        assert!(!ci.contains("apple-darwin"));
     }
 
     #[test]
