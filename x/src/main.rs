@@ -89,6 +89,8 @@ enum Commands {
         #[arg(long)]
         precise: String,
     },
+    /// Validate release tag against package version
+    ReleaseCheck,
     /// Process assets (favicons, icons)
     Assets,
     /// Run browser/E2E tests
@@ -166,6 +168,7 @@ fn main() -> Result<()> {
         Commands::Bundle { command } => bundle(command),
         Commands::Commit { command } => commit(command),
         Commands::Update { package, precise } => update(&package, &precise),
+        Commands::ReleaseCheck => release_check(),
         Commands::Assets => assets(),
         Commands::Browser { headed } => browser(headed),
     }
@@ -607,12 +610,14 @@ fn container(command: ContainerCommands) -> Result<()> {
         ContainerCommands::Build { release } => {
             if release {
                 check_clean()?;
+                check_release_tag_if_present()?;
             }
             build_container()
         }
         ContainerCommands::Push { release } => {
             if release {
                 check_clean()?;
+                check_release_tag_if_present()?;
             }
             build_container()?;
             tag_container()?;
@@ -780,6 +785,30 @@ fn update(package: &str, precise: &str) -> Result<()> {
 
 fn update_args<'a>(package: &'a str, precise: &'a str) -> [&'a str; 5] {
     ["update", "-p", package, "--precise", precise]
+}
+
+fn release_check() -> Result<()> {
+    let tag = std::env::var("GITHUB_REF_NAME").context("GITHUB_REF_NAME is required")?;
+    validate_release_tag(&tag)
+}
+
+fn check_release_tag_if_present() -> Result<()> {
+    match std::env::var("GITHUB_REF_NAME") {
+        Ok(tag) => validate_release_tag(&tag),
+        Err(_) => Ok(()),
+    }
+}
+
+fn validate_release_tag(tag: &str) -> Result<()> {
+    let expected = expected_release_tag();
+    if tag != expected {
+        bail!("release tag {tag} does not match package version {expected}");
+    }
+    Ok(())
+}
+
+fn expected_release_tag() -> String {
+    format!("v{VERSION}")
 }
 
 fn validate_commit_msg(file_path: &str) -> Result<()> {
@@ -1078,6 +1107,22 @@ mod tests {
         assert!(!ci.contains("macos-"));
         assert!(!ci.contains("pc-windows"));
         assert!(!ci.contains("apple-darwin"));
+    }
+
+    #[test]
+    fn release_upload_uses_ref_name_tag() {
+        let ci = ci_workflow();
+
+        assert!(ci.contains("cargo x release-check"));
+        assert!(ci.contains("tag_name: ${{ github.ref_name }}"));
+        assert!(!ci.contains("tag_name: ${{ github.ref }}"));
+    }
+
+    #[test]
+    fn release_tag_must_match_package_version() {
+        assert_eq!(expected_release_tag(), format!("v{VERSION}"));
+        assert!(validate_release_tag(&expected_release_tag()).is_ok());
+        assert!(validate_release_tag("v999.0.0").is_err());
     }
 
     #[test]
