@@ -83,6 +83,12 @@ enum Commands {
         #[command(subcommand)]
         command: CommitCommands,
     },
+    /// Update one locked dependency
+    Update {
+        package: String,
+        #[arg(long)]
+        precise: String,
+    },
     /// Process assets (favicons, icons)
     Assets,
     /// Run browser/E2E tests
@@ -159,6 +165,7 @@ fn main() -> Result<()> {
         Commands::Container { command } => container(command),
         Commands::Bundle { command } => bundle(command),
         Commands::Commit { command } => commit(command),
+        Commands::Update { package, precise } => update(&package, &precise),
         Commands::Assets => assets(),
         Commands::Browser { headed } => browser(headed),
     }
@@ -767,6 +774,14 @@ fn commit(command: CommitCommands) -> Result<()> {
     }
 }
 
+fn update(package: &str, precise: &str) -> Result<()> {
+    run_cargo(&update_args(package, precise))
+}
+
+fn update_args<'a>(package: &'a str, precise: &'a str) -> [&'a str; 5] {
+    ["update", "-p", package, "--precise", precise]
+}
+
 fn validate_commit_msg(file_path: &str) -> Result<()> {
     let output = Command::new("git")
         .args(["rev-parse", "-q", "--verify", "MERGE_HEAD"])
@@ -1124,6 +1139,14 @@ mod tests {
     fn datastar_download_rejects_http_errors() {
         assert!(http_status_ok(reqwest::StatusCode::OK, "url").is_ok());
         assert!(http_status_ok(reqwest::StatusCode::NOT_FOUND, "url").is_err());
+    }
+
+    #[test]
+    fn update_pins_one_package() {
+        assert_eq!(
+            update_args("rand@0.9.2", "0.9.3"),
+            ["update", "-p", "rand@0.9.2", "--precise", "0.9.3"]
+        );
     }
 
     #[test]
