@@ -10,6 +10,7 @@ use axum::{
     response::sse::{Event, Sse},
 };
 use chrono::Utc;
+use datastar::execute_script::ExecuteScript;
 use datastar::patch_elements::PatchElements;
 use datastar::patch_signals::PatchSignals;
 use futures::Stream;
@@ -30,17 +31,9 @@ const SESSION_COOKIE_OPTS: &str = "Path=/; HttpOnly; SameSite=Strict; Max-Age=86
 #[cfg(not(debug_assertions))]
 const SESSION_COOKIE_OPTS: &str = "Path=/; HttpOnly; SameSite=Strict; Secure; Max-Age=86400";
 
-/// Get the client IP from headers
-fn get_client_ip(headers: &HeaderMap) -> String {
-    headers
-        .get("x-forwarded-for")
-        .and_then(|v| v.to_str().ok())
-        .or_else(|| headers.get("x-real-ip").and_then(|v| v.to_str().ok()))
-        .unwrap_or("unknown")
-        .split(',')
-        .next()
-        .unwrap_or("unknown")
-        .to_string()
+/// Get the rate-limit key for editor auth.
+fn get_client_ip(_headers: &HeaderMap) -> String {
+    "local".to_string()
 }
 
 /// Extract and validate session token from cookie header
@@ -211,31 +204,14 @@ pub async fn login_handler(
     let expiry = state.create_session(token.clone()).await;
     info!(ip = %client_ip, expires = ?expiry, "Login successful");
 
-    let quests = state.db.get_all_quests().await.unwrap_or_default();
-    let rewards = state.db.get_all_rewards().await.unwrap_or_default();
-    let settings = state.db.get_settings().await.unwrap_or(Settings {
-        id: 1,
-        weekly_exp_goal: 100,
-        updated_at: Utc::now(),
-    });
-
-    let html = ui::editor::editor_page(true, "quests", &quests, &rewards, &settings);
-
     let signals = serde_json::json!({
         "isAuthenticated": true,
         "loginError": null
     });
 
-    let combined_html = format!(
-        r#"<div class="editor-wrapper" style="view-transition-name: editor-page;">{}</div>"#,
-        html.into_string()
-    );
-
     let events: Vec<Event> = vec![
-        PatchElements::new(combined_html)
-            .use_view_transition(true)
-            .into(),
         PatchSignals::new(signals.to_string()).into(),
+        ExecuteScript::new("window.location.href = '/editor'").into(),
     ];
 
     let mut response_headers = HeaderMap::new();

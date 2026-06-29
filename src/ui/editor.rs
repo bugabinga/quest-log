@@ -45,7 +45,16 @@ pub fn editor_page(
         })
     );
 
-    let computed = String::new();
+    let computed = r"({
+        _questFormValid: () => ($_questTitle ?? '').trim().length > 0,
+        _questFormTitle: () => $_editingQuestId ? 'Edit Quest' : 'Add New Quest',
+        _questSubmitText: () => $_editingQuestId ? 'Update Quest' : 'Save Quest',
+        _questImageTooLarge: () => ($_questImage ?? []).some((file) => file.size > 5 * 1024 * 1024),
+        _rewardFormValid: () => ($_rewardTitle ?? '').trim().length > 0 && Number($_rewardRequiredExp ?? 0) >= 0,
+        _rewardFormTitle: () => $_editingRewardId ? 'Edit Reward' : 'Add New Reward',
+        _rewardSubmitText: () => $_editingRewardId ? 'Update Reward' : 'Save Reward',
+        _rewardImageTooLarge: () => ($_rewardImage ?? []).some((file) => file.size > 5 * 1024 * 1024)
+    })".to_string();
 
     let body_content = html! {
         div class="editor-wrapper" {
@@ -59,34 +68,37 @@ pub fn editor_page(
                     div class="editor-tabs" {
                         button
                             class=(if active_tab == "quests" { "editor-tab editor-tab--active" } else { "editor-tab" })
-                            data-on:click="@get('/editor/tab/quests')" {
+                            data-class:editor-tab--active="$_activeTab === 'quests'"
+                            data-on:click="$_activeTab = 'quests'" {
                             "📜 Quests"
                         }
                         button
                             class=(if active_tab == "rewards" { "editor-tab editor-tab--active" } else { "editor-tab" })
-                            data-on:click="@get('/editor/tab/rewards')" {
+                            data-class:editor-tab--active="$_activeTab === 'rewards'"
+                            data-on:click="$_activeTab = 'rewards'" {
                             "🎁 Rewards"
                         }
                         button
                             class=(if active_tab == "settings" { "editor-tab editor-tab--active" } else { "editor-tab" })
-                            data-on:click="@get('/editor/tab/settings')" {
+                            data-class:editor-tab--active="$_activeTab === 'settings'"
+                            data-on:click="$_activeTab = 'settings'" {
                             "⚙️ Settings"
                         }
                     }
 
                     div class="editor-content" {
                         // Quests Tab
-                        div class=(if active_tab == "quests" { "editor-panel" } else { "editor-panel hidden" }) {
+                        div class="editor-panel" style=(if active_tab == "quests" { "" } else { "display: none;" }) data-show="$_activeTab === 'quests'" {
                             (editor_quests_panel(quests))
                         }
 
                         // Rewards Tab
-                        div class=(if active_tab == "rewards" { "editor-panel" } else { "editor-panel hidden" }) {
+                        div class="editor-panel" style=(if active_tab == "rewards" { "" } else { "display: none;" }) data-show="$_activeTab === 'rewards'" {
                             (editor_rewards_panel(rewards))
                         }
 
                         // Settings Tab
-                        div class=(if active_tab == "settings" { "editor-panel" } else { "editor-panel hidden" }) {
+                        div class="editor-panel" style=(if active_tab == "settings" { "" } else { "display: none;" }) data-show="$_activeTab === 'settings'" {
                             (editor_settings_panel(settings))
                         }
                     }
@@ -122,15 +134,15 @@ fn editor_quests_panel(quests: &[Quest]) -> Markup {
                 h2 { "📜 Quest Management" }
                 button
                     class="editor-btn editor-btn--primary"
-                    data-on:click="_showQuestForm = true; _editingQuestId = null; _questTitle = ''; _questDescription = ''; _questExpValue = 10; _questDayOfWeek = 0; _questImage = []" {
+                    data-on:click="$_showQuestForm = true; $_editingQuestId = null; $_questTitle = ''; $_questDescription = ''; $_questExpValue = 10; $_questDayOfWeek = 0; $_questImage = []" {
                     "+ Add Quest"
                 }
             }
 
             // Add/Edit Quest Form
-            div id="quest-form-container" class="editor-form-container hidden" data-show="_showQuestForm" {
+            div id="quest-form-container" class="editor-form-container" style="display: none;" data-show="$_showQuestForm" {
                 div class="editor-form" {
-                    h3 data-text="_questFormTitle" { "Add New Quest" }
+                    h3 data-text="$_questFormTitle" { "Add New Quest" }
 
                     div class="form-row" {
                         div class="form-group" {
@@ -167,7 +179,7 @@ fn editor_quests_panel(quests: &[Quest]) -> Markup {
                                 id="quest-image"
                                 data-bind:_questImage
                                 accept="image/*";
-                            (PreEscaped(r#"<p class="error" data-show="_questImageTooLarge">Image too large (max 5MB)</p>"#))
+                            (PreEscaped(r#"<p class="error" data-show="$_questImageTooLarge">Image too large (max 5MB)</p>"#))
                         }
                     }
 
@@ -184,15 +196,15 @@ fn editor_quests_panel(quests: &[Quest]) -> Markup {
                         button
                             type="button"
                             class="editor-btn editor-btn--secondary"
-                            data-on:click="_showQuestForm = false; _editingQuestId = null" {
+                            data-on:click="$_showQuestForm = false; $_editingQuestId = null" {
                             "Cancel"
                         }
                         button
                             type="button"
                             class="editor-btn editor-btn--primary"
-                            data-on:click="_questFormValid && (_editingQuestId ? @put(`/editor/quests/${_editingQuestId}`) : @post('/editor/quests'))"
-                            data-attr:disabled="!_questFormValid" {
-                            span data-text="_questSubmitText" { "Save Quest" }
+                            data-on:click="$_questFormValid && ($_editingQuestId ? @put('/editor/quests/' + $_editingQuestId) : @post('/editor/quests'))"
+                            data-attr:disabled="!$_questFormValid" {
+                            span data-text="$_questSubmitText" { "Save Quest" }
                         }
                     }
                 }
@@ -259,15 +271,15 @@ fn editor_rewards_panel(rewards: &[Reward]) -> Markup {
                 h2 { "🎁 Reward Management" }
                 button
                     class="editor-btn editor-btn--primary"
-                    data-on:click="_showRewardForm = true; _editingRewardId = null; _rewardTitle = ''; _rewardDescription = ''; _rewardRequiredExp = 50; _rewardImage = []" {
+                    data-on:click="$_showRewardForm = true; $_editingRewardId = null; $_rewardTitle = ''; $_rewardDescription = ''; $_rewardRequiredExp = 50; $_rewardImage = []" {
                     "+ Add Reward"
                 }
             }
 
             // Add/Edit Reward Form
-            div id="reward-form-container" class="editor-form-container hidden" data-show="_showRewardForm" {
+            div id="reward-form-container" class="editor-form-container" style="display: none;" data-show="$_showRewardForm" {
                 div class="editor-form" {
-                    h3 data-text="_rewardFormTitle" { "Add New Reward" }
+                    h3 data-text="$_rewardFormTitle" { "Add New Reward" }
 
                     div class="form-row" {
                         div class="form-group" {
@@ -295,7 +307,7 @@ fn editor_rewards_panel(rewards: &[Reward]) -> Markup {
                             id="reward-image"
                             data-bind:_rewardImage
                             accept="image/*";
-                        (PreEscaped(r#"<p class="error" data-show="_rewardImageTooLarge">Image too large (max 5MB)</p>"#))
+                        (PreEscaped(r#"<p class="error" data-show="$_rewardImageTooLarge">Image too large (max 5MB)</p>"#))
                     }
 
                     div class="form-group" {
@@ -311,15 +323,15 @@ fn editor_rewards_panel(rewards: &[Reward]) -> Markup {
                         button
                             type="button"
                             class="editor-btn editor-btn--secondary"
-                            data-on:click="_showRewardForm = false; _editingRewardId = null" {
+                            data-on:click="$_showRewardForm = false; $_editingRewardId = null" {
                             "Cancel"
                         }
                         button
                             type="button"
                             class="editor-btn editor-btn--primary"
-                            data-on:click="_rewardFormValid && (_editingRewardId ? @put(`/editor/rewards/${_editingRewardId}`) : @post('/editor/rewards'))"
-                            data-attr:disabled="!_rewardFormValid" {
-                            span data-text="_rewardSubmitText" { "Save Reward" }
+                            data-on:click="$_rewardFormValid && ($_editingRewardId ? @put('/editor/rewards/' + $_editingRewardId) : @post('/editor/rewards'))"
+                            data-attr:disabled="!$_rewardFormValid" {
+                            span data-text="$_rewardSubmitText" { "Save Reward" }
                         }
                     }
                 }

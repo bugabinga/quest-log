@@ -18,7 +18,7 @@ pub fn auth_modal() -> Markup {
                         p data-text="loginError" {}
                     }
 
-                    form id="login-form" class="auth-form" method="post" data-on:submit__prevent="(_password ?? '') && (_password ?? '').trim() !== '' ? @post('/editor/login') : (loginError = 'Please enter a password')" {
+                    form id="login-form" class="auth-form" method="post" data-on:submit__prevent="($_password ?? '') && ($_password ?? '').trim() !== '' ? @post('/editor/login', {contentType: 'form'}) : ($loginError = 'Please enter a password')" {
                         div class="form-group" {
                             label for="password" { "Master Key" }
                             input
@@ -26,7 +26,7 @@ pub fn auth_modal() -> Markup {
                                 id="password"
                                 name="password"
                                 placeholder="Enter your master key..."
-                                data-bind="_password"
+                                data-bind:_password
                                 autocomplete="current-password";
                         }
 

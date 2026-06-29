@@ -94,6 +94,55 @@ async fn test_login_handler_wrong_password_returns_error() {
 }
 
 #[tokio::test]
+async fn test_login_rate_limit_ignores_spoofed_forwarded_for() {
+    let pool = SqlitePool::connect("sqlite::memory:")
+        .await
+        .expect("Failed to create in-memory database");
+    let db: Database = Database::with_pool(pool);
+    db.migrate().await.expect("Failed to run migrations");
+
+    let (bcast_tx, _) = broadcast::channel(128);
+    let app_state = AppState::new(db, bcast_tx);
+    let app = Router::new()
+        .route("/editor/login", post(login_handler))
+        .with_state(app_state);
+
+    for attempt in 0..5 {
+        let request = Request::builder()
+            .method(Method::POST)
+            .uri("/editor/login")
+            .header("content-type", "application/x-www-form-urlencoded")
+            .header("x-forwarded-for", format!("198.51.100.{attempt}"))
+            .body(Body::from("password=wrong_password"))
+            .unwrap();
+
+        let response = app.clone().oneshot(request).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+    }
+
+    let request = Request::builder()
+        .method(Method::POST)
+        .uri("/editor/login")
+        .header("content-type", "application/x-www-form-urlencoded")
+        .header("x-forwarded-for", "198.51.100.99")
+        .body(Body::from("password=wrong_password"))
+        .unwrap();
+
+    let response = app.oneshot(request).await.unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let body_str = String::from_utf8(body.to_vec()).unwrap();
+
+    assert!(
+        body_str.contains("Too many login attempts"),
+        "spoofed X-Forwarded-For must not bypass login rate limiting: {body_str}"
+    );
+}
+
+#[tokio::test]
 async fn test_login_handler_correct_password_creates_session() {
     let pool = SqlitePool::connect("sqlite::memory:")
         .await

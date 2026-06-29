@@ -101,7 +101,7 @@ pub fn base_page(data: &PageData) -> maud::Markup {
                         @if let Some(ref signals) = data.signals {
                             div data-signals=(PreEscaped(escape_for_html_attr(signals))) {}
                         }
-                        @if let Some(ref computed) = data.computed {
+                        @if let Some(ref computed) = data.computed && !computed.is_empty() {
                             div data-computed=(PreEscaped(escape_for_html_attr(computed))) {}
                         }
                         div class="notifications" {}

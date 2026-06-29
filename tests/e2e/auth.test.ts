@@ -33,6 +33,27 @@ Deno.test({
 });
 
 Deno.test({
+  name: "Editor login reaches editor UI",
+  sanitizeResources: false,
+  sanitizeOps: false,
+  async fn() {
+    const browser = await launchBrowser();
+    try {
+      const page = await newPage(browser);
+      await clearBrowserState(page);
+      await gotoEditor(page);
+
+      await page.focus("#password");
+      await page.keyboard.type("dev");
+      await page.click(".auth-submit");
+      await page.waitForSelector(".editor-container", { visible: true });
+    } finally {
+      await browser.close();
+    }
+  },
+});
+
+Deno.test({
   name: "Editor auth modal has no page-load JavaScript errors",
   sanitizeResources: false,
   sanitizeOps: false,
@@ -47,6 +68,9 @@ Deno.test({
         if (msg.type() === "error") {
           errors.push(msg.text());
         }
+      });
+      page.on("pageerror", (error) => {
+        errors.push(error instanceof Error ? error.message : String(error));
       });
 
       await gotoEditor(page);
