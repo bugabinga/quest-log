@@ -793,10 +793,19 @@ fn release_check() -> Result<()> {
 }
 
 fn check_release_tag_if_present() -> Result<()> {
-    match std::env::var("GITHUB_REF_NAME") {
-        Ok(tag) => validate_release_tag(&tag),
-        Err(_) => Ok(()),
+    let Ok(github_ref) = std::env::var("GITHUB_REF") else {
+        return Ok(());
+    };
+    if !is_tag_ref(&github_ref) {
+        return Ok(());
     }
+
+    let tag = std::env::var("GITHUB_REF_NAME").context("GITHUB_REF_NAME is required")?;
+    validate_release_tag(&tag)
+}
+
+fn is_tag_ref(github_ref: &str) -> bool {
+    github_ref.starts_with("refs/tags/")
 }
 
 fn validate_release_tag(tag: &str) -> Result<()> {
@@ -1123,6 +1132,12 @@ mod tests {
         assert_eq!(expected_release_tag(), format!("v{VERSION}"));
         assert!(validate_release_tag(&expected_release_tag()).is_ok());
         assert!(validate_release_tag("v999.0.0").is_err());
+    }
+
+    #[test]
+    fn release_tag_validation_only_runs_for_tags() {
+        assert!(is_tag_ref("refs/tags/v1.2.3"));
+        assert!(!is_tag_ref("refs/heads/trunk"));
     }
 
     #[test]
