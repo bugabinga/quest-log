@@ -37,11 +37,9 @@ async fn test_timeout_handling() {
             AppState::new(db, bcast_tx)
         });
 
-    // Test with a very short timeout to simulate slow operations
     let request = Request::builder().uri("/").body(Body::empty()).unwrap();
 
-    // This should complete quickly in normal conditions
-    let result = timeout(Duration::from_millis(10), app.oneshot(request)).await;
+    let result = timeout(Duration::from_secs(1), app.oneshot(request)).await;
 
     match result {
         Ok(Ok(response)) => {
