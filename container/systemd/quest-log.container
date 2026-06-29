@@ -8,6 +8,7 @@ Image=ghcr.io/bugabinga/quest-log:latest
 PublishPort=3000:3000
 Volume=quest-log-data:/data
 Environment=QUEST_LOG_DATA_DIR=/data
+EnvironmentFile=/etc/quest-log/quest-log.env
 AutoUpdate=registry
 Notify=true
 TZ=Europe/Berlin

@@ -115,6 +115,13 @@ async fn main() {
     };
     tracing::debug!(bind_addr = %bind_addr, port = %port, "🔌 Address configured");
 
+    if !cfg!(debug_assertions)
+        && let Err(e) = config::required_editor_password_hash()
+    {
+        eprintln!("❌ Configuration error: {e}");
+        std::process::exit(1);
+    }
+
     tracing::info!("🗄️  Initializing database...");
     let db = match Database::new().await {
         Ok(db) => db,

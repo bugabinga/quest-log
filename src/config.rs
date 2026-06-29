@@ -101,6 +101,9 @@ pub enum ConfigError {
     /// Invalid bind address value.
     #[error("invalid bind address: {0}")]
     InvalidBindAddr(String),
+    /// Missing required editor password hash.
+    #[error("{0} must be set")]
+    MissingEditorPasswordHash(String),
     /// Failed to get current directory.
     #[error("failed to get current directory: {0}")]
     CurrentDirectory(std::io::Error),
@@ -205,6 +208,17 @@ pub fn bind_addr() -> Result<IpAddr, ConfigError> {
 #[must_use]
 pub fn editor_password_hash() -> Option<String> {
     std::env::var(QUEST_LOG_EDITOR_PASSWORD_HASH).ok()
+}
+
+/// Get the required editor password hash.
+///
+/// # Errors
+///
+/// Returns [`ConfigError::MissingEditorPasswordHash`] if `QUEST_LOG_EDITOR_PASSWORD_HASH` is not set.
+pub fn required_editor_password_hash() -> Result<String, ConfigError> {
+    editor_password_hash().ok_or_else(|| {
+        ConfigError::MissingEditorPasswordHash(QUEST_LOG_EDITOR_PASSWORD_HASH.to_string())
+    })
 }
 
 /// Get the session duration in hours.
@@ -349,6 +363,21 @@ mod tests {
             // SAFETY: serialized test-only env mutation.
             unsafe { std::env::set_var(QUEST_LOG_EDITOR_PASSWORD_HASH, "test-hash") };
             assert_eq!(editor_password_hash(), Some("test-hash".to_string()));
+            // SAFETY: serialized test-only env mutation.
+            unsafe { std::env::remove_var(QUEST_LOG_EDITOR_PASSWORD_HASH) };
+        });
+    }
+
+    #[test]
+    fn test_required_editor_password_hash() {
+        with_env_lock(|| {
+            // SAFETY: serialized test-only env mutation.
+            unsafe { std::env::remove_var(QUEST_LOG_EDITOR_PASSWORD_HASH) };
+            assert!(required_editor_password_hash().is_err());
+
+            // SAFETY: serialized test-only env mutation.
+            unsafe { std::env::set_var(QUEST_LOG_EDITOR_PASSWORD_HASH, "test-hash") };
+            assert_eq!(required_editor_password_hash().unwrap(), "test-hash");
             // SAFETY: serialized test-only env mutation.
             unsafe { std::env::remove_var(QUEST_LOG_EDITOR_PASSWORD_HASH) };
         });

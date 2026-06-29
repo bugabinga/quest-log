@@ -43,6 +43,9 @@ Local image commands live in `cargo x container ...`.
 
 See `.env.example` and `src/config.rs` for current env vars.
 
+Release builds require `QUEST_LOG_EDITOR_PASSWORD_HASH`.
+Generate it with `quest-log editor-password`.
+
 ## Current project facts
 
 Do not trust copied module/route lists in docs. Inspect sources:
