@@ -59,8 +59,8 @@ crossterm = "*"
 tower = "*"
 tower-sessions = "*"
 argon2 = "*"
+password-hash = { version = "*", features = ["getrandom"] }
 axum-extra = { version = "*", features = ["cookie", "multipart"] }
-rand_core = { version = "*", features = ["getrandom"] }
 rpassword = "*"
 
 [dev-dependencies]
