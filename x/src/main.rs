@@ -11,6 +11,7 @@ const IMAGE_REPOSITORY: &str = "ghcr.io/bugabinga/quest-log";
 const QUEST_LOG_DATA_DIR: &str = "QUEST_LOG_DATA_DIR";
 const QUEST_LOG_X_SERVER_ID: &str = "QUEST_LOG_X_SERVER_ID";
 const DEV_STATE_DIR: &str = "target/quest-log";
+const SERVER_START_TIMEOUT: Duration = Duration::from_secs(120);
 
 #[derive(Parser)]
 #[command(name = "x")]
@@ -962,7 +963,7 @@ fn wait_for_server() -> Result<()> {
         .and_then(|value| value.parse().ok())
         .unwrap_or(3000);
     let addr = SocketAddr::from(([127, 0, 0, 1], port));
-    let deadline = Instant::now() + Duration::from_secs(20);
+    let deadline = Instant::now() + SERVER_START_TIMEOUT;
 
     while Instant::now() < deadline {
         if TcpStream::connect_timeout(&addr, Duration::from_millis(200)).is_ok() {
@@ -1160,6 +1161,11 @@ mod tests {
 
         assert_eq!(IMAGE_REPOSITORY, "ghcr.io/bugabinga/quest-log");
         assert!(unit.contains("Image=ghcr.io/bugabinga/quest-log:latest"));
+    }
+
+    #[test]
+    fn server_wait_allows_cold_ci_builds() {
+        assert_eq!(SERVER_START_TIMEOUT, Duration::from_secs(120));
     }
 
     #[test]
