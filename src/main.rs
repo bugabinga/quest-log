@@ -13,7 +13,7 @@ mod systemd;
 mod time;
 mod ui;
 
-use crate::config::{data_dir, port};
+use crate::config::{bind_addr, data_dir, port};
 use crate::database::Database;
 use crate::handlers::ServerMessage;
 use crate::state::AppState;
@@ -106,7 +106,14 @@ async fn main() {
             std::process::exit(1);
         }
     };
-    tracing::debug!(port = %port, "🔌 Port configured");
+    let bind_addr = match bind_addr() {
+        Ok(addr) => addr,
+        Err(e) => {
+            eprintln!("❌ Configuration error: {e}");
+            std::process::exit(1);
+        }
+    };
+    tracing::debug!(bind_addr = %bind_addr, port = %port, "🔌 Address configured");
 
     tracing::info!("🗄️  Initializing database...");
     let db = match Database::new().await {
@@ -211,7 +218,7 @@ async fn main() {
     // with the same application state type (`AppState`).
     let app = router.merge(static_assets::static_router::<AppState>());
 
-    let addr = SocketAddr::from(([127, 0, 0, 1], port));
+    let addr = SocketAddr::new(bind_addr, port);
 
     tracing::info!(port, "🚀 Starting HTTP server...");
 

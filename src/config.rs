@@ -19,11 +19,13 @@
 //! - **Optional with defaults**: [`ENV_PORT`], [`ENV_EDITOR_SESSION_DURATION_HOURS`]
 //! - **Debug/Test only**: [`ENV_TODAY`], [`ENV_ENABLE_TEST_ENDPOINTS`]
 
+use std::net::IpAddr;
 use std::path::Path;
 use thiserror::Error;
 
 const QUEST_LOG_DATA_DIR: &str = "QUEST_LOG_DATA_DIR";
 const QUEST_LOG_PORT: &str = "PORT";
+const QUEST_LOG_BIND_ADDR: &str = "QUEST_LOG_BIND_ADDR";
 const QUEST_LOG_EDITOR_PASSWORD_HASH: &str = "QUEST_LOG_EDITOR_PASSWORD_HASH";
 const QUEST_LOG_EDITOR_SESSION_DURATION_HOURS: &str = "QUEST_LOG_EDITOR_SESSION_DURATION_HOURS";
 const QUEST_LOG_TODAY: &str = "QUEST_LOG_TODAY";
@@ -32,6 +34,7 @@ const QUEST_LOG_TODAY: &str = "QUEST_LOG_TODAY";
 const ENABLE_TEST_ENDPOINTS: &str = "ENABLE_TEST_ENDPOINTS";
 
 const DEFAULT_PORT: &str = "3000";
+const DEFAULT_BIND_ADDR: &str = "127.0.0.1";
 const DEFAULT_DATA_DIR: &str = ".";
 const DEFAULT_SESSION_DURATION_HOURS: u64 = 24;
 
@@ -43,6 +46,10 @@ pub const ENV_DATA_DIR: &str = QUEST_LOG_DATA_DIR;
 /// Environment variable name for the server port.
 #[allow(dead_code, reason = "Public API for documentation")]
 pub const ENV_PORT: &str = QUEST_LOG_PORT;
+
+/// Environment variable name for the server bind address.
+#[allow(dead_code, reason = "Public API for documentation")]
+pub const ENV_BIND_ADDR: &str = QUEST_LOG_BIND_ADDR;
 
 /// Environment variable name for the editor password hash.
 /// Required in production; debug builds use a default "dev" password.
@@ -67,6 +74,10 @@ pub const ENV_ENABLE_TEST_ENDPOINTS: &str = ENABLE_TEST_ENDPOINTS;
 #[allow(dead_code, reason = "Public API for documentation")]
 pub const DEFAULT_PORT_VALUE: &str = DEFAULT_PORT;
 
+/// Default bind address if not specified.
+#[allow(dead_code, reason = "Public API for documentation")]
+pub const DEFAULT_BIND_ADDR_VALUE: &str = DEFAULT_BIND_ADDR;
+
 /// Default session duration in hours.
 #[allow(dead_code, reason = "Public API for documentation")]
 pub const DEFAULT_SESSION_DURATION: u64 = DEFAULT_SESSION_DURATION_HOURS;
@@ -87,6 +98,9 @@ pub enum ConfigError {
     /// Invalid port value.
     #[error("invalid port: {0}")]
     InvalidPort(String),
+    /// Invalid bind address value.
+    #[error("invalid bind address: {0}")]
+    InvalidBindAddr(String),
     /// Failed to get current directory.
     #[error("failed to get current directory: {0}")]
     CurrentDirectory(std::io::Error),
@@ -169,6 +183,20 @@ pub fn port() -> Result<u16, ConfigError> {
     port_str
         .parse()
         .map_err(|_| ConfigError::InvalidPort(port_str))
+}
+
+/// Get the server bind address.
+///
+/// # Errors
+///
+/// Returns [`ConfigError::InvalidBindAddr`] if the bind address cannot be parsed as an IP address.
+pub fn bind_addr() -> Result<IpAddr, ConfigError> {
+    let bind_addr =
+        std::env::var(QUEST_LOG_BIND_ADDR).unwrap_or_else(|_| DEFAULT_BIND_ADDR.to_string());
+
+    bind_addr
+        .parse()
+        .map_err(|_| ConfigError::InvalidBindAddr(bind_addr))
 }
 
 /// Get the editor password hash from environment.
@@ -257,6 +285,37 @@ mod tests {
             assert!(port().is_err());
             // SAFETY: serialized test-only env mutation.
             unsafe { std::env::remove_var(QUEST_LOG_PORT) };
+        });
+    }
+
+    #[test]
+    fn test_default_bind_addr() {
+        with_env_lock(|| {
+            // SAFETY: serialized test-only env mutation.
+            unsafe { std::env::remove_var(QUEST_LOG_BIND_ADDR) };
+            assert_eq!(bind_addr().unwrap(), "127.0.0.1".parse::<IpAddr>().unwrap());
+        });
+    }
+
+    #[test]
+    fn test_custom_bind_addr() {
+        with_env_lock(|| {
+            // SAFETY: serialized test-only env mutation.
+            unsafe { std::env::set_var(QUEST_LOG_BIND_ADDR, "0.0.0.0") };
+            assert_eq!(bind_addr().unwrap(), "0.0.0.0".parse::<IpAddr>().unwrap());
+            // SAFETY: serialized test-only env mutation.
+            unsafe { std::env::remove_var(QUEST_LOG_BIND_ADDR) };
+        });
+    }
+
+    #[test]
+    fn test_invalid_bind_addr() {
+        with_env_lock(|| {
+            // SAFETY: serialized test-only env mutation.
+            unsafe { std::env::set_var(QUEST_LOG_BIND_ADDR, "not-an-ip") };
+            assert!(bind_addr().is_err());
+            // SAFETY: serialized test-only env mutation.
+            unsafe { std::env::remove_var(QUEST_LOG_BIND_ADDR) };
         });
     }
 

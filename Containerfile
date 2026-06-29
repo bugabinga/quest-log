@@ -27,6 +27,7 @@ COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 COPY --from=builder /usr/share/zoneinfo /usr/share/zoneinfo
 COPY --from=builder /app/target/x86_64-unknown-linux-musl/release/quest-log /usr/local/bin/quest-log
 ENV PORT=3000
+ENV QUEST_LOG_BIND_ADDR=0.0.0.0
 ENV QUEST_LOG_DATA_DIR=/data
 ENV TZ=UTC
 EXPOSE 3000
