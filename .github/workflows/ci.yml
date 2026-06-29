@@ -17,7 +17,7 @@ jobs:
         with:
           components: rustfmt, clippy
       - name: Install dictator
-        run: cargo install dictator
+        run: cargo install dictator --version 0.16.5 --locked
       - run: |
           cargo x check
           cargo x lint

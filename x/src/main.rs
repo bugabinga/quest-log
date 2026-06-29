@@ -1042,6 +1042,17 @@ mod tests {
     }
 
     #[test]
+    fn ci_installs_locked_dictator_version() {
+        let ci_path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .unwrap()
+            .join(".github/workflows/ci.yml");
+        let ci = std::fs::read_to_string(ci_path).unwrap();
+
+        assert!(ci.contains("cargo install dictator --version 0.16.5 --locked"));
+    }
+
+    #[test]
     fn watch_uses_server_defaults() {
         assert_eq!(
             watch_args(),
