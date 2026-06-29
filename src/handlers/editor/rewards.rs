@@ -16,7 +16,7 @@ use futures::Stream;
 
 use crate::database::SetOrRemove;
 use crate::handlers::AppError;
-use crate::models::{CreateRewardRequest, FileUpload, RewardJsonRequest, UpdateRewardRequest};
+use crate::models::{CreateRewardRequest, RewardJsonRequest, UpdateRewardRequest};
 use crate::sse_response;
 use crate::state::AppState;
 
@@ -84,20 +84,17 @@ fn extract_reward_from_request(req: RewardJsonRequest) -> Result<RewardData, App
         ));
     }
 
-    if let Some(file) = req.reward_image.first() {
-        if file.is_too_large() {
-            return Err(AppError::ValidationError(
-                "Image file is too large (max 5MB)".into(),
-            ));
-        }
-        tracing::debug!(filename = %file.filename(), mime = %file.mime, "Uploading image file");
-    }
-
-    let (image_data, image_content_type) = req
+    let image = req
         .reward_image
         .first()
-        .and_then(FileUpload::decode)
-        .unzip();
+        .map(|file| {
+            tracing::debug!(filename = %file.filename(), mime = %file.mime, "Uploading image file");
+            file.decode()
+        })
+        .transpose()
+        .map_err(|message| AppError::ValidationError(message.into()))?;
+
+    let (image_data, image_content_type) = image.unzip();
 
     Ok(RewardData {
         title: title.to_string(),

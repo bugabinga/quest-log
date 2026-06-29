@@ -16,7 +16,7 @@ use futures::Stream;
 
 use crate::database::SetOrRemove;
 use crate::handlers::AppError;
-use crate::models::{CreateQuestRequest, FileUpload, QuestJsonRequest, UpdateQuestRequest};
+use crate::models::{CreateQuestRequest, QuestJsonRequest, UpdateQuestRequest};
 use crate::sse_response;
 use crate::state::AppState;
 
@@ -104,17 +104,17 @@ fn extract_quest_from_request(req: QuestJsonRequest) -> Result<QuestData, AppErr
         return Err(AppError::ValidationError("EXP must be non-negative".into()));
     }
 
-    if let Some(file) = req.quest_image.first() {
-        if file.is_too_large() {
-            return Err(AppError::ValidationError(
-                "Image file is too large (max 5MB)".into(),
-            ));
-        }
-        tracing::debug!(filename = %file.filename(), mime = %file.mime, "Uploading image file");
-    }
+    let image = req
+        .quest_image
+        .first()
+        .map(|file| {
+            tracing::debug!(filename = %file.filename(), mime = %file.mime, "Uploading image file");
+            file.decode()
+        })
+        .transpose()
+        .map_err(|message| AppError::ValidationError(message.into()))?;
 
-    let (image_data, image_content_type) =
-        req.quest_image.first().and_then(FileUpload::decode).unzip();
+    let (image_data, image_content_type) = image.unzip();
 
     Ok(QuestData {
         title: title.to_string(),

@@ -133,6 +133,9 @@ pub struct UpdateSettingsRequest {
     pub weekly_exp_goal: i32,
 }
 
+/// Maximum decoded image upload size.
+pub const MAX_IMAGE_BYTES: usize = 5 * 1024 * 1024;
+
 /// Maximum file size for uploads (5MB decoded = ~6.7MB base64 encoded)
 pub const MAX_FILE_SIZE: usize = 7_000_000;
 
@@ -152,17 +155,47 @@ pub struct FileUpload {
 
 use base64::Engine;
 
+fn allowed_image_mime(mime: &str) -> bool {
+    matches!(
+        mime,
+        "image/png" | "image/jpeg" | "image/gif" | "image/webp"
+    )
+}
+
 impl FileUpload {
-    /// Decode base64 data URL to raw bytes
-    /// Returns (bytes, `mime_type`) or None if invalid
-    #[must_use]
-    pub fn decode(&self) -> Option<(Vec<u8>, String)> {
-        let base64_start = self.contents.find(";base64,")?;
-        let encoded = &self.contents[base64_start + 8..];
-        base64::engine::general_purpose::STANDARD
+    /// Decode base64 image data URL to raw bytes.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the upload is too large, malformed, or not an allowed image.
+    pub fn decode(&self) -> Result<(Vec<u8>, String), &'static str> {
+        if self.is_too_large() {
+            return Err("Image file is too large (max 5MB)");
+        }
+
+        let (header, encoded) = self
+            .contents
+            .split_once(";base64,")
+            .ok_or("Invalid image upload")?;
+        let mime = header.strip_prefix("data:").ok_or("Invalid image upload")?;
+
+        if mime != self.mime {
+            return Err("Invalid image upload");
+        }
+
+        if !allowed_image_mime(mime) {
+            return Err("Only image uploads are allowed");
+        }
+
+        let bytes = base64::engine::general_purpose::STANDARD
             .decode(encoded)
-            .ok()
-            .map(|bytes| (bytes, self.mime.clone()))
+            .map_err(|_| "Invalid image upload")?;
+
+        if bytes.len() > MAX_IMAGE_BYTES {
+            return Err("Image file is too large (max 5MB)");
+        }
+
+        Ok((bytes, mime.to_string()))
     }
 
     /// Check if file exceeds size limit
