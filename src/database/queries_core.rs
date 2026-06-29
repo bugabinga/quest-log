@@ -310,6 +310,8 @@ impl Database {
     /// Returns an error if the database insert fails
     pub async fn create_quest(&self, req: CreateQuestRequest) -> Result<Quest, sqlx::Error> {
         tracing::debug!(title = %req.title, day = req.day_of_week, exp = req.exp_value.unwrap_or(10), "📝 Creating new quest");
+        let exp_value = req.exp_value.unwrap_or(10);
+        super::reject_negative(exp_value, "exp_value")?;
         let now = Utc::now();
         let quest = sqlx::query_as::<_, Quest>(
             "INSERT INTO quests (title, description, exp_value, day_of_week, created_at, updated_at)
@@ -317,7 +319,7 @@ impl Database {
         )
         .bind(&req.title)
         .bind(&req.description)
-        .bind(req.exp_value.unwrap_or(10))
+        .bind(exp_value)
         .bind(req.day_of_week)
         .bind(now)
         .bind(now)
@@ -371,6 +373,7 @@ impl Database {
         }
 
         if let Some(exp_value) = req.exp_value {
+            super::reject_negative(exp_value, "exp_value")?;
             sqlx::query("UPDATE quests SET exp_value = ?, updated_at = ? WHERE id = ?")
                 .bind(exp_value)
                 .bind(now)

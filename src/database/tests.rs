@@ -499,7 +499,6 @@ mod tests {
     async fn test_negative_exp_quest() {
         let db = setup_test_db().await;
 
-        // Database might allow negative EXP values, but let's test the behavior
         let req = CreateQuestRequest {
             day_of_week: 1,
             description: None,
@@ -507,19 +506,9 @@ mod tests {
             title: "Negative EXP Quest".to_string(),
         };
 
-        let quest = db.create_quest(req).await.unwrap();
-        assert_eq!(quest.exp_value, -10);
+        let result = db.create_quest(req).await;
 
-        // Complete the quest using consistent dates
-        let week_start = NaiveDate::from_ymd_opt(2024, 1, 1).unwrap();
-        let today = week_start + chrono::Duration::days(2); // Wednesday within the week
-        let completed = db.toggle_quest_completion(quest.id, today).await.unwrap();
-        assert_eq!(completed, ToggleResult::NewlyCompleted);
-
-        // Calculate weekly EXP - should handle negative values
-        let week_end = week_start + chrono::Duration::days(6);
-        let total_exp = db.calculate_weekly_exp(week_start, week_end).await.unwrap();
-        assert_eq!(total_exp, -10, "Negative EXP should be handled correctly");
+        assert!(result.is_err(), "negative quest EXP must be rejected");
     }
 
     #[tokio::test]

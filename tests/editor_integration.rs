@@ -428,6 +428,51 @@ async fn test_update_quest_preserves_inactive_state() {
 }
 
 #[tokio::test]
+async fn test_update_quest_rejects_negative_exp() {
+    let pool = SqlitePool::connect("sqlite::memory:")
+        .await
+        .expect("Failed to create in-memory database");
+    let db: Database = Database::with_pool(pool);
+    db.migrate().await.expect("Failed to run migrations");
+
+    let quest = db
+        .create_quest(CreateQuestRequest {
+            title: "Quest".to_string(),
+            description: None,
+            exp_value: Some(10),
+            day_of_week: 1,
+        })
+        .await
+        .unwrap();
+
+    let (bcast_tx, _) = broadcast::channel(128);
+    let app_state = AppState::new(db, bcast_tx);
+    let token = "token-negative-exp".to_string();
+    app_state.create_session(token.clone()).await;
+
+    let app = Router::new()
+        .route("/editor/quests/{id}", put(update_quest_handler))
+        .with_state(app_state);
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method(Method::PUT)
+                .uri(format!("/editor/quests/{}", quest.id))
+                .header("cookie", format!("editor_session={token}"))
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    r#"{"questTitle":"Quest","questDescription":null,"questExpValue":-1,"questDayOfWeek":1,"questImage":[]}"#,
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+}
+
+#[tokio::test]
 async fn test_update_reward_preserves_inactive_state() {
     let pool = SqlitePool::connect("sqlite::memory:")
         .await

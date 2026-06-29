@@ -43,6 +43,8 @@ impl Database {
         image_content_type: Option<String>,
     ) -> Result<Quest, sqlx::Error> {
         tracing::debug!(title = %title, day = day_of_week, "📝 Creating quest with image");
+        let exp_value = exp_value.unwrap_or(10);
+        super::reject_negative(exp_value, "exp_value")?;
         let now = Utc::now();
         let quest = sqlx::query_as::<_, Quest>(
             "INSERT INTO quests (title, description, exp_value, day_of_week, image_data, image_content_type, created_at, updated_at)
@@ -50,7 +52,7 @@ impl Database {
         )
         .bind(&title)
         .bind(&description)
-        .bind(exp_value.unwrap_or(10))
+        .bind(exp_value)
         .bind(day_of_week)
         .bind(&image_data)
         .bind(&image_content_type)
@@ -116,6 +118,7 @@ impl Database {
         }
 
         if let Some(exp_value) = exp_value {
+            super::reject_negative(exp_value, "exp_value")?;
             sqlx::query("UPDATE quests SET exp_value = ?, updated_at = ? WHERE id = ?")
                 .bind(exp_value)
                 .bind(now)

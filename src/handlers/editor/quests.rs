@@ -100,6 +100,10 @@ fn extract_quest_from_request(req: QuestJsonRequest) -> Result<QuestData, AppErr
         return Err(AppError::ValidationError("Day must be 0-6".into()));
     }
 
+    if req.quest_exp_value.is_some_and(|exp| exp < 0) {
+        return Err(AppError::ValidationError("EXP must be non-negative".into()));
+    }
+
     if let Some(file) = req.quest_image.first() {
         if file.is_too_large() {
             return Err(AppError::ValidationError(

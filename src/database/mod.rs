@@ -24,6 +24,15 @@ pub enum SetOrRemove<T> {
     Set(T),
 }
 
+fn reject_negative(value: i32, field: &str) -> Result<(), sqlx::Error> {
+    if value < 0 {
+        return Err(sqlx::Error::Protocol(format!(
+            "{field} must be non-negative"
+        )));
+    }
+    Ok(())
+}
+
 impl<T> SetOrRemove<T> {
     /// Creates a new `SetOrRemove` with the given value.
     #[must_use]
