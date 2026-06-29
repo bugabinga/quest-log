@@ -1,5 +1,6 @@
 use chrono::{Datelike, NaiveDate, TimeDelta, Utc};
 use sqlx::{Row, SqlitePool};
+use std::collections::HashSet;
 use std::env;
 use std::path::Path;
 use tracing::instrument;
@@ -183,20 +184,13 @@ impl Database {
         let can_claim_this_week = today >= week_start && today <= week_end && is_sunday;
 
         let rewards = self.get_available_rewards().await?;
+        let claimed_reward_ids = self
+            .get_claimed_reward_ids_for_week(week_start, week_end)
+            .await?;
 
         let mut result = Vec::new();
         for reward in rewards {
-            let claimed_this_week: (i64,) = sqlx::query_as(
-                "SELECT COUNT(*) FROM reward_claims
-                 WHERE reward_id = ? AND claimed_date >= ? AND claimed_date <= ?",
-            )
-            .bind(reward.id)
-            .bind(week_start)
-            .bind(week_end)
-            .fetch_one(&self.pool)
-            .await?;
-
-            let is_claimed = claimed_this_week.0 > 0;
+            let is_claimed = claimed_reward_ids.contains(&reward.id);
             let has_enough_exp = weekly_exp >= reward.required_exp;
 
             let state = if is_claimed {
@@ -219,6 +213,23 @@ impl Database {
         }
 
         Ok(result)
+    }
+
+    async fn get_claimed_reward_ids_for_week(
+        &self,
+        week_start: NaiveDate,
+        week_end: NaiveDate,
+    ) -> Result<HashSet<i64>, sqlx::Error> {
+        let rows = sqlx::query(
+            "SELECT DISTINCT reward_id FROM reward_claims
+             WHERE claimed_date >= ? AND claimed_date <= ?",
+        )
+        .bind(week_start)
+        .bind(week_end)
+        .fetch_all(&self.pool)
+        .await?;
+
+        Ok(rows.into_iter().map(|row| row.get("reward_id")).collect())
     }
 
     #[instrument(name = "🏆 claim_reward_for_week", skip(self))]

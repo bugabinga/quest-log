@@ -502,7 +502,7 @@ async fn bench_summary() {
     println!("   Database Queries Removed from Quest Page:");
     println!("   - get_weekly_reward_status() - queries rewards table");
     println!("   - calculate_weekly_exp() - aggregates quest completions");
-    println!("   - N reward_claims lookups (one per reward)");
+    println!("   - 1 reward_claims lookup for claimed reward IDs");
     println!();
     println!("   HTML Rendering Reduced:");
     println!("   - No weekly-rewards details element (~500-1000 bytes)");
