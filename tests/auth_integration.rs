@@ -28,8 +28,8 @@ async fn test_generate_session_token_produces_unique_tokens() {
     let token1 = auth::generate_session_token();
     let token2 = auth::generate_session_token();
 
-    assert!(!token1.is_empty());
-    assert!(!token2.is_empty());
+    assert_ne!(token1, "");
+    assert_ne!(token2, "");
     assert_ne!(token1, token2);
 }
 

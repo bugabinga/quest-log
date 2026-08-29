@@ -228,8 +228,8 @@ mod tests {
         let token1 = generate_session_token();
         let token2 = generate_session_token();
 
-        assert!(!token1.is_empty());
-        assert!(!token2.is_empty());
+        assert_ne!(token1, "");
+        assert_ne!(token2, "");
         assert_ne!(token1, token2);
     }
 
@@ -272,7 +272,7 @@ mod tests {
     fn test_get_password_hash_or_default_dev() {
         // In debug builds, should return a hash for "dev" password
         let hash = get_password_hash_or_default();
-        assert!(!hash.is_empty());
+        assert_ne!(hash, "");
         // Verify the hash works for password "dev"
         assert!(verify_password("dev", &hash));
         // Wrong password should fail

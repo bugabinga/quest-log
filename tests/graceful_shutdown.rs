@@ -13,11 +13,7 @@ use std::process::Command;
 use std::time::{Duration, Instant};
 
 fn get_bin_path() -> std::path::PathBuf {
-    let exe = std::env::current_exe().expect("failed to get current exe");
-    exe.parent()
-        .and_then(|p| p.parent())
-        .expect("failed to get grandparent")
-        .join("quest-log")
+    std::path::PathBuf::from(env!("CARGO_BIN_EXE_quest-log"))
 }
 
 #[cfg(unix)]
