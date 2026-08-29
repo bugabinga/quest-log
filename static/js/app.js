@@ -70,25 +70,7 @@ document.addEventListener("datastar-fetch", (e) => {
 })();
 
 // ============================================================================
-// SECTION 2: Theme Initialization (runs immediately)
-// ============================================================================
-// Set theme based on prefers-color-scheme
-(function () {
-  const DARK_QUERY = globalThis.matchMedia("(prefers-color-scheme: dark)");
-
-  function applyTheme() {
-    document.documentElement.setAttribute(
-      "data-theme",
-      DARK_QUERY.matches ? "dark" : "light",
-    );
-  }
-
-  DARK_QUERY.addEventListener("change", applyTheme);
-  applyTheme();
-})();
-
-// ============================================================================
-// SECTION 3: Client ID Generation (runs immediately)
+// SECTION 2: Client ID Generation (runs immediately)
 // ============================================================================
 function generateClientId() {
   let clientId = sessionStorage.getItem("quest_log_client_id");
@@ -105,7 +87,7 @@ const CLIENT_ID = generateClientId();
 mergePatch({ client_id: CLIENT_ID });
 
 // ============================================================================
-// SECTION 4: UI Effects - Notifications & Confetti
+// SECTION 3: UI Effects - Notifications & Confetti
 // ============================================================================
 function pulseCounter(element) {
   element.classList.remove("exp-pulse");
@@ -277,7 +259,7 @@ function handleWeeklyChampionCelebration() {
 }
 
 // ============================================================================
-// SECTION 5: Video Modal (runs on DOMContentLoaded)
+// SECTION 4: Video Modal (runs on DOMContentLoaded)
 // ============================================================================
 function initVideoModal() {
   const STORAGE_KEY = "quest-log-first-time";
@@ -334,7 +316,7 @@ function initVideoModal() {
 }
 
 // ============================================================================
-// SECTION 6: Quest UI - Keyboard Navigation & Mutation Observer
+// SECTION 5: Quest UI - Keyboard Navigation & Mutation Observer
 // ============================================================================
 let previousExpToday = 0;
 
@@ -422,7 +404,7 @@ function initQuestUI() {
 }
 
 // ============================================================================
-// SECTION 7: SSE Events - Connection & Death Screen
+// SECTION 6: SSE Events - Connection & Death Screen
 // ============================================================================
 function _parseSseData(data) {
   const result = {};
