@@ -2263,12 +2263,12 @@ dependencies = [
 
 [[package]]
 name = "quest-log"
-version = "0.0.0"
+version = "0.1.0"
 dependencies = [
  "argon2",
  "async-stream",
  "axum",
- "base64 0.23.1",
+ "base64 0.22.1",
  "chrono",
  "chrono-tz",
  "clap",
@@ -4063,7 +4063,7 @@ checksum = "3ad82d2a33cdc9674dc7465672f271e096168fcdbe0f799d9e6db8c5892679dc"
 
 [[package]]
 name = "x"
-version = "0.0.0"
+version = "0.1.0"
 dependencies = [
  "anyhow",
  "clap",
