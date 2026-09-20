@@ -2,7 +2,6 @@
 
 use axum::{extract::State, response::Html, response::IntoResponse};
 use chrono::NaiveDate;
-use std::collections::HashMap;
 
 use crate::handlers::AppError;
 use crate::state::AppState;
@@ -28,52 +27,22 @@ pub struct HighscoreData {
 ///
 /// Returns an error if database queries fail
 pub async fn highscore(State(state): State<AppState>) -> Result<impl IntoResponse, AppError> {
-    let db = &state.db;
-
-    // Fetch all required data
-    let total_exp = db
-        .get_total_exp_earned()
+    let aggregates = state
+        .db
+        .get_highscore_stats()
         .await
         .map_err(AppError::Database)?;
-
-    let quests_completed = db
-        .get_total_completions_count()
+    let completions_by_date = state
+        .db
+        .get_recent_completion_counts(30)
         .await
         .map_err(AppError::Database)?;
-
-    let rewards_claimed = db
-        .get_rewards_claimed_count()
-        .await
-        .map_err(AppError::Database)?;
-
-    let weekly_champions = db
-        .get_all_weekly_champions()
-        .await
-        .map_err(AppError::Database)?;
-
-    let all_completions = db.get_all_completions().await.map_err(AppError::Database)?;
-
-    // Group completions by date
-    let mut completions_map: HashMap<NaiveDate, i32> = HashMap::new();
-    for completion in &all_completions {
-        let count = completions_map
-            .entry(completion.completed_date)
-            .or_insert(0);
-        *count = count.saturating_add(1);
-    }
-
-    // Convert to sorted vector (most recent first)
-    let mut completions_by_date: Vec<(NaiveDate, i32)> = completions_map.into_iter().collect();
-    completions_by_date.sort_by_key(|b| std::cmp::Reverse(b.0));
-
-    // Limit to last 30 days for MVP
-    completions_by_date.truncate(30);
 
     let data = HighscoreData {
-        total_exp,
-        quests_completed,
-        rewards_claimed,
-        weekly_champions: i32::try_from(weekly_champions.len()).unwrap_or(i32::MAX),
+        total_exp: aggregates.total_exp,
+        quests_completed: aggregates.quests_completed,
+        rewards_claimed: aggregates.rewards_claimed,
+        weekly_champions: aggregates.weekly_champions,
         completions_by_date,
     };
 

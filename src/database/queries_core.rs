@@ -1,5 +1,5 @@
 use chrono::{Datelike, NaiveDate, TimeDelta, Utc};
-use sqlx::{Row, SqlitePool};
+use sqlx::{AssertSqlSafe, Row, SqlitePool};
 use std::env;
 use std::path::Path;
 use tracing::instrument;
@@ -497,7 +497,7 @@ impl Database {
             placeholders.join(", ")
         );
 
-        let mut sql_query = sqlx::query(&query);
+        let mut sql_query = sqlx::query(AssertSqlSafe(query));
         for id in quest_ids {
             sql_query = sql_query.bind(id);
         }
@@ -516,41 +516,6 @@ impl Database {
         }
 
         Ok(result)
-    }
-
-    /// Get the total number of quest completions
-    ///
-    /// # Returns
-    ///
-    /// Total count of quest completions
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if the database query fails
-    pub async fn get_total_completions_count(&self) -> Result<i32, sqlx::Error> {
-        tracing::trace!("📋 Fetching total completions count");
-        let result: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM quest_completions")
-            .fetch_one(&self.pool)
-            .await?;
-        Ok(i32::try_from(result.0).unwrap_or(i32::MAX))
-    }
-
-    /// Get all quest completions
-    ///
-    /// # Returns
-    ///
-    /// Vector of all quest completions, ordered by date descending
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if the database query fails
-    pub async fn get_all_completions(&self) -> Result<Vec<QuestCompletion>, sqlx::Error> {
-        tracing::trace!("📋 Fetching all completions");
-        sqlx::query_as::<_, QuestCompletion>(
-            "SELECT * FROM quest_completions ORDER BY completed_date DESC",
-        )
-        .fetch_all(&self.pool)
-        .await
     }
 
     #[instrument(name = "🎯 toggle_quest_completion", skip(self))]

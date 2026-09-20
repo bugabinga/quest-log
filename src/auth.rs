@@ -5,23 +5,9 @@
 
 use crate::config;
 
-/// Simple hex encoding for session tokens (no external dependency)
-mod hex {
-    const HEX_CHARS: &[u8; 16] = b"0123456789abcdef";
-
-    pub fn encode(bytes: &[u8]) -> String {
-        let mut s = String::with_capacity(bytes.len().checked_mul(2).unwrap_or(0));
-        for &b in bytes {
-            s.push(HEX_CHARS[(b >> 4) as usize] as char);
-            s.push(HEX_CHARS[(b & 0xf) as usize] as char);
-        }
-        s
-    }
-}
-
 use argon2::{
     Argon2, PasswordHash, PasswordHasher, PasswordVerifier,
-    password_hash::{Error as PasswordHashError, SaltString, rand_core::OsRng, rand_core::RngCore},
+    password_hash::{Error as PasswordHashError, phc::SaltString},
 };
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -131,11 +117,9 @@ impl LoginRateLimiter {
 }
 
 /// Generate a cryptographically secure session token
+#[must_use]
 pub fn generate_session_token() -> String {
-    let salt = SaltString::generate(&mut OsRng);
-    let mut bytes = [0u8; 32];
-    OsRng.fill_bytes(&mut bytes);
-    format!("{}_{}", salt, hex::encode(&bytes))
+    format!("{}_{}", SaltString::generate(), SaltString::generate())
 }
 
 /// Get the password hash from environment variable
@@ -189,9 +173,8 @@ pub fn get_password_hash_or_default() -> String {
 /// - Cryptographic random number generator failure
 /// - Invalid password encoding
 pub fn hash_password(password: &str) -> Result<String, AuthError> {
-    let salt = SaltString::generate(&mut OsRng);
     let argon2 = Argon2::default();
-    let password_hash = argon2.hash_password(password.as_bytes(), &salt)?;
+    let password_hash = argon2.hash_password(password.as_bytes())?;
     Ok(password_hash.to_string())
 }
 

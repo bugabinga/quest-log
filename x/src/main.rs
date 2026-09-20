@@ -130,7 +130,7 @@ enum BundleCommands {
     /// Bundle datastar JS library
     Datastar {
         /// Version to bundle
-        #[arg(default_value = "1.0.0-RC.8")]
+        #[arg(default_value = "v1.0.3")]
         version: String,
     },
 }
@@ -300,7 +300,7 @@ fn cargo_fmt_args(args: &[String]) -> Vec<String> {
 fn deno_fmt_args(args: &[String]) -> Vec<String> {
     let mut fmt_args = vec!["fmt".to_string()];
     fmt_args.extend(args.iter().cloned());
-    fmt_args.push("static/".to_string());
+    fmt_args.extend(["static/".to_string(), "tests/e2e/".to_string()]);
     fmt_args
 }
 
@@ -321,7 +321,7 @@ fn lint() -> Result<()> {
 
     run_lint_step(steps[3], || {
         ensure_deno()?;
-        run_cmd("deno", &["lint", "static/js/"])
+        run_cmd("deno", &["lint", "static/js/", "tests/e2e/"])
     })?;
 
     run_lint_step(steps[4], check_sse_macro_usage)
@@ -1049,7 +1049,10 @@ mod tests {
         let args = vec!["--check".to_string()];
 
         assert_eq!(cargo_fmt_args(&args), ["fmt", "--check"]);
-        assert_eq!(deno_fmt_args(&args), ["fmt", "--check", "static/"]);
+        assert_eq!(
+            deno_fmt_args(&args),
+            ["fmt", "--check", "static/", "tests/e2e/"]
+        );
     }
 
     #[test]

@@ -438,8 +438,8 @@ async fn test_timezone_cookie_fallback() {
 
 /// Test: Navigate handler should respect timezone header
 ///
-/// REGRESSION TEST for bug where navigate used `time::today()` (UTC)
-/// while toggle used `time::today_with_timezone(tz)`.
+/// REGRESSION TEST for bug where navigate used UTC-only date resolution while
+/// toggle used `time::today_with_timezone(tz)`.
 ///
 /// Scenario: It's Saturday in Europe/Berlin (UTC+1) but still Friday in UTC.
 /// Navigate should show Saturday's quests (Berlin's today), not Friday's quests (UTC's today).

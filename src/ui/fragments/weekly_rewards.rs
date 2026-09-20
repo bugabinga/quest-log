@@ -63,7 +63,7 @@ pub fn weekly_rewards(
                                 }
                                 ClaimState::Claimable => {
                                     button class="claim-btn claimable" type="button"
-                                        data-on:click__prevent=[Some(PreEscaped(format!("@post('/rewards/claim', {{ payload: {{ reward_id: {} }} }})", reward.id)))] {
+                                        data-on:click__prevent=[Some(PreEscaped(format!("@post('/rewards/claim', {{ payload: {{ reward_id: {}, client_id: $client_id }} }})", reward.id)))] {
                                         "⚔️ CLAIM REWARD! ⚔️"
                                     }
                                 }

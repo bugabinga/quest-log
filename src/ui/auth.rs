@@ -6,7 +6,7 @@ use maud::{Markup, html};
 #[must_use]
 pub fn auth_modal() -> Markup {
     html! {
-        div id="auth-modal" class="auth-modal" data-init="loginError = null; isRateLimited = false; _password = ''" {
+        div id="auth-modal" class="auth-modal" data-signals=r#"{"loginError":null,"isRateLimited":false,"_password":"","_loginLoading":false}"# {
             div class="auth-backdrop" {
                 div class="auth-container" {
                     div class="auth-header" {
@@ -14,8 +14,8 @@ pub fn auth_modal() -> Markup {
                         p { "Enter your credentials to access the editor" }
                     }
 
-                    div class="auth-error" data-show="!!loginError" {
-                        p data-text="loginError" {}
+                    div class="auth-error" data-show="!!$loginError" {
+                        p data-text="$loginError" {}
                     }
 
                     form id="login-form" class="auth-form" method="post" data-on:submit__prevent="($_password ?? '') && ($_password ?? '').trim() !== '' ? @post('/editor/login', {contentType: 'form'}) : ($loginError = 'Please enter a password')" {
@@ -26,16 +26,17 @@ pub fn auth_modal() -> Markup {
                                 id="password"
                                 name="password"
                                 placeholder="Enter your master key..."
-                                data-bind:_password
+                                data-bind="_password"
                                 autocomplete="current-password";
                         }
 
                         button
                             type="submit"
                             class="auth-submit"
-                            data-indicator="#login-loading" {
-                            span { "Enter the Guild" }
-                            span id="login-loading" style="display: none" { "Authenticating..." }
+                            data-indicator="_loginLoading"
+                            data-attr:disabled="$isRateLimited || $_loginLoading" {
+                            span data-show="!$_loginLoading" { "Enter the Guild" }
+                            span id="login-loading" style="display: none" data-show="$_loginLoading" { "Authenticating..." }
                         }
                     }
 
@@ -64,6 +65,14 @@ mod tests {
             html.contains(r#"method="post""#),
             "Expected form to have method=\"post\", got: {html}"
         );
+    }
+
+    #[test]
+    fn test_password_binding_preserves_private_signal_case() {
+        let html = auth_modal().into_string();
+
+        assert!(html.contains(r#"data-bind="_password""#));
+        assert!(!html.contains("data-bind:_password"));
     }
 
     #[test]

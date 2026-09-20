@@ -139,17 +139,16 @@ pub const MAX_IMAGE_BYTES: usize = 5 * 1024 * 1024;
 /// Maximum file size for uploads (5MB decoded = ~6.7MB base64 encoded)
 pub const MAX_FILE_SIZE: usize = 7_000_000;
 
-/// File upload from Datastar (base64 encoded data URL)
-/// Format: [{ name: string, contents: string, type: string }]
-/// where contents is a data URL like "data:image/png;base64,..."
+/// File upload from Datastar.
+/// Format: [{ name: string, contents: string, mime: string }]
+/// where contents is raw base64.
 #[derive(Debug, Clone, Deserialize)]
 pub struct FileUpload {
-    /// Original filename
+    /// Original filename.
     pub name: String,
-    /// Base64 encoded file contents (data URL format)
+    /// Raw base64 encoded file contents.
     pub contents: String,
-    /// MIME type from data URL
-    #[serde(rename = "type")]
+    /// MIME type reported by the browser.
     pub mime: String,
 }
 
@@ -163,7 +162,7 @@ fn allowed_image_mime(mime: &str) -> bool {
 }
 
 impl FileUpload {
-    /// Decode base64 image data URL to raw bytes.
+    /// Decode raw base64 image data to bytes.
     ///
     /// # Errors
     ///
@@ -173,29 +172,19 @@ impl FileUpload {
             return Err("Image file is too large (max 5MB)");
         }
 
-        let (header, encoded) = self
-            .contents
-            .split_once(";base64,")
-            .ok_or("Invalid image upload")?;
-        let mime = header.strip_prefix("data:").ok_or("Invalid image upload")?;
-
-        if mime != self.mime {
-            return Err("Invalid image upload");
-        }
-
-        if !allowed_image_mime(mime) {
+        if !allowed_image_mime(&self.mime) {
             return Err("Only image uploads are allowed");
         }
 
         let bytes = base64::engine::general_purpose::STANDARD
-            .decode(encoded)
+            .decode(&self.contents)
             .map_err(|_| "Invalid image upload")?;
 
         if bytes.len() > MAX_IMAGE_BYTES {
             return Err("Image file is too large (max 5MB)");
         }
 
-        Ok((bytes, mime.to_string()))
+        Ok((bytes, self.mime.clone()))
     }
 
     /// Check if file exceeds size limit
@@ -204,56 +193,67 @@ impl FileUpload {
         self.contents.len() > MAX_FILE_SIZE
     }
 
-    /// Get original filename for logging/audit
+    /// Get original filename for logging/audit.
     #[must_use]
     pub fn filename(&self) -> &str {
         &self.name
     }
 }
 
-/// Request payload for creating/updating quest via Datastar JSON signals
-#[derive(Debug, Deserialize)]
-#[allow(
-    clippy::struct_field_names,
-    reason = "Frontend uses camelCase, Rust uses snake_case"
-)]
-pub struct QuestJsonRequest {
-    /// Quest title from form
-    #[serde(rename = "questTitle")]
-    pub quest_title: String,
-    /// Quest description from form
-    #[serde(rename = "questDescription")]
-    pub quest_description: Option<String>,
-    /// Quest EXP value from form
-    #[serde(rename = "questExpValue")]
-    pub quest_exp_value: Option<i32>,
-    /// Quest day of week from form
-    #[serde(rename = "questDayOfWeek")]
-    pub quest_day_of_week: i32,
-    /// Quest image upload from form
-    #[serde(rename = "questImage")]
-    pub quest_image: Vec<FileUpload>,
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn decodes_datastar_raw_base64_upload() {
+        let upload = FileUpload {
+            name: "pixel.png".to_string(),
+            contents: "AQID".to_string(),
+            mime: "image/png".to_string(),
+        };
+
+        assert_eq!(
+            upload.decode(),
+            Ok((vec![1, 2, 3], "image/png".to_string()))
+        );
+    }
 }
 
-/// Request payload for creating/updating reward via Datastar JSON signals
+/// Request payload for creating/updating quest via Datastar JSON signals.
 #[derive(Debug, Deserialize)]
-#[allow(
-    clippy::struct_field_names,
-    reason = "Frontend uses camelCase, Rust uses snake_case"
-)]
+pub struct QuestJsonRequest {
+    /// Quest title from form.
+    #[serde(rename = "questTitle")]
+    pub title: String,
+    /// Quest description from form.
+    #[serde(rename = "questDescription")]
+    pub description: Option<String>,
+    /// Quest EXP value from form.
+    #[serde(rename = "questExpValue")]
+    pub exp_value: Option<i32>,
+    /// Quest day of week from form.
+    #[serde(rename = "questDayOfWeek")]
+    pub day_of_week: i32,
+    /// Quest image upload from form.
+    #[serde(rename = "questImage")]
+    pub image: Vec<FileUpload>,
+}
+
+/// Request payload for creating/updating reward via Datastar JSON signals.
+#[derive(Debug, Deserialize)]
 pub struct RewardJsonRequest {
-    /// Reward title from form
+    /// Reward title from form.
     #[serde(rename = "rewardTitle")]
-    pub reward_title: String,
-    /// Reward description from form
+    pub title: String,
+    /// Reward description from form.
     #[serde(rename = "rewardDescription")]
-    pub reward_description: Option<String>,
-    /// Reward required EXP from form
+    pub description: Option<String>,
+    /// Reward required EXP from form.
     #[serde(rename = "rewardRequiredExp")]
-    pub reward_required_exp: i32,
-    /// Reward image upload from form
+    pub required_exp: i32,
+    /// Reward image upload from form.
     #[serde(rename = "rewardImage")]
-    pub reward_image: Vec<FileUpload>,
+    pub image: Vec<FileUpload>,
 }
 
 /// Result of toggling a quest completion status.
@@ -295,6 +295,19 @@ pub struct WeeklyRewardDisplay {
     pub title: String,
     /// Player's current weekly experience total.
     pub weekly_exp: i32,
+}
+
+/// Aggregate statistics shown on the highscore page.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct HighscoreStats {
+    /// Total experience earned from completed quests.
+    pub total_exp: i32,
+    /// Total number of quest completions.
+    pub quests_completed: i32,
+    /// Total number of claimed rewards.
+    pub rewards_claimed: i32,
+    /// Total number of weekly championships.
+    pub weekly_champions: i32,
 }
 
 /// Statistics about player quest progress.

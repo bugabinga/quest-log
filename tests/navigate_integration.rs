@@ -10,8 +10,8 @@ use axum::{
     http::{Request, StatusCode},
     routing::get,
 };
-use chrono::{Datelike, NaiveDate, Utc};
-use quest_log::{database::Database, handlers, models::*, state::AppState};
+use chrono::{Datelike, Utc};
+use quest_log::{database::Database, handlers, models::*, state::AppState, time};
 
 use sqlx::SqlitePool;
 use tokio::sync::broadcast;
@@ -88,11 +88,12 @@ async fn test_navigate_to_specific_date() {
     let app = Router::new()
         .route("/navigate/{date}", get(handlers::navigate::navigate))
         .with_state(app_state);
+    let (monday, _) = time::get_week_bounds(Utc::now().date_naive());
 
     let response = app
         .oneshot(
             Request::builder()
-                .uri("/navigate/2024-01-01")
+                .uri(format!("/navigate/{monday}"))
                 .body(Body::empty())
                 .unwrap(),
         )
@@ -202,11 +203,13 @@ async fn test_navigate_updates_document_title() {
     let app = Router::new()
         .route("/navigate/{date}", get(handlers::navigate::navigate))
         .with_state(app_state);
+    let (week_start, _) = time::get_week_bounds(Utc::now().date_naive());
+    let friday = week_start + chrono::Duration::days(4);
 
     let response = app
         .oneshot(
             Request::builder()
-                .uri("/navigate/2026-01-02") // Friday Jan 2, 2026
+                .uri(format!("/navigate/{friday}"))
                 .body(Body::empty())
                 .unwrap(),
         )
@@ -256,9 +259,10 @@ async fn test_navigate_title_differs_by_day() {
         .route("/navigate/{date}", get(handlers::navigate::navigate))
         .with_state(app_state);
 
-    let friday_date = NaiveDate::from_ymd_opt(2026, 1, 2).unwrap(); // Friday
-    let saturday_date = NaiveDate::from_ymd_opt(2026, 1, 3).unwrap(); // Saturday
-    let sunday_date = NaiveDate::from_ymd_opt(2026, 1, 4).unwrap(); // Sunday
+    let (week_start, _) = time::get_week_bounds(Utc::now().date_naive());
+    let friday_date = week_start + chrono::Duration::days(4);
+    let saturday_date = week_start + chrono::Duration::days(5);
+    let sunday_date = week_start + chrono::Duration::days(6);
 
     let friday_response = app
         .clone()

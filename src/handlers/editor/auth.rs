@@ -11,7 +11,6 @@ use axum::{
 };
 use chrono::Utc;
 use datastar::execute_script::ExecuteScript;
-use datastar::patch_elements::PatchElements;
 use datastar::patch_signals::PatchSignals;
 use futures::Stream;
 use serde::Deserialize;
@@ -30,6 +29,12 @@ const SESSION_COOKIE_OPTS: &str = "Path=/; HttpOnly; SameSite=Strict; Max-Age=86
 
 #[cfg(not(debug_assertions))]
 const SESSION_COOKIE_OPTS: &str = "Path=/; HttpOnly; SameSite=Strict; Secure; Max-Age=86400";
+
+#[cfg(debug_assertions)]
+const EXPIRED_SESSION_COOKIE_OPTS: &str = "Path=/; HttpOnly; SameSite=Strict; Max-Age=0";
+
+#[cfg(not(debug_assertions))]
+const EXPIRED_SESSION_COOKIE_OPTS: &str = "Path=/; HttpOnly; SameSite=Strict; Secure; Max-Age=0";
 
 /// Get the rate-limit key for editor auth.
 fn get_client_ip(_headers: &HeaderMap) -> String {
@@ -229,10 +234,20 @@ pub async fn login_handler(
 /// # Errors
 ///
 /// Returns an error if session invalidation fails
+///
+/// # Panics
+///
+/// Panics if the static expired-cookie header is invalid.
 pub async fn logout_handler(
     State(state): State<AppState>,
     headers: HeaderMap,
-) -> Result<Sse<impl Stream<Item = Result<Event, std::convert::Infallible>>>, AppError> {
+) -> Result<
+    (
+        HeaderMap,
+        Sse<impl Stream<Item = Result<Event, std::convert::Infallible>>>,
+    ),
+    AppError,
+> {
     let client_ip = get_client_ip(&headers);
     debug!(ip = %client_ip, "Logout requested");
 
@@ -244,24 +259,17 @@ pub async fn logout_handler(
     let signals = serde_json::json!({
         "isAuthenticated": false
     });
-
-    let settings = Settings {
-        id: 1,
-        weekly_exp_goal: 100,
-        updated_at: Utc::now(),
-    };
-    let html = ui::editor::editor_page(false, "quests", &[], &[], &settings);
-    let wrapped_html = format!(
-        r#"<div class="editor-wrapper" style="view-transition-name: editor-page;">{}</div>"#,
-        html.into_string()
-    );
-
     let events: Vec<Event> = vec![
-        PatchElements::new(wrapped_html)
-            .use_view_transition(true)
-            .into(),
         PatchSignals::new(signals.to_string()).into(),
+        ExecuteScript::new("window.location.assign('/editor')").into(),
     ];
 
-    Ok(sse_response!(events))
+    let mut response_headers = HeaderMap::new();
+    let cookie = format!("editor_session=; {EXPIRED_SESSION_COOKIE_OPTS}");
+    let cookie_header_value = cookie.parse().unwrap_or_else(|_| {
+        panic!("Cookie string is valid; constructed with known format: {cookie}")
+    });
+    response_headers.insert(SET_COOKIE, cookie_header_value);
+
+    Ok((response_headers, sse_response!(events)))
 }

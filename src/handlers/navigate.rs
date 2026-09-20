@@ -34,10 +34,6 @@ pub struct NavigatePath {
 /// # Errors
 ///
 /// Returns an error if database operation fails or date is invalid
-///
-/// # Panics
-///
-/// Panics if the week start or end date overflows
 #[instrument(name = "🧭 navigate", skip(state, path, headers))]
 pub async fn navigate(
     State(state): State<AppState>,
@@ -62,25 +58,20 @@ pub async fn navigate(
         }
     };
 
-    let week_start = selected_date
-        .checked_sub_days(chrono::Days::new(u64::from(
-            selected_date.weekday().num_days_from_monday(),
-        )))
-        .unwrap_or_else(|| panic!("date overflow"));
-    let week_end = week_start
-        .checked_add_days(chrono::Days::new(6))
-        .unwrap_or_else(|| panic!("date overflow"));
+    let (week_start, week_end) = time::get_week_bounds(today);
 
     if selected_date < week_start || selected_date > week_end {
         tracing::debug!(target_date = %selected_date, week_start = %week_start, week_end = %week_end, "🧭 Navigate: date outside week bounds");
         return Err(AppError::NotFound);
     }
 
-    let day_of_week = selected_date.weekday().num_days_from_sunday().cast_signed();
+    let selected_weekday =
+        u8::try_from(selected_date.weekday().num_days_from_sunday()).unwrap_or(0);
+    let current_day = u8::try_from(today.weekday().num_days_from_sunday()).unwrap_or(0);
     let is_today = selected_date == today;
 
     let quests = db
-        .get_quests_for_day(day_of_week)
+        .get_quests_for_day(i32::from(selected_weekday))
         .await
         .map_err(AppError::Database)?;
 
@@ -107,7 +98,6 @@ pub async fn navigate(
     use crate::handlers::quests::get_fantasy_day_name;
     let day_name = get_fantasy_day_name(selected_date.weekday()).to_string();
     let selected_date_formatted = time::format_date_display(selected_date);
-    let weekday_num = u8::try_from(selected_date.weekday().num_days_from_monday()).unwrap_or(0);
 
     let can_navigate_left = selected_date > week_start;
     let can_navigate_right = selected_date < week_end;
@@ -145,7 +135,7 @@ pub async fn navigate(
         format!("/day/{date_iso}")
     };
     let history_script = format!(
-        "window.history.pushState({{date:'{date_iso}'}}, '', '{url_path}'); document.body.setAttribute('data-weekday', '{weekday_num}'); document.title = '{day_name}';"
+        "window.history.pushState({{date:'{date_iso}'}}, '', '{url_path}'); document.body.setAttribute('data-weekday', '{selected_weekday}'); document.title = '{day_name}';"
     );
 
     let signals_json = serde_json::json!({
@@ -155,7 +145,7 @@ pub async fn navigate(
         "weekExpMax": quest_stats.week_exp_max,
         "questsCompleted": quest_stats.quests_completed,
         "questsTotal": quest_stats.quests_total,
-        "currentDay": day_of_week,
+        "currentDay": current_day,
         "isToday": is_today
     });
 

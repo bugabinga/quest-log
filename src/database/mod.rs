@@ -62,6 +62,7 @@ pub struct Database {
 
 mod queries;
 mod queries_core;
+mod queries_stats;
 mod queries_weekly;
 #[cfg(test)]
 mod tests;

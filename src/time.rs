@@ -60,50 +60,20 @@ pub fn today_with_timezone(tz: Option<&str>) -> NaiveDate {
     Utc::now().date_naive()
 }
 
-/// Returns the current date.
-///
-/// This function provides the current date with the following precedence:
-/// 1. **Test Override**: If [`set_today()`] was called (thread-local), returns that date
-/// 2. **Environment Variable**: If `QUEST_LOG_TODAY` is set (debug builds only)
-/// 3. **Real Date**: Returns the actual current date from the system clock
-///
-/// # Testing
-///
-/// For integration tests, use [`set_today()`] and [`reset_today()`] to override
-/// the date. This provides better test isolation than environment variables.
-///
-/// For manual testing, set the `QUEST_LOG_TODAY` environment variable:
-/// - Specific date: `QUEST_LOG_TODAY=2024-01-15`
-/// - Weekday number: `QUEST_LOG_TODAY=1` (0=Sunday, 1=Monday, etc.)
-/// - Weekday name: `QUEST_LOG_TODAY=Monday`
-#[must_use]
-pub fn today() -> NaiveDate {
-    if let Some(datetime) = FAKE_TODAY.with(|m| *m.borrow()) {
-        return datetime.date();
-    }
-
-    #[cfg(debug_assertions)]
-    {
-        if let Some(val) = config::today_override() {
-            return parse_today_override(&val);
-        }
-    }
-
-    Utc::now().date_naive()
-}
-
 #[cfg(debug_assertions)]
 fn parse_today_override(val: &str) -> NaiveDate {
     let val = val.trim();
+    let reference_date = FAKE_TODAY
+        .with(|m| m.borrow().map(|datetime| datetime.date()))
+        .unwrap_or_else(|| Utc::now().date_naive());
 
     if let Ok(num) = val.parse::<u8>()
         && num <= 6
     {
-        let today = today();
-        let current_weekday = today.weekday().num_days_from_sunday();
+        let current_weekday = reference_date.weekday().num_days_from_sunday();
         let target = u32::from(num);
         let offset = i64::from(current_weekday) - i64::from(target);
-        return today - chrono::Duration::days(offset);
+        return reference_date - chrono::Duration::days(offset);
     }
 
     let lower = val.to_lowercase();
@@ -118,10 +88,9 @@ fn parse_today_override(val: &str) -> NaiveDate {
         _ => None,
     };
     if let Some(weekday) = weekday {
-        let today = today();
-        let current_weekday = i64::from(today.weekday().num_days_from_sunday());
+        let current_weekday = i64::from(reference_date.weekday().num_days_from_sunday());
         let target = i64::from(weekday.num_days_from_sunday());
-        return today - chrono::Duration::days(current_weekday - target);
+        return reference_date - chrono::Duration::days(current_weekday - target);
     }
 
     if let Ok(date) = NaiveDate::parse_from_str(val, "%Y-%m-%d") {
@@ -133,10 +102,10 @@ fn parse_today_override(val: &str) -> NaiveDate {
 
 /// Override the current date for testing purposes.
 ///
-/// This function sets a thread-local variable that makes [`today()`] return
-/// the specified date instead of the real current date. The time component
-/// is set to the current UTC time to enable proper timezone conversion in
-/// [`today_with_timezone()`].
+/// This function sets a thread-local variable that makes
+/// [`today_with_timezone()`] return the specified date instead of the real
+/// current date. The time component is set to the current UTC time to enable
+/// proper timezone conversion.
 ///
 /// # Why Thread-Locals Instead of Environment Variables?
 ///
@@ -207,8 +176,8 @@ pub fn set_fake_datetime(datetime: chrono::DateTime<Utc>) {
 
 /// Reset the date override set by [`set_today()`] or [`set_fake_datetime()`].
 ///
-/// After calling this function, [`today()`] will return the real current date
-/// again.
+/// After calling this function, [`today_with_timezone()`] will return the real
+/// current date again.
 ///
 /// This is typically called in test cleanup (e.g., in a `Drop` impl or
 /// `after_each` hook) to ensure tests don't affect each other.
@@ -691,7 +660,7 @@ mod tests {
         set_today(fake_date);
 
         // The fake should take precedence
-        let result = today();
+        let result = today_with_timezone(None);
         assert_eq!(result, fake_date);
 
         reset_today();
@@ -701,7 +670,7 @@ mod tests {
     fn test_env_var_takes_precedence_over_real() {
         // Set env var and verify it takes effect
         // Note: This test only runs in debug mode where env var is checked
-        let result = today();
+        let result = today_with_timezone(None);
         // Just verify it returns some valid date in the valid range
         assert!(result.year() >= 2020 && result.year() <= 2030);
         reset_today();

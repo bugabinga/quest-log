@@ -143,11 +143,11 @@ async fn test_business_logic_integration() {
     );
 
     // Check that bronze reward was claimed
-    let claimed_count = db
-        .get_rewards_claimed_count()
+    let stats = db
+        .get_highscore_stats()
         .await
-        .expect("Failed to get claimed count");
-    assert_eq!(claimed_count, 1, "Should have 1 reward claimed");
+        .expect("Failed to get highscore stats");
+    assert_eq!(stats.rewards_claimed, 1, "Should have 1 reward claimed");
 
     // Try to claim bronze again - should fail
     let claim_again = db
@@ -169,12 +169,12 @@ async fn test_business_logic_integration() {
         "Should be able to claim Silver reward with 110 EXP"
     );
 
-    let claimed_count_after_silver = db
-        .get_rewards_claimed_count()
+    let stats_after_silver = db
+        .get_highscore_stats()
         .await
-        .expect("Failed to get claimed count after silver");
+        .expect("Failed to get highscore stats after silver");
     assert_eq!(
-        claimed_count_after_silver, 2,
+        stats_after_silver.rewards_claimed, 2,
         "Should have 2 rewards claimed"
     );
 
@@ -189,11 +189,11 @@ async fn test_business_logic_integration() {
     );
 
     // Test total EXP earned calculation
-    let total_exp = db
-        .get_total_exp_earned()
+    let stats = db
+        .get_highscore_stats()
         .await
-        .expect("Failed to get total EXP earned");
-    assert_eq!(total_exp, 110, "Total EXP earned should be 110");
+        .expect("Failed to get highscore stats");
+    assert_eq!(stats.total_exp, 110, "Total EXP earned should be 110");
 
     // Test edge cases
 
@@ -279,12 +279,12 @@ async fn test_business_logic_integration() {
     );
 
     // Verify the completion is counted in total EXP
-    let total_with_future = db
-        .get_total_exp_earned()
+    let stats_with_future = db
+        .get_highscore_stats()
         .await
-        .expect("Failed to get total EXP after re-completing");
+        .expect("Failed to get highscore stats after re-completing");
     assert_eq!(
-        total_with_future, 110,
+        stats_with_future.total_exp, 110,
         "Total EXP should be 110 after re-completing quest1"
     );
 }
@@ -336,8 +336,8 @@ async fn test_todays_quests_with_set_today() {
         .await
         .expect("Failed to create Sunday quest");
 
-    // Use time::today() to get today's quests (now returns fake Wednesday)
-    let today = time::today();
+    // Resolve the fake Wednesday without applying a timezone offset.
+    let today = time::today_with_timezone(None);
     let day_of_week = today.weekday().num_days_from_sunday().cast_signed();
 
     // Verify we're on Wednesday
@@ -359,7 +359,7 @@ async fn test_todays_quests_with_set_today() {
     let monday = NaiveDate::from_ymd_opt(2024, 1, 1).unwrap();
     time::set_today(monday);
 
-    let today_monday = time::today();
+    let today_monday = time::today_with_timezone(None);
     let monday_dow = today_monday.weekday().num_days_from_sunday().cast_signed();
 
     assert_eq!(monday_dow, 1, "Should be Monday (1)");
@@ -373,7 +373,7 @@ async fn test_todays_quests_with_set_today() {
     assert_eq!(monday_quests[0].title, "Monday Only Quest");
 
     // Test completion tracking with fake today
-    let wednesday_again = time::today();
+    let wednesday_again = time::today_with_timezone(None);
     let was_completed = db
         .is_quest_completed_today(wednesday_q.id, wednesday_again)
         .await

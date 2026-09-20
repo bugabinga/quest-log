@@ -196,7 +196,7 @@ async fn test_partial_claim_should_not_return_all_rewards_claimed() {
 /// - A `weekly_champions` table exists to track when a user
 ///   completes all weekly rewards
 ///
-/// This test verifies the `get_all_weekly_champions` method works correctly.
+/// This test verifies the highscore aggregate tracks weekly champions.
 #[tokio::test]
 async fn test_weekly_champions_table_should_track_completion() {
     let pool = SqlitePool::connect("sqlite::memory:")
@@ -209,15 +209,12 @@ async fn test_weekly_champions_table_should_track_completion() {
     let sunday = NaiveDate::from_ymd_opt(2024, 1, 7).unwrap();
     time::set_today(sunday);
 
-    // Initially, no champion record should exist
-    let all_champions = db
-        .get_all_weekly_champions()
+    let initial_stats = db
+        .get_highscore_stats()
         .await
-        .expect("Failed to get all champions");
-    let initial_champion = all_champions.iter().find(|c| c.week_start == week_start);
-
-    assert!(
-        initial_champion.is_none(),
+        .expect("Failed to get highscore stats");
+    assert_eq!(
+        initial_stats.weekly_champions, 0,
         "No champion record should exist before any rewards are claimed"
     );
 
@@ -250,18 +247,13 @@ async fn test_weekly_champions_table_should_track_completion() {
         .await
         .expect("Failed to claim reward");
 
-    // Now champion record should exist
-    // This requires the database to create a weekly_champions record
-    // when all rewards are claimed
-    let all_champions = db
-        .get_all_weekly_champions()
+    let final_stats = db
+        .get_highscore_stats()
         .await
-        .expect("Failed to get all champions after claiming");
-    let champion = all_champions.iter().find(|c| c.week_start == week_start);
-
-    assert!(
-        champion.is_some(),
-        "Champion record should exist after claiming all rewards - weekly_champions table should be created"
+        .expect("Failed to get highscore stats after claiming");
+    assert_eq!(
+        final_stats.weekly_champions, 1,
+        "Champion record should exist after claiming all rewards"
     );
 
     time::reset_today();

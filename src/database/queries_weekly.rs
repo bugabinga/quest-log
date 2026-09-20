@@ -55,7 +55,7 @@ impl Database {
     ///
     /// # Arguments
     ///
-    /// * `today` - Today's date
+    /// * `selected_date` - Date whose daily statistics to return
     /// * `week_start` - Start date of the week (inclusive)
     /// * `week_end` - End date of the week (inclusive)
     ///
@@ -68,19 +68,21 @@ impl Database {
     /// Returns an error if any of the database queries fail
     pub async fn get_week_stats(
         &self,
-        today: NaiveDate,
+        selected_date: NaiveDate,
         week_start: NaiveDate,
         week_end: NaiveDate,
     ) -> Result<crate::models::QuestStats, sqlx::Error> {
-        tracing::debug!(today = %today, week_start = %week_start, week_end = %week_end, "📊 Getting week stats");
-        let day_of_week = today.weekday().num_days_from_sunday().cast_signed();
+        tracing::debug!(selected_date = %selected_date, week_start = %week_start, week_end = %week_end, "📊 Getting week stats");
+        let day_of_week = selected_date.weekday().num_days_from_sunday().cast_signed();
 
         let today_quests = self.get_quests_for_day(day_of_week).await?;
         let exp_today_max: i32 = today_quests.iter().map(|q| q.exp_value).sum();
         let quests_total = i32::try_from(today_quests.len()).unwrap_or(i32::MAX);
 
         let quest_ids: Vec<i64> = today_quests.iter().map(|q| q.id).collect();
-        let completion_status = self.get_quests_completion_status(&quest_ids, today).await?;
+        let completion_status = self
+            .get_quests_completion_status(&quest_ids, selected_date)
+            .await?;
 
         let mut exp_today = 0i32;
         let mut quests_completed = 0i32;
@@ -96,12 +98,7 @@ impl Database {
         }
 
         let week_exp = self.calculate_weekly_exp(week_start, week_end).await?;
-        let week_exp_max_raw: (i64,) =
-            sqlx::query_as("SELECT COALESCE(SUM(exp_value), 0) FROM quests WHERE is_active = TRUE")
-                .fetch_one(&self.pool)
-                .await?;
-        let week_exp_max = i32::try_from(week_exp_max_raw.0)
-            .map_err(|_| sqlx::Error::Protocol("Integer overflow in week_exp_max".into()))?;
+        let week_exp_max = self.get_settings().await?.weekly_exp_goal;
 
         Ok(crate::models::QuestStats {
             exp_today,
@@ -111,46 +108,6 @@ impl Database {
             week_exp,
             week_exp_max,
         })
-    }
-
-    /// Get the total experience earned from all completed quests
-    ///
-    /// # Returns
-    ///
-    /// Total experience earned from all completed quests
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if the database query fails
-    pub async fn get_total_exp_earned(&self) -> Result<i32, sqlx::Error> {
-        tracing::trace!("💎 Fetching total EXP");
-        let result: (i32,) = sqlx::query_as(
-            "SELECT COALESCE(SUM(q.exp_value), 0) as total_exp
-             FROM quest_completions qc
-             JOIN quests q ON qc.quest_id = q.id",
-        )
-        .fetch_one(&self.pool)
-        .await?;
-
-        Ok(result.0)
-    }
-
-    /// Get the total number of rewards claimed
-    ///
-    /// # Returns
-    ///
-    /// Total count of rewards claimed
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if the database query fails
-    pub async fn get_rewards_claimed_count(&self) -> Result<i32, sqlx::Error> {
-        tracing::trace!("🏆 Fetching claimed rewards count");
-        let result: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM reward_claims")
-            .fetch_one(&self.pool)
-            .await?;
-
-        Ok(i32::try_from(result.0).unwrap_or(i32::MAX))
     }
 
     // Reward claiming logic
@@ -324,28 +281,6 @@ impl Database {
 
         tracing::info!(reward_id, title = %reward.title, "Reward claimed successfully!");
         Ok(true)
-    }
-
-    /// Get a weekly champion record for a specific week
-    ///
-    /// # Arguments
-    ///
-    /// Get all weekly champion records
-    ///
-    /// # Returns
-    ///
-    /// Vector of all weekly champions ordered by week start date descending
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if the database query fails
-    pub async fn get_all_weekly_champions(&self) -> Result<Vec<WeeklyChampion>, sqlx::Error> {
-        tracing::trace!("🏆 Fetching all weekly champions");
-        sqlx::query_as::<_, WeeklyChampion>(
-            "SELECT * FROM weekly_champions ORDER BY week_start DESC",
-        )
-        .fetch_all(&self.pool)
-        .await
     }
 
     /// Create a new weekly champion record

@@ -14,7 +14,8 @@ export async function launchBrowser() {
 }
 
 async function firefox(isCI: boolean, headless: boolean) {
-  const executablePath = Deno.env.get("BROWSER_EXECUTABLE") ?? "/usr/bin/firefox";
+  const executablePath = Deno.env.get("BROWSER_EXECUTABLE") ??
+    "/usr/bin/firefox";
   const userDataDir = await Deno.makeTempDir({ prefix: "quest-log-firefox-" });
   const launchArgs = ["--profile", userDataDir];
   if (isCI) {
@@ -35,7 +36,8 @@ async function firefox(isCI: boolean, headless: boolean) {
 }
 
 async function chrome(isCI: boolean, headless: boolean) {
-  const executablePath = Deno.env.get("BROWSER_EXECUTABLE") ?? chromeExecutable();
+  const executablePath = Deno.env.get("BROWSER_EXECUTABLE") ??
+    chromeExecutable();
   const launchArgs = [
     "--disable-dev-shm-usage", // General Linux stability
   ];
@@ -56,12 +58,14 @@ async function chrome(isCI: boolean, headless: boolean) {
 }
 
 function chromeExecutable() {
-  for (const path of [
-    "/usr/bin/google-chrome",
-    "/usr/bin/google-chrome-stable",
-    "/usr/bin/chromium",
-    "/usr/bin/chromium-browser",
-  ]) {
+  for (
+    const path of [
+      "/usr/bin/google-chrome",
+      "/usr/bin/google-chrome-stable",
+      "/usr/bin/chromium",
+      "/usr/bin/chromium-browser",
+    ]
+  ) {
     try {
       Deno.statSync(path);
       return path;

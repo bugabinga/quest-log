@@ -42,7 +42,9 @@ Deno.test({
       const page = await newPage(browser);
       const failedUrls: string[] = [];
       page.on("response", (response) => {
-        if (response.url().includes("/editor/tab/") && response.status() >= 400) {
+        if (
+          response.url().includes("/editor/tab/") && response.status() >= 400
+        ) {
           failedUrls.push(`${response.status()} ${response.url()}`);
         }
       });

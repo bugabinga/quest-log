@@ -906,11 +906,10 @@ async fn test_day_change_detection_signals_and_logic() {
         "HTML should contain $currentDay signal to track the current weekday"
     );
 
-    // Check 2: The HTML should have $isToday signal
-    // This indicates whether user is viewing "today"
+    // Check 2: The signal declaration should mark the root page as today.
     assert!(
-        html.contains("$isToday"),
-        "HTML should contain $isToday signal to track if viewing today"
+        html.contains("isToday: true"),
+        "HTML should initialize isToday for the root page"
     );
 
     // Check 3: The HTML should have day change detector element with interval
@@ -920,11 +919,10 @@ async fn test_day_change_detection_signals_and_logic() {
         "HTML should contain day-change-detector with data-on-interval for automatic day change detection"
     );
 
-    // Check 4: The day change logic should navigate to today when day changes
-    // The condition checks: $isToday && new Date().getDay() !== $currentDay
+    // Check 4: Rollover should navigate to today from any viewed date.
     assert!(
-        html.contains("/navigate/today"),
-        "HTML should contain navigation to /navigate/today when day change is detected"
+        html.contains("new Date().getDay() !== $currentDay") && html.contains("/navigate/today"),
+        "HTML should navigate to /navigate/today when the weekday changes"
     );
 
     println!("Day change detection test completed successfully");

@@ -11,12 +11,9 @@ pub fn bounty_page(
     all_rewards_claimed: bool,
 ) -> maud::Markup {
     let signals = "{weeklyRewardsOpen: true}".to_string();
-    let computed =
-        "({weekExpPercent: () => Math.round($weekExp / Math.max($weekExpMax, 1) * 100)})"
-            .to_string();
 
     let body_content = html! {
-        div data-signals=(maud::PreEscaped(&signals)) data-computed=(maud::PreEscaped(&computed)) {}
+        div data-signals=(maud::PreEscaped(&signals)) {}
 
         div class="notifications" {}
         h1 class="rainbow-text" { "🏴‍☠️ Bounty Board 🏴‍☠️" }
@@ -38,7 +35,7 @@ pub fn bounty_page(
         body_content,
         weekday: None,
         signals: Some(signals),
-        computed: Some(computed),
+        computed: None,
         show_nav: true,
         active_route: Some("/bounty".to_string()),
         extra_scripts: None,

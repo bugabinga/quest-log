@@ -5,10 +5,38 @@
 // Order matters: early-execution code first, then event-driven code.
 // ============================================================================
 
-import { mergePatch } from "../vendor/datastar.js";
+// ============================================================================
+// SECTION 0: Timezone Bootstrap (runs before Datastar)
+// ============================================================================
+const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+const timezoneCookieName = "QuestLog-TZ";
+
+function readCookie(name) {
+  const prefix = `${name}=`;
+  return document.cookie
+    .split(";")
+    .map((cookie) => cookie.trim())
+    .find((cookie) => cookie.startsWith(prefix))
+    ?.slice(prefix.length);
+}
+
+if (timezone && timezone !== "undefined") {
+  const cookieTimezone = readCookie(timezoneCookieName);
+  if (cookieTimezone !== timezone) {
+    const maxAge = 60 * 60 * 24 * 365;
+    document.cookie =
+      `${timezoneCookieName}=${timezone}; path=/; max-age=${maxAge}; SameSite=Lax`;
+    if (readCookie(timezoneCookieName) === timezone) {
+      globalThis.location.reload();
+      await new Promise(() => {});
+    }
+  }
+}
+
+const { mergePatch } = await import("../vendor/datastar.js");
 
 // ============================================================================
-// SECTION 0: Datastar Error Interceptor (runs immediately)
+// SECTION 1: Datastar Error Interceptor
 // ============================================================================
 // Global error handler for Datastar - catches and logs all Datastar errors
 // including GenerateExpression errors which are otherwise hard to debug.
@@ -24,53 +52,27 @@ document.addEventListener("datastar-fetch", (e) => {
 });
 
 // ============================================================================
-// SECTION 1: Timezone Header (runs immediately)
+// SECTION 2: Timezone Header
 // ============================================================================
 // Monkey-patch fetch to add X-Timezone header to all requests.
 // This is required because the server needs to know the user's timezone
 // to determine "today" for quest filtering. The browser knows the user's
 // timezone via Intl.DateTimeFormat().resolvedOptions().timeZone,
 // but there's no standard HTTP header for timezone, so we use a custom header.
-(function () {
-  const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-  console.debug("[Fetch] Timezone:", timezone);
-  const originalFetch = globalThis.fetch;
+console.debug("[Fetch] Timezone:", timezone);
+const originalFetch = globalThis.fetch;
 
-  globalThis.fetch = function (input, init = {}) {
-    init = init || {};
-    init.headers = {
-      ...init.headers,
-      "X-Timezone": timezone,
-    };
-    return originalFetch(input, init);
+globalThis.fetch = function (input, init = {}) {
+  init = init || {};
+  init.headers = {
+    ...init.headers,
+    "X-Timezone": timezone,
   };
-
-  // On page load, check if we have a timezone cookie. If not, set it directly
-  // without triggering a reload (avoids infinite reload loop with datastar).
-  const cookieName = "QuestLog-TZ=";
-  const cookies = document.cookie.split(";");
-  let hasTimezone = false;
-  for (let cookie of cookies) {
-    cookie = cookie.trim();
-    if (cookie.startsWith(cookieName)) {
-      hasTimezone = true;
-      break;
-    }
-  }
-
-  // Set cookie directly if missing and timezone is valid
-  if (
-    !hasTimezone && timezone && timezone !== "undefined" && timezone !== null
-  ) {
-    const maxAge = 60 * 60 * 24 * 365; // 1 year
-    document.cookie = `QuestLog-TZ=${
-      encodeURIComponent(timezone)
-    }; path=/; max-age=${maxAge}; SameSite=Lax`;
-  }
-})();
+  return originalFetch(input, init);
+};
 
 // ============================================================================
-// SECTION 2: Client ID Generation (runs immediately)
+// SECTION 3: Client ID Generation (runs immediately)
 // ============================================================================
 function generateClientId() {
   let clientId = sessionStorage.getItem("quest_log_client_id");
@@ -87,7 +89,7 @@ const CLIENT_ID = generateClientId();
 mergePatch({ client_id: CLIENT_ID });
 
 // ============================================================================
-// SECTION 3: UI Effects - Notifications & Confetti
+// SECTION 4: UI Effects - Notifications & Confetti
 // ============================================================================
 function pulseCounter(element) {
   element.classList.remove("exp-pulse");
@@ -170,29 +172,6 @@ function triggerQuestUncompletionNotification() {
   }, 3000);
 }
 
-function triggerRewardClaimedNotification(rewardId) {
-  const rewardCard = document.getElementById(`reward-${rewardId}`);
-  if (rewardCard) {
-    rewardCard.setAttribute("data-just-claimed", "true");
-    setTimeout(() => rewardCard.removeAttribute("data-just-claimed"), 600);
-  }
-
-  const overlay = document.createElement("div");
-  overlay.className = "reward-claimed-notification";
-  overlay.innerHTML = `
-    <h2>🎉 REWARD CLAIMED! 🎉</h2>
-    <p>Your treasure awaits!</p>
-  `;
-  document.body.appendChild(overlay);
-
-  createConfetti();
-
-  setTimeout(() => {
-    overlay.style.animation = "reward-notification-in 0.3s ease-out reverse";
-    setTimeout(() => overlay.remove(), 300);
-  }, 2500);
-}
-
 function createConfetti() {
   const colors = [
     "oklch(0.6 0.15 45)",
@@ -226,11 +205,6 @@ function createConfetti() {
 }
 
 function handleWeeklyChampionCelebration() {
-  // Get the current week start from the day title or calculate it
-  const dayTitle = document.querySelector(".day-title");
-  if (!dayTitle) return;
-
-  // Try to get the week start from the page - we'll use the current week
   const now = new Date();
   const day = now.getDay();
   const diff = now.getDate() - day + (day === 0 ? -6 : 1); // Adjust for Sunday
@@ -258,8 +232,13 @@ function handleWeeklyChampionCelebration() {
   setTimeout(createConfetti, 600);
 }
 
+globalThis.triggerErrorNotification = triggerErrorNotification;
+globalThis.triggerSuccessNotification = triggerSuccessNotification;
+globalThis.triggerQuestUncompletionNotification =
+  triggerQuestUncompletionNotification;
+
 // ============================================================================
-// SECTION 4: Video Modal (runs on DOMContentLoaded)
+// SECTION 5: Video Modal (runs on DOMContentLoaded)
 // ============================================================================
 function initVideoModal() {
   const STORAGE_KEY = "quest-log-first-time";
@@ -267,15 +246,17 @@ function initVideoModal() {
   const modal = document.getElementById("video-modal");
   const video = document.getElementById("intro-video");
   const closeBtn = document.querySelector(".video-close");
+  const trailerBtn = document.querySelector(".nav-link--trailer");
 
-  if (!modal || !video) return;
+  if (!modal || !video || !closeBtn || !trailerBtn) return;
 
-  function openVideoModal() {
+  function openVideoModal(muted = false) {
     modal.style.display = "flex";
     modal.style.opacity = "1";
     video.currentTime = 0;
+    video.muted = muted;
     video.play().catch(function (err) {
-      console.warn("[Video] Autoplay blocked:", err.message);
+      console.warn("[Video] Playback blocked:", err.message);
     });
   }
 
@@ -291,9 +272,7 @@ function initVideoModal() {
     localStorage.setItem(STORAGE_KEY, "true");
   }
 
-  globalThis.openVideoModal = openVideoModal;
-  globalThis.closeVideoModal = closeVideoModal;
-
+  trailerBtn.addEventListener("click", () => openVideoModal());
   closeBtn.addEventListener("click", closeVideoModal);
 
   modal.addEventListener("click", function (e) {
@@ -310,71 +289,62 @@ function initVideoModal() {
 
   video.addEventListener("ended", closeVideoModal);
 
-  if (!localStorage.getItem(STORAGE_KEY)) {
-    openVideoModal();
+  if (
+    !localStorage.getItem(STORAGE_KEY) &&
+    location.pathname !== "/editor"
+  ) {
+    openVideoModal(true);
   }
 }
 
 // ============================================================================
-// SECTION 5: Quest UI - Keyboard Navigation & Mutation Observer
+// SECTION 6: Quest UI - Keyboard Navigation & Mutation Observer
 // ============================================================================
 let previousExpToday = 0;
 
-function initQuestUI() {
-  // Keyboard navigation
-  document.addEventListener("keydown", (e) => {
-    if (e.key === "ArrowLeft") {
-      const prevBtn = document.querySelector(".nav-btn.left:not(.disabled)");
-      if (prevBtn) prevBtn.click();
-    } else if (e.key === "ArrowRight") {
-      const nextBtn = document.querySelector(".nav-btn.right:not(.disabled)");
-      if (nextBtn) nextBtn.click();
-    } else if (e.key === "t" || e.key === "T") {
-      const todayBtn = document.querySelector(".today-btn");
-      if (todayBtn) todayBtn.click();
-    }
-  });
-
-  // Mutation observer for quest completion/uncompletion
-  const observer = new MutationObserver((mutations) => {
-    for (const mutation of mutations) {
-      if (mutation.type === "attributes" && mutation.attributeName) {
-        const el = mutation.target;
-        const attr = el.getAttribute(mutation.attributeName);
-
-        if (
-          mutation.attributeName === "data-just-completed" && attr === "true"
-        ) {
-          triggerSuccessNotification("Quest completed!");
-          el.removeAttribute("data-just-completed");
-        } else if (
-          mutation.attributeName === "data-just-uncompleted" &&
-          attr === "true"
-        ) {
-          triggerQuestUncompletionNotification();
-          el.removeAttribute("data-just-uncompleted");
-        }
-      }
-    }
-  });
-
-  const questList = document.getElementById("quest-list");
-  if (questList) {
-    observer.observe(questList, {
-      attributes: true,
-      subtree: true,
-      attributeFilter: ["data-just-completed", "data-just-uncompleted"],
-    });
+function canHandleKeyboardShortcut(event) {
+  if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) {
+    return false;
   }
+
+  const target = event.target;
+  if (
+    target instanceof Element &&
+    target.closest("input, textarea, select, [contenteditable]")
+  ) {
+    return false;
+  }
+
+  return ![
+    ...document.querySelectorAll(
+      "dialog[open], [aria-modal='true'], .auth-modal, #video-modal",
+    ),
+  ].some((modal) => getComputedStyle(modal).display !== "none");
+}
+
+function initQuestUI() {
+  document.addEventListener("keydown", (event) => {
+    if (!canHandleKeyboardShortcut(event)) return;
+
+    let button = null;
+    if (event.key === "ArrowLeft") {
+      button = document.querySelector(".nav-btn.left:not(.disabled)");
+    } else if (event.key === "ArrowRight") {
+      button = document.querySelector(".nav-btn.right:not(.disabled)");
+    } else if (event.key === "t" || event.key === "T") {
+      button = document.querySelector(".today-btn");
+    }
+
+    if (button) {
+      event.preventDefault();
+      button.click();
+    }
+  });
 
   // Listen to Datastar signal patches
   document.addEventListener("datastar-signal-patch", (e) => {
     const signals = e.detail;
     console.debug("[Signals] Received:", Object.keys(signals).join(", "));
-    if (signals.error) {
-      triggerErrorNotification(signals.error);
-    }
-
     if (typeof signals.expToday === "number") {
       const expCounter = document.getElementById("exp-counter");
       if (expCounter && signals.expToday !== previousExpToday) {
@@ -384,10 +354,6 @@ function initQuestUI() {
         }
       }
       previousExpToday = signals.expToday;
-    }
-
-    if (signals.rewardClaimed) {
-      triggerRewardClaimedNotification(signals.rewardClaimed);
     }
 
     // Handle celebration when all rewards are claimed
@@ -404,23 +370,8 @@ function initQuestUI() {
 }
 
 // ============================================================================
-// SECTION 6: SSE Events - Connection & Death Screen
+// SECTION 7: SSE Events - Connection & Death Screen
 // ============================================================================
-function _parseSseData(data) {
-  const result = {};
-  const lines = data.split(/\n/);
-  for (const line of lines) {
-    const colonIdx = line.indexOf(" ");
-    if (colonIdx === -1) continue;
-    const key = line.slice(0, colonIdx);
-    const value = line.slice(colonIdx + 1);
-    (result[key] ||= []).push(value);
-  }
-  return Object.fromEntries(
-    Object.entries(result).map(([k, v]) => [k, v.join("\n")]),
-  );
-}
-
 (function () {
   "use strict";
 
@@ -428,6 +379,8 @@ function _parseSseData(data) {
   let shutdownOverlay = null;
   let isConnected = false;
   let healthCheckTimer = null;
+  let initialized = false;
+  let unloading = false;
 
   function startServerPolling() {
     console.log("[Shutdown] Starting server polling...");
@@ -458,68 +411,23 @@ function _parseSseData(data) {
     poll();
   }
 
-  function applyPatchElements(html) {
-    const temp = document.createElement("div");
-    temp.innerHTML = html;
-
-    for (const newEl of temp.children) {
-      if (!newEl.id) continue;
-
-      const existingEl = document.getElementById(newEl.id);
-      if (existingEl) {
-        const newContent = newEl.innerHTML;
-        const newAttrs = newEl.attributes;
-
-        for (const attr of [...existingEl.attributes]) {
-          existingEl.removeAttribute(attr.name);
-        }
-        for (const attr of newAttrs) {
-          existingEl.setAttribute(attr.name, attr.value);
-        }
-        existingEl.innerHTML = newContent;
-
-        if (
-          existingEl.classList.contains("quest-item") &&
-          existingEl.classList.contains("completed")
-        ) {
-          existingEl.setAttribute("data-just-completed", "true");
-        }
-      }
-    }
-
-    globalThis.datastar?.initialize?.();
+  function applyPatchElements(elements) {
+    document.dispatchEvent(
+      new CustomEvent("datastar-fetch", {
+        detail: {
+          type: "datastar-patch-elements",
+          el: document.documentElement,
+          argsRaw: { elements },
+        },
+      }),
+    );
   }
 
-  function applyPatchSignals(jsonStr) {
+  function applyPatchSignals(json) {
     try {
-      const signals = JSON.parse(jsonStr);
-      const paths = [];
-      const addPaths = (obj, prefix = "") => {
-        for (const [key, value] of Object.entries(obj)) {
-          const path = prefix ? `${prefix}.${key}` : key;
-          if (value && typeof value === "object" && !Array.isArray(value)) {
-            addPaths(value, path);
-          } else {
-            paths.push([path, value]);
-          }
-        }
-      };
-      addPaths(signals);
-
-      const merged = {};
-      for (const [path, value] of paths) {
-        const keys = path.split(".");
-        let obj = merged;
-        for (let i = 0; i < keys.length - 1; i++) {
-          obj[keys[i]] ||= {};
-          obj = obj[keys[i]];
-        }
-        obj[keys[keys.length - 1]] = value;
-      }
-
-      mergePatch(merged);
-    } catch (e) {
-      console.error("[SSE] Error parsing signals:", e);
+      mergePatch(JSON.parse(json));
+    } catch (error) {
+      console.error("[SSE] Error parsing signals:", error);
     }
   }
 
@@ -578,9 +486,8 @@ function _parseSseData(data) {
         });
     }
 
-    // Check every 5 seconds
+    // Check every 5 seconds. EventSource covers initial connectivity.
     healthCheckTimer = setInterval(check, 5000);
-    check(); // Also check immediately
   }
 
   function stopProactiveHealthCheck() {
@@ -670,6 +577,10 @@ function _parseSseData(data) {
     };
 
     eventSource.onerror = function _err() {
+      if (unloading || document.visibilityState === "hidden") {
+        eventSource.close();
+        return;
+      }
       console.error("[SSE] Error");
       isConnected = false;
       eventSource.close();
@@ -683,6 +594,9 @@ function _parseSseData(data) {
   }
 
   function initApp() {
+    if (initialized) return;
+    initialized = true;
+
     connect();
     // Start proactive health check to detect server death even if EventSource doesn't fire onerror
     startProactiveHealthCheck();
@@ -698,6 +612,13 @@ function _parseSseData(data) {
     // DOMContentLoaded has already fired, initialize immediately
     initApp();
   }
+
+  globalThis.addEventListener("pagehide", function () {
+    unloading = true;
+    isConnected = false;
+    stopProactiveHealthCheck();
+    eventSource?.close();
+  });
 
   document.addEventListener("visibilitychange", function () {
     if (
@@ -724,4 +645,4 @@ function _parseSseData(data) {
   globalThis.addEventListener("unhandledrejection", function (event) {
     console.error("[JS] Unhandled promise rejection:", event.reason);
   });
-});
+})();

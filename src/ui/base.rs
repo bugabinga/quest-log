@@ -57,14 +57,13 @@ pub fn base_page(data: &PageData) -> maud::Markup {
                     (PreEscaped(extra_scripts))
                 }
             }
-            body data-weekday=(data.weekday.map(|w| w.to_string()).unwrap_or_default().as_str()) {
-                a class="skip-link" href="#main-content" { "Skip to main content" }
+            body data-weekday=(data.weekday.map_or_default(|w| w.to_string()).as_str()) {
                 @if data.show_nav {
                     div id="video-modal" class="video-modal" style="display: none;" {
                         div class="video-overlay" {}
                         div class="video-container" {
-                            button class="video-close" data-on:click=[Some(PreEscaped("window.closeVideoModal()".to_string()))] { "×" }
-                            video id="intro-video" controls playsinline {
+                            button type="button" class="video-close" { "×" }
+                            video id="intro-video" controls playsinline preload="none" {
                                 source src="/video/trailer.mp4" type="video/mp4";
                             }
                         }
@@ -88,7 +87,7 @@ pub fn base_page(data: &PageData) -> maud::Markup {
                                 span class="nav-icon nav-icon--scroll" {}
                                 span { "Editor" }
                             }
-                            span class="nav-link nav-link--trailer" data-on:click=[Some(PreEscaped("window.openVideoModal()".to_string()))] {
+                            button type="button" class="nav-link nav-link--trailer" {
                                 span class="nav-icon nav-icon--crystal" {}
                                 span { "Trailer" }
                             }

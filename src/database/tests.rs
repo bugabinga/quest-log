@@ -129,7 +129,7 @@ mod tests {
         };
 
         let quest = db.create_quest(req).await.unwrap();
-        let today = time::today();
+        let today = time::today_with_timezone(None);
 
         // Complete quest
         let completed = db.toggle_quest_completion(quest.id, today).await.unwrap();
@@ -162,7 +162,6 @@ mod tests {
         let quest = db.create_quest(req).await.unwrap();
 
         // Complete quest on Monday and Wednesday of the current week
-        let _today = time::today();
         // For simplicity, use a known Monday
         let monday = NaiveDate::from_ymd_opt(2024, 1, 1).unwrap(); // This was a Monday
         let wednesday = monday + chrono::Duration::days(2);
@@ -274,8 +273,8 @@ mod tests {
         assert!(!claimed_again);
 
         // Check that claim was recorded
-        let claimed_count = db.get_rewards_claimed_count().await.unwrap();
-        assert_eq!(claimed_count, 1);
+        let stats = db.get_highscore_stats().await.unwrap();
+        assert_eq!(stats.rewards_claimed, 1);
     }
 
     // ===== QUEST_LOG_DATA_DIR INTEGRATION TESTS =====
@@ -380,7 +379,7 @@ mod tests {
     #[tokio::test]
     async fn test_toggle_completion_nonexistent_quest() {
         let db = setup_test_db().await;
-        let today = time::today();
+        let today = time::today_with_timezone(None);
 
         // Should return an error for non-existent quest
         let result = db.toggle_quest_completion(99999, today).await;
@@ -484,7 +483,7 @@ mod tests {
         assert_eq!(quest.exp_value, 0);
 
         // Complete the quest
-        let today = time::today();
+        let today = time::today_with_timezone(None);
         let completed = db.toggle_quest_completion(quest.id, today).await.unwrap();
         assert_eq!(completed, ToggleResult::NewlyCompleted);
 
@@ -638,7 +637,7 @@ mod tests {
         };
         let quest = db.create_quest(req).await.unwrap();
 
-        let today = time::today();
+        let today = time::today_with_timezone(None);
 
         // Wrap in Arc so all concurrent tasks share the same database instance
         let db_arc = Arc::new(db);
@@ -731,7 +730,10 @@ mod tests {
         assert_eq!(failure_count, 4, "Four reward claims should fail");
 
         // Verify reward was claimed
-        let claimed_count = db.get_rewards_claimed_count().await.unwrap();
-        assert_eq!(claimed_count, 1, "Reward should be claimed exactly once");
+        let stats = db.get_highscore_stats().await.unwrap();
+        assert_eq!(
+            stats.rewards_claimed, 1,
+            "Reward should be claimed exactly once"
+        );
     }
 }

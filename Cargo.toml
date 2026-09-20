@@ -55,12 +55,9 @@ tracing-error = "*"
 clap = { version = "*", features = ["derive"] }
 futures = "*"
 async-stream = "*"
-crossterm = "*"
 tower = "*"
-tower-sessions = "*"
 argon2 = "*"
 password-hash = { version = "*", features = ["getrandom"] }
-axum-extra = { version = "*", features = ["cookie", "multipart"] }
 rpassword = "*"
 
 [dev-dependencies]

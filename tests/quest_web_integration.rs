@@ -124,7 +124,7 @@ async fn test_quest_listing_on_sunday() {
         .await
         .expect("Failed to create test quest");
 
-    let today = time::today();
+    let today = time::today_with_timezone(None);
     let day_of_week = today.weekday().num_days_from_sunday().cast_signed();
 
     assert_eq!(day_of_week, 0, "Should be Sunday (0)");

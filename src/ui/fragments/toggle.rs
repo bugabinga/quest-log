@@ -47,7 +47,7 @@ impl QuestDisplay {
 #[must_use]
 pub fn toggle(quest: &QuestDisplay) -> Markup {
     let onclick = format!(
-        "@post('/quests/toggle', {{ payload: {{ quest_id: {} }} }})",
+        "@post('/quests/toggle', {{ payload: {{ quest_id: {}, client_id: $client_id }} }})",
         quest.id
     );
 

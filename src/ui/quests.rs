@@ -17,7 +17,8 @@ pub fn quests_page(
     can_navigate_right: bool,
     prev_date: &str,
     next_date: &str,
-    weekday_num: u8,
+    selected_weekday: u8,
+    current_day: u8,
     stats: &QuestStats,
 ) -> maud::Markup {
     let signals = format!(
@@ -28,11 +29,11 @@ pub fn quests_page(
         stats.week_exp_max,
         stats.quests_completed,
         stats.quests_total,
-        weekday_num,
+        current_day,
         if is_today { "true" } else { "false" }
     );
 
-    let computed = "({expTodayPercent: () => Math.round($expToday / Math.max($expTodayMax, 1) * 100), weekExpPercent: () => Math.round($weekExp / Math.max($weekExpMax, 1) * 100)})".to_string();
+    let computed = "({expTodayPercent: () => Math.round(Math.min(100, Math.max(0, $expToday / Math.max($expTodayMax, 1) * 100))), weekExpPercent: () => Math.round(Math.min(100, Math.max(0, $weekExp / Math.max($weekExpMax, 1) * 100)))})".to_string();
 
     let nav_left_onclick = if can_navigate_left {
         Some(PreEscaped(format!(
@@ -60,8 +61,8 @@ pub fn quests_page(
         div data-signals=(PreEscaped(&signals)) data-computed=(PreEscaped(&computed)) {}
 
         div id="day-change-detector" style="display: none;"
-            data-on-interval="60000; if ($isToday && new Date().getDay() !== $currentDay) { @get('/navigate/today') }"
-            data-on:questlog_simulate_day_change__window="if ($isToday && new Date().getDay() !== $currentDay) { @get('/navigate/today') }"
+            "data-on-interval__duration.60000ms"="if (new Date().getDay() !== $currentDay) { @get('/navigate/today') }"
+            data-on:questlog_simulate_day_change__window="if (new Date().getDay() !== $currentDay) { @get('/navigate/today') }"
         {}
 
         div class="notifications" {}
@@ -104,17 +105,19 @@ pub fn quests_page(
             div class="progress-bar" {
                 div class="progress-fill" data-style:width=(PreEscaped("$expTodayPercent + '%'")) {}
             }
-            div class="stat-row" {
-                span class="stat-label" { "Weekly Progress:" }
-                span class="stat-value" {
-                    span data-text=(PreEscaped("$weekExp")) {}
-                    " / "
-                    span data-text=(PreEscaped("$weekExpMax")) {}
-                    " EXP"
+            @if stats.week_exp_max > 0 {
+                div class="stat-row" {
+                    span class="stat-label" { "Weekly Progress:" }
+                    span class="stat-value" {
+                        span data-text=(PreEscaped("$weekExp")) {}
+                        " / "
+                        span data-text=(PreEscaped("$weekExpMax")) {}
+                        " EXP"
+                    }
                 }
-            }
-            div class="progress-bar weekly" {
-                div class="progress-fill" data-style:width=(PreEscaped("$weekExpPercent + '%'")) {}
+                div class="progress-bar weekly" {
+                    div class="progress-fill" data-style:width=(PreEscaped("$weekExpPercent + '%'")) {}
+                }
             }
             div class="stat-row" {
                 span class="stat-label" { "Quests Completed:" }
@@ -149,7 +152,7 @@ pub fn quests_page(
                             @if is_today {
                                 button class=(if quest.completed_today { "toggle-btn completed" } else { "toggle-btn" })
                                      type="button"
-                                     data-on:click__prevent=[Some(PreEscaped(format!("@post('/quests/toggle', {{ payload: {{ quest_id: {} }} }})", quest.id)))] {
+                                     data-on:click__prevent=[Some(PreEscaped(format!("@post('/quests/toggle', {{ payload: {{ quest_id: {}, client_id: $client_id }} }})", quest.id)))] {
                                     @if quest.completed_today {
                                         "✅ Quest Complete"
                                     } @else {
@@ -187,7 +190,7 @@ pub fn quests_page(
     let page_data = PageData {
         title: day_name.to_string(),
         body_content,
-        weekday: Some(weekday_num),
+        weekday: Some(selected_weekday),
         signals: Some(signals),
         computed: Some(computed),
         show_nav: true,

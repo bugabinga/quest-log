@@ -154,8 +154,8 @@ async fn test_quest_listing_on_sunday() {
         .await
         .expect("Failed to create test quest");
 
-    // Test using time::today() which now returns our fake Sunday
-    let today = time::today();
+    // Resolve the fake Sunday without applying a timezone offset.
+    let today = time::today_with_timezone(None);
     let day_of_week = today.weekday().num_days_from_sunday().cast_signed();
 
     // Verify we're on Sunday

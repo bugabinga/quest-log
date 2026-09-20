@@ -1,7 +1,5 @@
 //! Editor quest CRUD handlers
 
-use std::fmt::Write;
-
 use axum::{
     extract::Path,
     extract::State,
@@ -19,67 +17,9 @@ use crate::handlers::AppError;
 use crate::models::{CreateQuestRequest, QuestJsonRequest, UpdateQuestRequest};
 use crate::sse_response;
 use crate::state::AppState;
+use crate::ui::editor::quests_table;
 
 use super::auth::extract_and_validate_session;
-
-const DAY_NAMES: &[&str] = &[
-    "Sunday",
-    "Monday",
-    "Tuesday",
-    "Wednesday",
-    "Thursday",
-    "Friday",
-    "Saturday",
-];
-
-fn escape_html(s: &str) -> String {
-    s.replace('&', "&amp;")
-        .replace('<', "&lt;")
-        .replace('>', "&gt;")
-        .replace('"', "&quot;")
-        .replace('\'', "&#39;")
-}
-
-fn render_quests_table(quests: &[crate::models::Quest]) -> String {
-    let mut html = String::new();
-
-    html.push_str(r#"<table class="editor-table"><thead><tr><th>Title</th><th>EXP</th><th>Day</th><th>Status</th><th>Actions</th></tr></thead><tbody>"#);
-
-    for quest in quests {
-        let row_class = if quest.is_active { "" } else { "inactive-row" };
-        let status_badge = if quest.is_active {
-            r#"<span class="status-badge status-badge--active">Active</span>"#
-        } else {
-            r#"<span class="status-badge status-badge--inactive">Inactive</span>"#
-        };
-
-        let day_name = quest
-            .day_of_week
-            .try_into()
-            .ok()
-            .and_then(|idx: usize| DAY_NAMES.get(idx))
-            .unwrap_or(&"Unknown");
-        let _ = write!(
-            &mut html,
-            r#"<tr id="quest-row-{}" class="{}" style="view-transition-name: editor-row;"><td>{}</td><td>{}</td><td>{}</td><td>{}</td><td><div class="action-buttons"><button class="editor-btn editor-btn--small" data-on:click="@get('/editor/quests/{}/edit')">Edit</button><button class="editor-btn editor-btn--danger" data-on:click="@delete('/editor/quests/{}')">Delete</button></div></td></tr>"#,
-            quest.id,
-            row_class,
-            escape_html(&quest.title),
-            quest.exp_value,
-            day_name,
-            status_badge,
-            quest.id,
-            quest.id
-        );
-    }
-
-    if quests.is_empty() {
-        html.push_str(r#"<tr><td colspan="5" class="empty-message">No quests yet. Add your first quest!</td></tr>"#);
-    }
-
-    html.push_str("</tbody></table>");
-    html
-}
 
 struct QuestData {
     title: String,
@@ -91,21 +31,21 @@ struct QuestData {
 }
 
 fn extract_quest_from_request(req: QuestJsonRequest) -> Result<QuestData, AppError> {
-    let title = req.quest_title.trim();
+    let title = req.title.trim();
     if title.is_empty() {
         return Err(AppError::ValidationError("Title is required".into()));
     }
 
-    if !(0..=6).contains(&req.quest_day_of_week) {
+    if !(0..=6).contains(&req.day_of_week) {
         return Err(AppError::ValidationError("Day must be 0-6".into()));
     }
 
-    if req.quest_exp_value.is_some_and(|exp| exp < 0) {
+    if req.exp_value.is_some_and(|exp| exp < 0) {
         return Err(AppError::ValidationError("EXP must be non-negative".into()));
     }
 
     let image = req
-        .quest_image
+        .image
         .first()
         .map(|file| {
             tracing::debug!(filename = %file.filename(), mime = %file.mime, "Uploading image file");
@@ -118,9 +58,9 @@ fn extract_quest_from_request(req: QuestJsonRequest) -> Result<QuestData, AppErr
 
     Ok(QuestData {
         title: title.to_string(),
-        description: req.quest_description,
-        exp_value: req.quest_exp_value,
-        day_of_week: req.quest_day_of_week,
+        description: req.description,
+        exp_value: req.exp_value,
+        day_of_week: req.day_of_week,
         image_data,
         image_content_type,
     })
@@ -176,12 +116,15 @@ pub async fn create_quest_handler(
         .get_all_quests()
         .await
         .map_err(AppError::Database)?;
-    let html = render_quests_table(&quests);
+    let html = quests_table(&quests).into_string();
 
     let signals = r#"{"_showQuestForm": false, "_questTitle": "", "_questDescription": "", "_questExpValue": 10, "_questDayOfWeek": 0, "_questImage": []}"#;
 
     let events: Vec<Event> = vec![
-        PatchElements::new(html).use_view_transition(true).into(),
+        PatchElements::new(html)
+            .selector("#quests-table")
+            .use_view_transition(true)
+            .into(),
         PatchSignals::new(signals).into(),
     ];
 
@@ -217,14 +160,17 @@ pub async fn delete_quest_handler(
         .get_all_quests()
         .await
         .map_err(AppError::Database)?;
-    let html = render_quests_table(&quests);
+    let html = quests_table(&quests).into_string();
 
     let signals = serde_json::json!({
         "questDeleted": id
     });
 
     let events: Vec<Event> = vec![
-        PatchElements::new(html).use_view_transition(true).into(),
+        PatchElements::new(html)
+            .selector("#quests-table")
+            .use_view_transition(true)
+            .into(),
         PatchSignals::new(signals.to_string()).into(),
     ];
 
@@ -348,12 +294,15 @@ pub async fn update_quest_handler(
         .get_all_quests()
         .await
         .map_err(AppError::Database)?;
-    let html = render_quests_table(&quests);
+    let html = quests_table(&quests).into_string();
 
     let signals = r#"{"_showQuestForm": false, "_editingQuestId": null, "_questTitle": "", "_questDescription": "", "_questExpValue": 10, "_questDayOfWeek": 0, "_questImage": []}"#;
 
     let events: Vec<Event> = vec![
-        PatchElements::new(html).use_view_transition(true).into(),
+        PatchElements::new(html)
+            .selector("#quests-table")
+            .use_view_transition(true)
+            .into(),
         PatchSignals::new(signals).into(),
     ];
 

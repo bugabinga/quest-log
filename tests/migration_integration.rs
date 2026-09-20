@@ -127,8 +127,8 @@ async fn test_migration_data_preservation() {
     let rewards = db.get_available_rewards().await.unwrap();
     assert!(rewards.iter().any(|r| r.title == "Pre-Migration Reward"));
 
-    let claimed_count = db.get_rewards_claimed_count().await.unwrap();
-    assert_eq!(claimed_count, 1);
+    let stats = db.get_highscore_stats().await.unwrap();
+    assert_eq!(stats.rewards_claimed, 1);
 
     // Verify EXP calculations still work
     let week_end = week_start + chrono::Duration::days(6);
@@ -245,11 +245,11 @@ async fn test_migration_schema_integrity() {
         .expect("Reward claims table should exist");
     assert!(claimed);
 
-    let claimed_count = db
-        .get_rewards_claimed_count()
+    let stats = db
+        .get_highscore_stats()
         .await
-        .expect("Reward claims count should work");
-    assert_eq!(claimed_count, 1);
+        .expect("Highscore stats should work");
+    assert_eq!(stats.rewards_claimed, 1);
 
     println!("Migration schema integrity test completed successfully");
 }

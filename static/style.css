@@ -1,26 +1,3 @@
-.skip-link:not(:focus) {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  padding: 0;
-  margin: -1px;
-  overflow: hidden;
-  clip-path: inset(50%);
-  white-space: nowrap;
-  border: 0;
-}
-
-.skip-link:focus {
-  position: fixed;
-  top: var(--space-md);
-  left: var(--space-md);
-  z-index: 1000;
-  padding: var(--space-sm) var(--space-md);
-  background: var(--color-bg-primary);
-  color: var(--color-text-primary);
-  outline: 3px solid var(--glow-brass);
-}
-
 /* Game Header Navigation */
 .game-header {
   width: 100%;
@@ -72,7 +49,9 @@
   color: var(--color-text-secondary);
   text-decoration: none;
   border-radius: var(--radius-sm);
-  transition: all var(--duration-normal) var(--ease-out);
+  transition:
+    color var(--duration-normal) var(--ease-out),
+    text-shadow var(--duration-normal) var(--ease-out);
   position: relative;
   text-transform: uppercase;
   letter-spacing: 0.5px;
@@ -258,6 +237,10 @@
 }
 
 .nav-link--trailer {
+  appearance: none;
+  border: 0;
+  background: none;
+  font: inherit;
   cursor: pointer;
 }
 
@@ -726,41 +709,6 @@
   view-transition-name: exp-counter;
 }
 
-/* Editor row morph - steampunk scale/fade with blur */
-::view-transition-old(editor-row) {
-  animation: 200ms var(--ease-out) both editor-row-out;
-}
-
-::view-transition-new(editor-row) {
-  animation: 280ms var(--ease-out) 40ms both editor-row-in;
-}
-
-@keyframes editor-row-out {
-  from {
-    opacity: 1;
-    transform: scale(1);
-    filter: blur(0);
-  }
-  to {
-    opacity: 0;
-    transform: scale(0.92);
-    filter: blur(4px);
-  }
-}
-
-@keyframes editor-row-in {
-  from {
-    opacity: 0;
-    transform: scale(1.04);
-    filter: blur(4px);
-  }
-  to {
-    opacity: 1;
-    transform: scale(1);
-    filter: blur(0);
-  }
-}
-
 /* Editor wrapper transition - full page morph on login/logout */
 ::view-transition-old(editor-page) {
   animation: 350ms var(--ease-out) both editor-page-out;
@@ -797,7 +745,7 @@
 }
 
 .editor-table tbody tr {
-  view-transition-name: editor-row;
+  view-transition-name: none !important;
 }
 
 .editor-wrapper {
@@ -1150,37 +1098,37 @@ body::before {
 
 /* Sunday (Rest): Peaceful cloud wisps with soft pastels */
 body[data-weekday="0"]::before {
-  background-image: url("/images/sunday.png");
+  background-image: url("/images/sunday.webp");
 }
 
 /* Monday (Sword): Metallic armor pattern with blue-gray hues */
 body[data-weekday="1"]::before {
-  background-image: url("/images/monday.png");
+  background-image: url("/images/monday.webp");
 }
 
 /* Tuesday (Shield): Earth stone texture with brown-green tones */
 body[data-weekday="2"]::before {
-  background-image: url("/images/tuesday.png");
+  background-image: url("/images/tuesday.webp");
 }
 
 /* Wednesday (Wand): Mystical sparkles with purple-magenta shifts */
 body[data-weekday="3"]::before {
-  background-image: url("/images/wednesday.png");
+  background-image: url("/images/wednesday.webp");
 }
 
 /* Thursday (Tome): Ancient parchment with warm browns */
 body[data-weekday="4"]::before {
-  background-image: url("/images/thursday.png");
+  background-image: url("/images/thursday.webp");
 }
 
 /* Friday (Arcane): Ether particles with bright accent hues */
 body[data-weekday="5"]::before {
-  background-image: url("/images/friday.png");
+  background-image: url("/images/friday.webp");
 }
 
 /* Saturday (Crown): Gem-like facets with gold-yellow tones */
 body[data-weekday="6"]::before {
-  background-image: url("/images/saturday.png");
+  background-image: url("/images/saturday.webp");
 }
 
 .container {
@@ -1245,18 +1193,8 @@ body[data-weekday="6"]::before {
   background-size: 400% 100%;
   background-clip: text;
   -webkit-background-clip: text;
-  animation: rainbow-scroll 8s linear infinite;
   text-shadow: var(--text-glow-primary);
   image-rendering: pixelated;
-}
-
-@keyframes rainbow-scroll {
-  0% {
-    background-position: 0% 50%;
-  }
-  100% {
-    background-position: 400% 50%;
-  }
 }
 
 .total-exp {
@@ -3677,7 +3615,13 @@ h1 {
     grid-template-columns: 1fr;
   }
 
+  #quests-panel,
+  #rewards-panel {
+    overflow-x: auto;
+  }
+
   .editor-table {
+    min-width: 40rem;
     font-size: 0.85rem;
   }
 

@@ -192,7 +192,9 @@ pub async fn quests_handler(
 
     let is_today = selected_date == today;
     let day_name = get_fantasy_day_name(selected_date.weekday());
-    let weekday_num = u8::try_from(selected_date.weekday().num_days_from_monday()).unwrap_or(0);
+    let selected_weekday =
+        u8::try_from(selected_date.weekday().num_days_from_sunday()).unwrap_or(0);
+    let current_day = u8::try_from(today.weekday().num_days_from_sunday()).unwrap_or(0);
     let selected_date_formatted = time::format_date_display(selected_date);
     let can_navigate_left = selected_date > week_start;
     let can_navigate_right = selected_date < week_end;
@@ -210,7 +212,7 @@ pub async fn quests_handler(
     };
 
     let weekly_stats = db
-        .get_week_stats(today, week_start, week_end)
+        .get_week_stats(selected_date, week_start, week_end)
         .await
         .unwrap_or_else(|e| {
             tracing::warn!(error = %e, "⚠️ Failed to get week stats, using defaults");
@@ -239,7 +241,8 @@ pub async fn quests_handler(
         can_navigate_right,
         &prev_date,
         &next_date,
-        weekday_num,
+        selected_weekday,
+        current_day,
         &weekly_stats,
     );
 
@@ -307,7 +310,6 @@ pub async fn toggle_quest(
 
     let quest_display = QuestDisplay::from_quest(quest, completed_today, today, today);
 
-    let day_of_week = today.weekday().num_days_from_sunday().cast_signed();
     let (week_start, week_end) = time::get_week_bounds(today);
     let quest_stats = db
         .get_week_stats(today, week_start, week_end)
@@ -325,9 +327,7 @@ pub async fn toggle_quest(
         "weekExp": quest_stats.week_exp,
         "weekExpMax": quest_stats.week_exp_max,
         "questsCompleted": quest_stats.quests_completed,
-        "questsTotal": quest_stats.quests_total,
-        "currentDay": day_of_week,
-        "isToday": true
+        "questsTotal": quest_stats.quests_total
     });
 
     let origin = request.client_id.clone();
