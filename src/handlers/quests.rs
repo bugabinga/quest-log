@@ -109,6 +109,30 @@ pub async fn quests_with_date(
     quests_handler(state, Some(date_str), tz.0).await
 }
 
+/// Serve a quest's stored image bytes
+///
+/// # Errors
+///
+/// Returns an error if the quest or its image is not found
+#[instrument(name = "🖼️ GET /quests/:id/image", skip(state))]
+pub async fn quest_image(
+    State(state): State<AppState>,
+    Path(id): Path<i64>,
+) -> Result<axum::http::Response<axum::body::Body>, AppError> {
+    let quest = state
+        .db
+        .get_quest_by_id(id)
+        .await
+        .map_err(AppError::Database)?;
+    let Some(quest) = quest else {
+        return Err(AppError::NotFound);
+    };
+    let Some(image_data) = quest.image_data else {
+        return Err(AppError::NotFound);
+    };
+    Ok(super::image_response(image_data, quest.image_content_type))
+}
+
 /// Internal handler for loading quests
 ///
 /// # Errors

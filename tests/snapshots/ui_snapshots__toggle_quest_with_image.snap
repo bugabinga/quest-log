@@ -1,0 +1,5 @@
+---
+source: tests/ui_snapshots.rs
+expression: html
+---
+<div class="quest-item" id="quest-9" data-quest-id="9" style="view-transition-name: quest-9;" data-view-transition="quest-morph"><div class="quest-content"><img class="quest-image" src="/quests/9/image" alt="Slay the Laundry Dragon" loading="lazy"><h3>Slay the Laundry Dragon</h3><p>Sort, fold, and banish every garment</p><span class="exp-value">4 EXP</span></div><div class="quest-actions"><button class="toggle-btn" type="button" data-on:click__prevent="@post('/quests/toggle', { payload: { quest_id: 9, client_id: $client_id } })">⚔️ Mark Complete</button></div></div>

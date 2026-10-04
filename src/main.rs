@@ -145,7 +145,9 @@ async fn main() {
         .route("/day/{date}", get(handlers::quests::quests_with_date))
         .route("/navigate/{date}", get(handlers::navigate::navigate))
         .route("/quests/toggle", post(handlers::quests::toggle_quest))
+        .route("/quests/{id}/image", get(handlers::quests::quest_image))
         .route("/rewards/claim", post(handlers::bounty::claim_reward))
+        .route("/rewards/{id}/image", get(handlers::bounty::reward_image))
         .route("/events", get(handlers::events::events))
         .route("/health", get(health))
         // Editor routes

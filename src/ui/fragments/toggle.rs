@@ -14,6 +14,8 @@ pub struct QuestDisplay {
     pub description: String,
     /// Experience points value.
     pub exp_value: i32,
+    /// URL serving the quest image, if any.
+    pub image_url: Option<String>,
     /// Whether quest was completed today.
     pub completed_today: bool,
     /// Whether the quest date is in the past.
@@ -36,6 +38,10 @@ impl QuestDisplay {
             title: quest.title,
             description: quest.description.unwrap_or_default(),
             exp_value: quest.exp_value,
+            image_url: quest
+                .image_data
+                .as_ref()
+                .map(|_| format!("/quests/{}/image", quest.id)),
             completed_today,
             is_past: selected_date < today,
             is_future: selected_date > today,
@@ -68,6 +74,13 @@ pub fn toggle(quest: &QuestDisplay) -> Markup {
             style=(format!("view-transition-name: quest-{};", quest.id))
             data-view-transition="quest-morph" {
             div class="quest-content" {
+                @if let Some(image_url) = &quest.image_url {
+                    img
+                        class="quest-image"
+                        src=(image_url)
+                        alt=(quest.title.as_str())
+                        loading="lazy";
+                }
                 h3 { (quest.title.as_str()) }
                 @if !quest.description.is_empty() {
                     p { (quest.description.as_str()) }

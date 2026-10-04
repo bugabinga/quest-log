@@ -43,6 +43,7 @@ fn toggle_quest_incomplete() {
         description: "Venture into the volcanic mountains and defeat the ancient dragon"
             .to_string(),
         exp_value: 100,
+        image_url: None,
         completed_today: false,
         is_past: false,
         is_future: false,
@@ -59,7 +60,25 @@ fn toggle_quest_completed() {
         title: "Complete the Tutorial".to_string(),
         description: "Learn the basics of quest management".to_string(),
         exp_value: 50,
+        image_url: None,
         completed_today: true,
+        is_past: false,
+        is_future: false,
+    };
+
+    let html = toggle(&fixture).into_string();
+    insta::assert_snapshot!(html);
+}
+
+#[test]
+fn toggle_quest_with_image() {
+    let fixture = QuestDisplay {
+        id: 9,
+        title: "Slay the Laundry Dragon".to_string(),
+        description: "Sort, fold, and banish every garment".to_string(),
+        exp_value: 4,
+        image_url: Some("/quests/9/image".to_string()),
+        completed_today: false,
         is_past: false,
         is_future: false,
     };
@@ -75,6 +94,7 @@ fn toggle_quest_past() {
         title: "Recover the Lost Artifact".to_string(),
         description: "Find the ancient relic in the abandoned temple".to_string(),
         exp_value: 150,
+        image_url: None,
         completed_today: false,
         is_past: true,
         is_future: false,
@@ -91,6 +111,7 @@ fn toggle_quest_future() {
         title: "Explore the New Dungeon".to_string(),
         description: "Chart the unknown territories beyond the western ridge".to_string(),
         exp_value: 200,
+        image_url: None,
         completed_today: false,
         is_past: false,
         is_future: true,
@@ -119,6 +140,7 @@ fn quest_list_with_quests() {
             title: "Morning Meditation".to_string(),
             description: "Begin your day with clarity".to_string(),
             exp_value: 10,
+            image_url: None,
             completed_today: true,
             is_past: false,
             is_future: false,
@@ -128,6 +150,7 @@ fn quest_list_with_quests() {
             title: "Defeat the Dragon".to_string(),
             description: "Venture into the volcanic mountains".to_string(),
             exp_value: 100,
+            image_url: None,
             completed_today: false,
             is_past: false,
             is_future: false,
@@ -137,6 +160,7 @@ fn quest_list_with_quests() {
             title: "Past Quest Example".to_string(),
             description: "A quest from the past".to_string(),
             exp_value: 75,
+            image_url: None,
             completed_today: true,
             is_past: true,
             is_future: false,

@@ -78,6 +78,33 @@ async fn bounty_handler(
     Ok(axum::response::Html(html.into_string()).into_response())
 }
 
+/// Serve a reward's stored image bytes
+///
+/// # Errors
+///
+/// Returns an error if the reward or its image is not found
+#[instrument(name = "🖼️ GET /rewards/:id/image", skip(state))]
+pub async fn reward_image(
+    State(state): State<AppState>,
+    axum::extract::Path(id): axum::extract::Path<i64>,
+) -> Result<axum::http::Response<axum::body::Body>, AppError> {
+    let reward = state
+        .db
+        .get_reward_by_id(id)
+        .await
+        .map_err(AppError::Database)?;
+    let Some(reward) = reward else {
+        return Err(AppError::NotFound);
+    };
+    let Some(image_data) = reward.image_data else {
+        return Err(AppError::NotFound);
+    };
+    Ok(crate::handlers::image_response(
+        image_data,
+        reward.image_content_type,
+    ))
+}
+
 /// Claim a reward
 ///
 /// # Errors

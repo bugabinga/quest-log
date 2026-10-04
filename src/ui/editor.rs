@@ -50,10 +50,12 @@ pub fn editor_page(
         _questFormTitle: () => $_editingQuestId ? 'Edit Quest' : 'Add New Quest',
         _questSubmitText: () => $_editingQuestId ? 'Update Quest' : 'Save Quest',
         _questImageTooLarge: () => ($_questImage ?? []).some((file) => file.contents.length > 7_000_000),
+        _questImagePreview: () => ($_questImage ?? []).length > 0 ? 'data:' + (($_questImage ?? [])[0].mime || 'image/png') + ';base64,' + ($_questImage ?? [])[0].contents : '',
         _rewardFormValid: () => ($_rewardTitle ?? '').trim().length > 0 && Number($_rewardRequiredExp ?? 0) >= 0,
         _rewardFormTitle: () => $_editingRewardId ? 'Edit Reward' : 'Add New Reward',
         _rewardSubmitText: () => $_editingRewardId ? 'Update Reward' : 'Save Reward',
-        _rewardImageTooLarge: () => ($_rewardImage ?? []).some((file) => file.contents.length > 7_000_000)
+        _rewardImageTooLarge: () => ($_rewardImage ?? []).some((file) => file.contents.length > 7_000_000),
+        _rewardImagePreview: () => ($_rewardImage ?? []).length > 0 ? 'data:' + (($_rewardImage ?? [])[0].mime || 'image/png') + ';base64,' + ($_rewardImage ?? [])[0].contents : ''
     })".to_string();
 
     let body_content = html! {
@@ -180,6 +182,11 @@ fn editor_quests_panel(quests: &[Quest]) -> Markup {
                                 data-bind="_questImage"
                                 data-effect="!$_showQuestForm && (document.getElementById('quest-image').value = '')"
                                 accept="image/*";
+                            img
+                                class="image-preview"
+                                alt="Selected quest image"
+                                data-attr:src="$_questImagePreview"
+                                data-show="($_questImage ?? []).length > 0";
                             p class="error" data-show="$_questImageTooLarge" { "Image too large (max 5MB)" }
                         }
                     }
@@ -261,6 +268,11 @@ fn editor_rewards_panel(rewards: &[Reward]) -> Markup {
                             data-bind="_rewardImage"
                             data-effect="!$_showRewardForm && (document.getElementById('reward-image').value = '')"
                             accept="image/*";
+                        img
+                            class="image-preview"
+                            alt="Selected reward image"
+                            data-attr:src="$_rewardImagePreview"
+                            data-show="($_rewardImage ?? []).length > 0";
                         p class="error" data-show="$_rewardImageTooLarge" { "Image too large (max 5MB)" }
                     }
 
@@ -320,7 +332,16 @@ pub(crate) fn quests_table(quests: &[Quest]) -> Markup {
             tbody {
                 @for quest in quests {
                     tr id=(format!("quest-row-{}", quest.id)) class=(if quest.is_active { "" } else { "inactive-row" }) {
-                        td { (quest.title) }
+                        td {
+                            @if quest.image_data.is_some() {
+                                img
+                                    class="editor-thumb"
+                                    src=(format!("/quests/{}/image", quest.id))
+                                    alt=""
+                                    loading="lazy";
+                            }
+                            (quest.title)
+                        }
                         td { (quest.exp_value) }
                         td { (day_name(quest.day_of_week)) }
                         td {
@@ -374,7 +395,16 @@ pub(crate) fn rewards_table(rewards: &[Reward]) -> Markup {
             tbody {
                 @for reward in rewards {
                     tr id=(format!("reward-row-{}", reward.id)) class=(if reward.is_active { "" } else { "inactive-row" }) {
-                        td { (reward.title) }
+                        td {
+                            @if reward.image_data.is_some() {
+                                img
+                                    class="editor-thumb"
+                                    src=(format!("/rewards/{}/image", reward.id))
+                                    alt=""
+                                    loading="lazy";
+                            }
+                            (reward.title)
+                        }
                         td { (reward.required_exp) }
                         td {
                             @if reward.is_active {

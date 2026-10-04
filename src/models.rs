@@ -200,25 +200,6 @@ impl FileUpload {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn decodes_datastar_raw_base64_upload() {
-        let upload = FileUpload {
-            name: "pixel.png".to_string(),
-            contents: "AQID".to_string(),
-            mime: "image/png".to_string(),
-        };
-
-        assert_eq!(
-            upload.decode(),
-            Ok((vec![1, 2, 3], "image/png".to_string()))
-        );
-    }
-}
-
 /// Request payload for creating/updating quest via Datastar JSON signals.
 #[derive(Debug, Deserialize)]
 pub struct QuestJsonRequest {
@@ -336,4 +317,23 @@ pub struct WeeklyChampion {
     pub id: i64,
     /// Start date of the week.
     pub week_start: NaiveDate,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn decodes_datastar_raw_base64_upload() {
+        let upload = FileUpload {
+            name: "pixel.png".to_string(),
+            contents: "AQID".to_string(),
+            mime: "image/png".to_string(),
+        };
+
+        assert_eq!(
+            upload.decode(),
+            Ok((vec![1, 2, 3], "image/png".to_string()))
+        );
+    }
 }

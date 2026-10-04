@@ -1,7 +1,7 @@
 //! HTTP handlers for the Quest Log application
 
 use axum::body::Body;
-use axum::http::{Response, StatusCode};
+use axum::http::{Response, StatusCode, header};
 use axum::response::Html;
 use axum::response::IntoResponse;
 
@@ -14,6 +14,20 @@ pub enum ServerMessage {
     Elements(String, Option<String>),
     /// Signals to update client-side state
     Signals(String, Option<String>),
+}
+
+/// Binary image response with sensible caching for rarely-changing blobs.
+#[must_use]
+pub(crate) fn image_response(data: Vec<u8>, content_type: Option<String>) -> Response<Body> {
+    let content_type = content_type
+        .filter(|ct| !ct.is_empty())
+        .unwrap_or_else(|| "image/png".to_string());
+    Response::builder()
+        .status(StatusCode::OK)
+        .header(header::CONTENT_TYPE, content_type)
+        .header(header::CACHE_CONTROL, "public, max-age=86400")
+        .body(Body::from(data))
+        .unwrap_or_else(|_| StatusCode::INTERNAL_SERVER_ERROR.into_response())
 }
 
 pub mod bounty;

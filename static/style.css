@@ -1263,6 +1263,34 @@ h1 {
   border-color: var(--color-accent-light);
 }
 
+.quest-image {
+  display: block;
+  width: 100%;
+  max-height: 180px;
+  object-fit: cover;
+  border-radius: var(--radius-md);
+  margin-bottom: var(--space-md);
+}
+
+.editor-thumb {
+  display: inline-block;
+  width: 36px;
+  height: 36px;
+  object-fit: cover;
+  border-radius: var(--radius-sm);
+  margin-right: var(--space-md);
+  vertical-align: middle;
+  border: 1px solid var(--color-border);
+}
+
+.image-preview {
+  display: block;
+  max-height: 96px;
+  margin-top: var(--space-sm);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border);
+}
+
 .quest-item.completed {
   background: linear-gradient(
     135deg,
