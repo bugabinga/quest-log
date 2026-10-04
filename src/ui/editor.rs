@@ -45,6 +45,9 @@ pub fn editor_page(
         })
     );
 
+    // Vendored Datastar (v1.0.3, still broken in v1.0.4) mangles block-bodied
+    // arrows and IIFEs in data-computed objects. Keep expressions brace-free;
+    // tests/datastar_expression_limits.rs fails the build otherwise.
     let computed = r"({
         _questFormValid: () => ($_questTitle ?? '').trim().length > 0,
         _questFormTitle: () => $_editingQuestId ? 'Edit Quest' : 'Add New Quest',
